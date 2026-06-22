@@ -1,3 +1,5 @@
+import type { Session } from "@supabase/supabase-js";
+import { supabase } from "./lib/supabase";
 import { useEffect, useMemo, useState } from "react";
 import {
   CartesianGrid,
@@ -191,6 +193,11 @@ export default function App() {
   const [editingDate, setEditingDate] = useState<string | null>(null);
   const [page, setPage] = useState<Page>("home");
   const [goalScreen, setGoalScreen] = useState<GoalScreen>("menu");
+  const [session, setSession] = useState<Session | null>(null);
+  const [authEmail, setAuthEmail] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
+  const [cloudLoaded, setCloudLoaded] = useState(false);
+  const [syncStatus, setSyncStatus] = useState("Chưa đồng bộ");
 
   const [form, setForm] = useState({
     date: getToday(),
@@ -234,6 +241,55 @@ export default function App() {
       JSON.stringify(completedGoals)
     );
   }, [entries, goals, completedGoals, loaded]);
+
+  useEffect(() => {
+  supabase.auth.getSession().then(({ data }) => {
+    setSession(data.session);
+  });
+
+  const {
+    data: { subscription },
+  } = supabase.auth.onAuthStateChange((_event, session) => {
+    setSession(session);
+  });
+
+  return () => {
+    subscription.unsubscribe();
+  };
+}, []);
+
+useEffect(() => {
+  if (!session?.user) return;
+
+  setCloudLoaded(false);
+  loadCloudData(session.user.id);
+}, [session?.user.id]);
+
+useEffect(() => {
+  if (!session?.user || !cloudLoaded) return;
+
+  const timeout = setTimeout(async () => {
+    setSyncStatus("Đang lưu...");
+
+    const { error } = await supabase.from("money_diary_state").upsert({
+      user_id: session.user.id,
+      entries,
+      goals,
+      completed_goals: completedGoals,
+      updated_at: new Date().toISOString(),
+    });
+
+    if (error) {
+      console.error(error);
+      setSyncStatus("Lỗi lưu cloud");
+      return;
+    }
+
+    setSyncStatus("Đã đồng bộ");
+  }, 700);
+
+  return () => clearTimeout(timeout);
+}, [entries, goals, completedGoals, session?.user.id, cloudLoaded]);
 
   const todayString = getToday();
   const isSelectedToday = selectedDate === todayString;
@@ -444,6 +500,52 @@ export default function App() {
   setCompletedGoals((prev) => prev.filter((goal) => goal.id !== id));
 }
 
+  async function loadCloudData(userId: string) {
+  setSyncStatus("Đang tải dữ liệu cloud...");
+
+  const { data, error } = await supabase
+    .from("money_diary_state")
+    .select("entries, goals, completed_goals")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (error) {
+    console.error(error);
+    setSyncStatus("Lỗi tải dữ liệu cloud");
+    return;
+  }
+
+  if (data) {
+    setEntries((data.entries || []) as unknown as DailyEntry[]);
+    setCompletedGoals((data.completed_goals || []) as unknown as CompletedGoal[]);
+
+    setGoals({
+      ...defaultGoals,
+      ...((data.goals || {}) as unknown as Goals),
+    });
+
+  } else {
+    const { error: insertError } = await supabase
+      .from("money_diary_state")
+      .insert({
+        user_id: userId,
+        entries,
+        goals,
+        completed_goals: completedGoals,
+        updated_at: new Date().toISOString(),
+      });
+
+    if (insertError) {
+      console.error(insertError);
+      setSyncStatus("Lỗi tạo dữ liệu cloud");
+      return;
+    }
+  }
+
+  setCloudLoaded(true);
+  setSyncStatus("Đã đồng bộ");
+}
+
   function updateGoal(key: keyof Goals, value: string) {
     const textFields: Array<keyof Goals> = ["bigGoalName", "bigGoalDeadline"];
 
@@ -452,6 +554,52 @@ export default function App() {
       [key]: textFields.includes(key) ? value : Number(value),
     }));
   }
+
+async function handleSignUp() {
+  if (!authEmail || !authPassword) {
+    alert("Bạn chưa nhập email hoặc mật khẩu.");
+    return;
+  }
+
+  const { error } = await supabase.auth.signUp({
+    email: authEmail,
+    password: authPassword,
+  });
+
+  if (error) {
+    alert(error.message);
+    return;
+  }
+
+  alert(
+    "Đăng ký thành công. Nếu Supabase yêu cầu xác nhận email, hãy mở email để xác nhận."
+  );
+}
+
+async function handleLogin() {
+  if (!authEmail || !authPassword) {
+    alert("Bạn chưa nhập email hoặc mật khẩu.");
+    return;
+  }
+
+  const { error } = await supabase.auth.signInWithPassword({
+    email: authEmail,
+    password: authPassword,
+  });
+
+  if (error) {
+    alert(error.message);
+    return;
+  }
+}
+
+async function handleLogout() {
+  await supabase.auth.signOut();
+
+  setSession(null);
+  setCloudLoaded(false);
+  setSyncStatus("Chưa đồng bộ");
+}
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900">
@@ -464,7 +612,86 @@ export default function App() {
         </div>
       </header>
 
-<main className="mx-auto grid max-w-6xl gap-6 px-4 py-6">
+      {!session && (
+  <main className="mx-auto max-w-md px-4 py-8">
+    <section className="rounded-2xl bg-white p-5 shadow-sm">
+      <h2 className="text-2xl font-bold">Đăng nhập để đồng bộ</h2>
+
+      <p className="mt-2 text-sm text-slate-500">
+        Dùng cùng một tài khoản trên laptop và điện thoại để dữ liệu tự đồng bộ.
+      </p>
+
+      <div className="mt-5 grid gap-3">
+        <div>
+          <label className="text-sm font-medium">Email</label>
+          <input
+            type="email"
+            value={authEmail}
+            onChange={(e) => setAuthEmail(e.target.value)}
+            className="mt-1 w-full rounded-xl border px-3 py-2"
+            placeholder="you@example.com"
+          />
+        </div>
+
+        <div>
+          <label className="text-sm font-medium">Mật khẩu</label>
+          <input
+            type="password"
+            value={authPassword}
+            onChange={(e) => setAuthPassword(e.target.value)}
+            className="mt-1 w-full rounded-xl border px-3 py-2"
+            placeholder="Ít nhất 6 ký tự"
+          />
+        </div>
+      </div>
+
+      <div className="mt-5 flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={handleLogin}
+          className="rounded-xl bg-slate-900 px-5 py-2 font-medium text-white hover:bg-slate-700"
+        >
+          Đăng nhập
+        </button>
+
+        <button
+          type="button"
+          onClick={handleSignUp}
+          className="rounded-xl border bg-white px-5 py-2 font-medium hover:bg-slate-100"
+        >
+          Đăng ký
+        </button>
+      </div>
+
+      <p className="mt-4 text-xs text-slate-500">
+        Sau khi đăng nhập, dữ liệu nhật ký và mục tiêu sẽ được lưu lên cloud.
+      </p>
+    </section>
+  </main>
+)}
+
+{session && (
+  <main className="mx-auto grid max-w-6xl gap-6 px-4 py-6">
+    <section className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-white p-4 shadow-sm">
+  <div>
+    <p className="text-sm text-slate-500">Tài khoản</p>
+    <p className="font-bold">{session.user.email}</p>
+  </div>
+
+  <div className="flex flex-wrap items-center gap-2">
+    <span className="rounded-full bg-slate-100 px-3 py-1 text-sm font-medium">
+      {syncStatus}
+    </span>
+
+    <button
+      type="button"
+      onClick={handleLogout}
+      className="rounded-xl border bg-white px-4 py-2 text-sm font-medium hover:bg-slate-100"
+    >
+      Đăng xuất
+    </button>
+  </div>
+</section>
   {page === "home" && (
     <>
       <section className="grid gap-4">
@@ -1182,6 +1409,7 @@ export default function App() {
     </>
   )}
 </main>
+)}
     </div>
   );
 }
