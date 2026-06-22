@@ -9,14 +9,15 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: "autoUpdate",
-      includeAssets: ["favicon.ico", "apple-touch-icon.png"],
+      injectRegister: "auto",
       manifest: {
-        name: "Nhật kí của tôi",
+        name: "Nhật ký của tôi",
         short_name: "MoneyDiary",
-        description: "App ghi nhật ký kiếm tiền, giờ làm và mục tiêu cá nhân",
+        description: "App ghi nhật ký kiếm tiền và theo dõi mục tiêu cá nhân",
         theme_color: "#0f172a",
         background_color: "#f1f5f9",
         display: "standalone",
+        orientation: "portrait",
         start_url: "/",
         scope: "/",
         icons: [
