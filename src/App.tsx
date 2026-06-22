@@ -245,7 +245,7 @@ export default function App() {
   );
 
   const weekIncome = weekEntries.reduce((sum, entry) => sum + entry.income, 0);
-  const weekHours = weekEntries.reduce((sum, entry) => sum + entry.workHours, 0);
+  // const weekHours = weekEntries.reduce((sum, entry) => sum + entry.workHours, 0);
 
   const monthIncome = monthEntries.reduce((sum, entry) => sum + entry.income, 0);
   const monthHours = monthEntries.reduce(
