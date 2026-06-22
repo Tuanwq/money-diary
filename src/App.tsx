@@ -36,8 +36,21 @@ type Goals = {
   bigGoalDeadline: string;
 };
 
+type Page = "home" | "goals" | "entry" | "history";
+type GoalScreen = "menu" | "current" | "completed";
+
+type CompletedGoal = {
+  id: string;
+  name: string;
+  target: number;
+  saved: number;
+  deadline: string;
+  completedAt: string;
+};
+
 const STORAGE_ENTRIES_KEY = "money_diary_entries";
 const STORAGE_GOALS_KEY = "money_diary_goals";
+const STORAGE_COMPLETED_GOALS_KEY = "money_diary_completed_goals";
 
 const defaultGoals: Goals = {
   dailyIncome: 200000,
@@ -165,8 +178,11 @@ export default function App() {
   const [loaded, setLoaded] = useState(false);
   const [entries, setEntries] = useState<DailyEntry[]>([]);
   const [goals, setGoals] = useState<Goals>(defaultGoals);
+  const [completedGoals, setCompletedGoals] = useState<CompletedGoal[]>([]);
   const [selectedDate, setSelectedDate] = useState(getToday());
   const [editingDate, setEditingDate] = useState<string | null>(null);
+  const [page, setPage] = useState<Page>("home");
+  const [goalScreen, setGoalScreen] = useState<GoalScreen>("menu");
 
   const [form, setForm] = useState({
     date: getToday(),
@@ -180,6 +196,7 @@ export default function App() {
   useEffect(() => {
     const savedEntries = localStorage.getItem(STORAGE_ENTRIES_KEY);
     const savedGoals = localStorage.getItem(STORAGE_GOALS_KEY);
+    const savedCompletedGoals = localStorage.getItem(STORAGE_COMPLETED_GOALS_KEY);
 
     if (savedEntries) {
       setEntries(JSON.parse(savedEntries));
@@ -192,6 +209,10 @@ export default function App() {
       });
     }
 
+    if (savedCompletedGoals) {
+      setCompletedGoals(JSON.parse(savedCompletedGoals));
+    }
+
     setLoaded(true);
   }, []);
 
@@ -200,7 +221,11 @@ export default function App() {
 
     localStorage.setItem(STORAGE_ENTRIES_KEY, JSON.stringify(entries));
     localStorage.setItem(STORAGE_GOALS_KEY, JSON.stringify(goals));
-  }, [entries, goals, loaded]);
+    localStorage.setItem(
+      STORAGE_COMPLETED_GOALS_KEY,
+      JSON.stringify(completedGoals)
+    );
+  }, [entries, goals, completedGoals, loaded]);
 
   const todayString = getToday();
   const isSelectedToday = selectedDate === todayString;
@@ -314,6 +339,8 @@ export default function App() {
       return;
     }
 
+    const savedDate = form.date;
+
     setEntries((prev) => {
       const existingEntry = prev.find((entry) => entry.date === form.date);
 
@@ -342,6 +369,8 @@ export default function App() {
     });
 
   setEditingDate(null);
+  setSelectedDate(savedDate);
+  setPage("home");
   }
 
   function editEntry(entry: DailyEntry) {
@@ -356,6 +385,7 @@ export default function App() {
 
   setSelectedDate(entry.date);
   setEditingDate(entry.date);
+  setPage("entry");
 
   window.scrollTo({
     top: 0,
@@ -369,6 +399,42 @@ export default function App() {
 
     setEntries((prev) => prev.filter((entry) => entry.id !== id));
   }
+
+  function completeCurrentGoal() {
+  const confirmed = confirm(
+    `Bạn có chắc muốn hoàn thành mục tiêu "${goals.bigGoalName}" không?`
+  );
+
+  if (!confirmed) return;
+
+  const completedGoal: CompletedGoal = {
+    id: crypto.randomUUID(),
+    name: goals.bigGoalName,
+    target: goals.bigGoalTarget,
+    saved: totalSavedForBigGoal,
+    deadline: goals.bigGoalDeadline,
+    completedAt: getToday(),
+  };
+
+  setCompletedGoals((prev) => [completedGoal, ...prev]);
+
+  setGoals((prev) => ({
+    ...prev,
+    bigGoalName: "Mục tiêu mới",
+    bigGoalTarget: 0,
+    bigGoalSaved: 0,
+    bigGoalDeadline: getToday(),
+  }));
+
+  setGoalScreen("completed");
+}
+  function deleteCompletedGoal(id: string) {
+  const confirmed = confirm("Bạn có chắc muốn xóa mục tiêu đã hoàn thành này không?");
+
+  if (!confirmed) return;
+
+  setCompletedGoals((prev) => prev.filter((goal) => goal.id !== id));
+}
 
   function updateGoal(key: keyof Goals, value: string) {
     const textFields: Array<keyof Goals> = ["bigGoalName", "bigGoalDeadline"];
@@ -390,96 +456,250 @@ export default function App() {
         </div>
       </header>
 
-      <main className="mx-auto grid max-w-6xl gap-6 px-4 py-6">
-        <section className="grid gap-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h2 className="text-xl font-bold">
-                {isSelectedToday ? "Chỉ số hôm nay" : "Chỉ số ngày đang xem"}
-              </h2>
-              <p className="text-sm text-slate-500">
-                Ngày:{" "}
-                <strong>
-                  {isSelectedToday ? "Hôm nay" : formatDateShort(selectedDate)}
-                </strong>
-              </p>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={goToPreviousDay}
-                className="rounded-xl border bg-white px-4 py-2 text-lg font-bold shadow-sm hover:bg-slate-100"
-              >
-                {"<"}
-              </button>
-
-              <button
-                type="button"
-                onClick={goToNextDay}
-                disabled={isSelectedToday}
-                className={`rounded-xl border bg-white px-4 py-2 text-lg font-bold shadow-sm ${
-                  isSelectedToday
-                    ? "cursor-not-allowed opacity-40"
-                    : "hover:bg-slate-100"
-                }`}
-              >
-                {">"}
-              </button>
-
-              <button
-                type="button"
-                onClick={goToToday}
-                disabled={isSelectedToday}
-                className={`rounded-xl border bg-white px-4 py-2 text-sm font-bold shadow-sm ${
-                  isSelectedToday
-                    ? "cursor-not-allowed opacity-40"
-                    : "hover:bg-slate-100"
-                }`}
-              >
-                Hôm nay
-              </button>
-
-              <input
-                type="date"
-                value={selectedDate}
-                max={todayString}
-                onChange={(e) => handleSelectDate(e.target.value)}
-                className="rounded-xl border bg-white px-4 py-2 text-sm shadow-sm"
-              />
-            </div>
+<main className="mx-auto grid max-w-6xl gap-6 px-4 py-6">
+  {page === "home" && (
+    <>
+      <section className="grid gap-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-xl font-bold">
+              {isSelectedToday ? "Mục tiêu hôm nay" : "Mục tiêu ngày đang xem"}
+            </h2>
+            <p className="text-sm text-slate-500">
+              Ngày:{" "}
+              <strong>
+                {isSelectedToday ? "Hôm nay" : formatDateShort(selectedDate)}
+              </strong>
+            </p>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            <StatCard
-              title={isSelectedToday ? "Tiền hôm nay" : "Tiền ngày này"}
-              value={formatMoney(selectedIncome)}
-              target={formatMoney(goals.dailyIncome)}
-              progress={getProgress(selectedIncome, goals.dailyIncome)}
-            />
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={goToPreviousDay}
+              className="rounded-xl border bg-white px-4 py-2 text-lg font-bold shadow-sm hover:bg-slate-100"
+            >
+              {"<"}
+            </button>
 
-            <StatCard
-              title={isSelectedToday ? "Giờ làm hôm nay" : "Giờ làm ngày này"}
-              value={`${selectedHours} giờ`}
-              target={`${goals.dailyHours} giờ`}
-              progress={getProgress(selectedHours, goals.dailyHours)}
-            />
+            <button
+              type="button"
+              onClick={goToNextDay}
+              disabled={isSelectedToday}
+              className={`rounded-xl border bg-white px-4 py-2 text-lg font-bold shadow-sm ${
+                isSelectedToday
+                  ? "cursor-not-allowed opacity-40"
+                  : "hover:bg-slate-100"
+              }`}
+            >
+              {">"}
+            </button>
 
-            <StatCard
-              title={isSelectedToday ? "Tiền tuần này" : "Tiền tuần đang xem"}
-              value={formatMoney(weekIncome)}
-              target={formatMoney(goals.weeklyIncome)}
-              progress={getProgress(weekIncome, goals.weeklyIncome)}
-            />
+            <button
+              type="button"
+              onClick={goToToday}
+              disabled={isSelectedToday}
+              className={`rounded-xl border bg-white px-4 py-2 text-sm font-bold shadow-sm ${
+                isSelectedToday
+                  ? "cursor-not-allowed opacity-40"
+                  : "hover:bg-slate-100"
+              }`}
+            >
+              Hôm nay
+            </button>
 
-            <StatCard
-              title={isSelectedToday ? "Tiền tháng này" : "Tiền tháng đang xem"}
-              value={formatMoney(monthIncome)}
-              target={formatMoney(goals.monthlyIncome)}
-              progress={getProgress(monthIncome, goals.monthlyIncome)}
+            <input
+              type="date"
+              value={selectedDate}
+              max={todayString}
+              onChange={(e) => handleSelectDate(e.target.value)}
+              className="rounded-xl border bg-white px-4 py-2 text-sm shadow-sm"
             />
           </div>
-        </section>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <StatCard
+            title={isSelectedToday ? "Tiền hôm nay" : "Tiền ngày này"}
+            value={formatMoney(selectedIncome)}
+            target={formatMoney(goals.dailyIncome)}
+            progress={getProgress(selectedIncome, goals.dailyIncome)}
+          />
+
+          <StatCard
+            title={isSelectedToday ? "Giờ làm hôm nay" : "Giờ làm ngày này"}
+            value={`${selectedHours} giờ`}
+            target={`${goals.dailyHours} giờ`}
+            progress={getProgress(selectedHours, goals.dailyHours)}
+          />
+
+          <StatCard
+            title={isSelectedToday ? "Tiền tuần này" : "Tiền tuần đang xem"}
+            value={formatMoney(weekIncome)}
+            target={formatMoney(goals.weeklyIncome)}
+            progress={getProgress(weekIncome, goals.weeklyIncome)}
+          />
+
+          <StatCard
+            title={isSelectedToday ? "Tiền tháng này" : "Tiền tháng đang xem"}
+            value={formatMoney(monthIncome)}
+            target={formatMoney(goals.monthlyIncome)}
+            progress={getProgress(monthIncome, goals.monthlyIncome)}
+          />
+        </div>
+      </section>
+
+      <section className="grid gap-4 md:grid-cols-3">
+        <button
+          type="button"
+          onClick={() => {setPage("goals");
+                          setGoalScreen("menu");}
+          }
+          className="rounded-2xl bg-white p-6 text-left shadow-sm hover:bg-slate-50"
+        >
+          <p className="text-3xl">🎯</p>
+          <h3 className="mt-3 text-xl font-bold">Các mục tiêu</h3>
+          <p className="mt-1 text-sm text-slate-500">
+            Xem mục tiêu lớn, mục tiêu ngày, tuần và tháng.
+          </p>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setPage("entry")}
+          className="rounded-2xl bg-white p-6 text-left shadow-sm hover:bg-slate-50"
+        >
+          <p className="text-3xl">📝</p>
+          <h3 className="mt-3 text-xl font-bold">Ghi nhật kí</h3>
+          <p className="mt-1 text-sm text-slate-500">
+            Ghi lại hôm nay làm gì, kiếm được bao nhiêu và làm mấy giờ.
+          </p>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setPage("history")}
+          className="rounded-2xl bg-white p-6 text-left shadow-sm hover:bg-slate-50"
+        >
+          <p className="text-3xl">📚</p>
+          <h3 className="mt-3 text-xl font-bold">Lịch sử nhật kí</h3>
+          <p className="mt-1 text-sm text-slate-500">
+            Xem lại, sửa hoặc xóa các ngày đã ghi.
+          </p>
+        </button>
+      </section>
+    </>
+  )}
+
+{page === "goals" && (
+  <>
+    <div className="flex items-center justify-between">
+      <div>
+        <h2 className="text-2xl font-bold">Các mục tiêu</h2>
+        <p className="text-sm text-slate-500">
+          Quản lý mục tiêu hiện tại và xem lại các mục tiêu đã hoàn thành.
+        </p>
+      </div>
+
+      <button
+        type="button"
+        onClick={() => {
+          setPage("home");
+          setGoalScreen("menu");
+        }}
+        className="rounded-xl border bg-white px-4 py-2 font-medium shadow-sm hover:bg-slate-100"
+      >
+        Về trang chủ
+      </button>
+    </div>
+
+    {goalScreen === "menu" && (
+      <section className="grid gap-4 md:grid-cols-2">
+        <button
+          type="button"
+          onClick={() => setGoalScreen("current")}
+          className="rounded-2xl bg-white p-8 text-left shadow-sm hover:bg-slate-50"
+        >
+          <p className="text-4xl">🎯</p>
+
+          <h3 className="mt-4 text-2xl font-bold">Mục tiêu hiện tại</h3>
+
+          <p className="mt-2 text-sm text-slate-500">
+            Xem và chỉnh sửa mục tiêu lớn, mục tiêu ngày, tuần và tháng.
+          </p>
+
+          <div className="mt-5 rounded-xl bg-slate-100 p-4 text-sm">
+            <p>
+              Mục tiêu: <strong>{goals.bigGoalName}</strong>
+            </p>
+
+            <p className="mt-1">
+              Đã có: <strong>{formatMoney(totalSavedForBigGoal)}</strong>
+            </p>
+
+            <p className="mt-1">
+              Còn thiếu: <strong>{formatMoney(remainingBigGoal)}</strong>
+            </p>
+
+            <ProgressBar value={bigGoalProgress} />
+
+            <p className="mt-2 font-medium">
+              Hoàn thành {bigGoalProgress}%
+            </p>
+          </div>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setGoalScreen("completed")}
+          className="rounded-2xl bg-white p-8 text-left shadow-sm hover:bg-slate-50"
+        >
+          <p className="text-4xl">🏆</p>
+
+          <h3 className="mt-4 text-2xl font-bold">
+            Các mục tiêu đã hoàn thành
+          </h3>
+
+          <p className="mt-2 text-sm text-slate-500">
+            Xem lại những mục tiêu bạn đã hoàn thành trong quá khứ.
+          </p>
+
+          <div className="mt-5 rounded-xl bg-slate-100 p-4 text-sm">
+            <p>
+              Đã hoàn thành:{" "}
+              <strong>{completedGoals.length}</strong> mục tiêu
+            </p>
+
+            <p className="mt-1">
+              Gần nhất:{" "}
+              <strong>
+                {completedGoals[0]?.name ?? "Chưa có mục tiêu nào"}
+              </strong>
+            </p>
+          </div>
+        </button>
+      </section>
+    )}
+
+    {goalScreen === "current" && (
+      <>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => setGoalScreen("menu")}
+            className="rounded-xl border bg-white px-4 py-2 font-medium shadow-sm hover:bg-slate-100"
+          >
+            Quay lại
+          </button>
+
+          <button
+            type="button"
+            onClick={completeCurrentGoal}
+            className="rounded-xl bg-green-600 px-4 py-2 font-medium text-white shadow-sm hover:bg-green-700"
+          >
+            Hoàn thành mục tiêu
+          </button>
+        </div>
 
         <section className="grid gap-6 lg:grid-cols-3">
           <div className="rounded-2xl bg-white p-5 shadow-sm lg:col-span-2">
@@ -558,7 +778,9 @@ export default function App() {
                 <input
                   type="date"
                   value={goals.bigGoalDeadline}
-                  onChange={(e) => updateGoal("bigGoalDeadline", e.target.value)}
+                  onChange={(e) =>
+                    updateGoal("bigGoalDeadline", e.target.value)
+                  }
                   className="mt-1 w-full rounded-xl border px-3 py-2"
                 />
               </div>
@@ -592,274 +814,366 @@ export default function App() {
           </div>
         </section>
 
-        <section className="grid gap-6 lg:grid-cols-3">
-          <form
-            onSubmit={handleSubmit}
-            className="rounded-2xl bg-white p-5 shadow-sm lg:col-span-2"
-          >
-            <h2 className="text-xl font-bold">
-              {editingDate ? `Sửa nhật ký ngày ${editingDate}` : "Ghi nhật ký hôm nay"}
-            </h2>
+        <section className="rounded-2xl bg-white p-5 shadow-sm">
+          <h2 className="text-xl font-bold">Mục tiêu ngày / tuần / tháng</h2>
 
-            <div className="mt-4 grid gap-4 md:grid-cols-2">
-              <div>
-                <label className="text-sm font-medium">Ngày</label>
-                <input
-                  type="date"
-                  value={form.date}
-                  onChange={(e) =>
-                    setForm((prev) => ({ ...prev, date: e.target.value }))
-                  }
-                  className="mt-1 w-full rounded-xl border px-3 py-2"
-                />
-              </div>
-
-              <div>
-                <label className="text-sm font-medium">Tâm trạng</label>
-                <select
-                  value={form.mood}
-                  onChange={(e) =>
-                    setForm((prev) => ({
-                      ...prev,
-                      mood: e.target.value as Mood,
-                    }))
-                  }
-                  className="mt-1 w-full rounded-xl border px-3 py-2"
-                >
-                  <option value="good">Vui</option>
-                  <option value="normal">Bình thường</option>
-                  <option value="tired">Mệt</option>
-                  <option value="bad">Tệ</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="text-sm font-medium">Tiền kiếm được</label>
-                <input
-                  type="number"
-                  placeholder="VD: 250000"
-                  value={form.income}
-                  onChange={(e) =>
-                    setForm((prev) => ({ ...prev, income: e.target.value }))
-                  }
-                  className="mt-1 w-full rounded-xl border px-3 py-2"
-                />
-              </div>
-
-              <div>
-                <label className="text-sm font-medium">Số giờ làm việc</label>
-                <input
-                  type="number"
-                  step="0.5"
-                  placeholder="VD: 4"
-                  value={form.workHours}
-                  onChange={(e) =>
-                    setForm((prev) => ({ ...prev, workHours: e.target.value }))
-                  }
-                  className="mt-1 w-full rounded-xl border px-3 py-2"
-                />
-              </div>
-            </div>
-
-            <div className="mt-4">
-              <label className="text-sm font-medium">
-                Hôm nay mình đã làm gì?
-              </label>
-              <textarea
-                rows={4}
-                value={form.diary}
-                onChange={(e) =>
-                  setForm((prev) => ({ ...prev, diary: e.target.value }))
-                }
-                placeholder="VD: Hôm nay chạy đơn buổi sáng, hơi mệt nhưng vẫn cố hoàn thành..."
+          <div className="mt-4 grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+            <div>
+              <label className="text-sm font-medium">Tiền / ngày</label>
+              <input
+                type="number"
+                value={goals.dailyIncome}
+                onChange={(e) => updateGoal("dailyIncome", e.target.value)}
                 className="mt-1 w-full rounded-xl border px-3 py-2"
               />
             </div>
 
-            <div className="mt-4">
-              <label className="text-sm font-medium">Ghi chú thêm</label>
-              <textarea
-                rows={3}
-                value={form.note}
-                onChange={(e) =>
-                  setForm((prev) => ({ ...prev, note: e.target.value }))
-                }
-                placeholder="VD: Mai cần dậy sớm hơn, tối ưu khung giờ làm việc..."
+            <div>
+              <label className="text-sm font-medium">Giờ làm / ngày</label>
+              <input
+                type="number"
+                value={goals.dailyHours}
+                onChange={(e) => updateGoal("dailyHours", e.target.value)}
                 className="mt-1 w-full rounded-xl border px-3 py-2"
               />
             </div>
 
-            <div className="mt-4 flex flex-wrap gap-2">
-              <button
-                type="submit"
-                className="rounded-xl bg-slate-900 px-5 py-2 font-medium text-white hover:bg-slate-700"
-              >
-                {editingDate ? "Cập nhật nhật ký" : "Lưu nhật ký"}
-              </button>
-
-              {editingDate && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEditingDate(null);
-                    setForm({
-                      date: getToday(),
-                      diary: "",
-                      income: "",
-                      workHours: "",
-                      mood: "normal",
-                      note: "",
-                    });
-                  }}
-                  className="rounded-xl border bg-white px-5 py-2 font-medium hover:bg-slate-100"
-                >
-                  Hủy sửa
-                </button>
-              )}
+            <div>
+              <label className="text-sm font-medium">Tiền / tuần</label>
+              <input
+                type="number"
+                value={goals.weeklyIncome}
+                onChange={(e) => updateGoal("weeklyIncome", e.target.value)}
+                className="mt-1 w-full rounded-xl border px-3 py-2"
+              />
             </div>
 
-            <p className="mt-3 text-sm text-slate-500">
-              Lưu ý: Nếu bạn nhập trùng một ngày, app sẽ cập nhật lại bản ghi của ngày đó.
-            </p>
-          </form>
-
-          <aside className="rounded-2xl bg-white p-5 shadow-sm">
-            <h2 className="text-xl font-bold">Mục tiêu</h2>
-
-            <div className="mt-4 grid gap-3">
-              <div>
-                <label className="text-sm font-medium">Tiền / ngày</label>
-                <input
-                  type="number"
-                  value={goals.dailyIncome}
-                  onChange={(e) => updateGoal("dailyIncome", e.target.value)}
-                  className="mt-1 w-full rounded-xl border px-3 py-2"
-                />
-              </div>
-
-              <div>
-                <label className="text-sm font-medium">Giờ làm / ngày</label>
-                <input
-                  type="number"
-                  value={goals.dailyHours}
-                  onChange={(e) => updateGoal("dailyHours", e.target.value)}
-                  className="mt-1 w-full rounded-xl border px-3 py-2"
-                />
-              </div>
-
-              <div>
-                <label className="text-sm font-medium">Tiền / tuần</label>
-                <input
-                  type="number"
-                  value={goals.weeklyIncome}
-                  onChange={(e) => updateGoal("weeklyIncome", e.target.value)}
-                  className="mt-1 w-full rounded-xl border px-3 py-2"
-                />
-              </div>
-
-              <div>
-                <label className="text-sm font-medium">Giờ làm / tuần</label>
-                <input
-                  type="number"
-                  value={goals.weeklyHours}
-                  onChange={(e) => updateGoal("weeklyHours", e.target.value)}
-                  className="mt-1 w-full rounded-xl border px-3 py-2"
-                />
-              </div>
-
-              <div>
-                <label className="text-sm font-medium">Tiền / tháng</label>
-                <input
-                  type="number"
-                  value={goals.monthlyIncome}
-                  onChange={(e) => updateGoal("monthlyIncome", e.target.value)}
-                  className="mt-1 w-full rounded-xl border px-3 py-2"
-                />
-              </div>
-
-              <div>
-                <label className="text-sm font-medium">Giờ làm / tháng</label>
-                <input
-                  type="number"
-                  value={goals.monthlyHours}
-                  onChange={(e) => updateGoal("monthlyHours", e.target.value)}
-                  className="mt-1 w-full rounded-xl border px-3 py-2"
-                />
-              </div>
+            <div>
+              <label className="text-sm font-medium">Giờ làm / tuần</label>
+              <input
+                type="number"
+                value={goals.weeklyHours}
+                onChange={(e) => updateGoal("weeklyHours", e.target.value)}
+                className="mt-1 w-full rounded-xl border px-3 py-2"
+              />
             </div>
 
-            <div className="mt-5 rounded-xl bg-slate-100 p-4 text-sm">
-              <p>
-                Tháng này còn thiếu:{" "}
-                <strong>
-                  {formatMoney(Math.max(goals.monthlyIncome - monthIncome, 0))}
-                </strong>
-              </p>
-              <p className="mt-1">
-                Tổng giờ tháng này: <strong>{monthHours} giờ</strong>
-              </p>
-              <p className="mt-1">
-                Tổng giờ tuần này: <strong>{weekHours} giờ</strong>
-              </p>
+            <div>
+              <label className="text-sm font-medium">Tiền / tháng</label>
+              <input
+                type="number"
+                value={goals.monthlyIncome}
+                onChange={(e) => updateGoal("monthlyIncome", e.target.value)}
+                className="mt-1 w-full rounded-xl border px-3 py-2"
+              />
             </div>
-          </aside>
+
+            <div>
+              <label className="text-sm font-medium">Giờ làm / tháng</label>
+              <input
+                type="number"
+                value={goals.monthlyHours}
+                onChange={(e) => updateGoal("monthlyHours", e.target.value)}
+                className="mt-1 w-full rounded-xl border px-3 py-2"
+              />
+            </div>
+          </div>
         </section>
+      </>
+    )}
+
+    {goalScreen === "completed" && (
+      <>
+        <div>
+          <button
+            type="button"
+            onClick={() => setGoalScreen("menu")}
+            className="rounded-xl border bg-white px-4 py-2 font-medium shadow-sm hover:bg-slate-100"
+          >
+            Quay lại
+          </button>
+        </div>
 
         <section className="rounded-2xl bg-white p-5 shadow-sm">
-          <h2 className="text-xl font-bold">Lịch sử nhật ký</h2>
+          <h2 className="text-xl font-bold">Các mục tiêu đã hoàn thành</h2>
 
-          {sortedEntries.length === 0 ? (
+          {completedGoals.length === 0 ? (
             <p className="mt-4 text-slate-500">
-              Chưa có nhật ký nào. Hãy nhập ngày đầu tiên của bạn.
+              Bạn chưa hoàn thành mục tiêu nào.
             </p>
           ) : (
             <div className="mt-4 grid gap-3">
-              {sortedEntries.map((entry) => (
-                <article
-                  key={entry.id}
-                  className="rounded-xl border p-4"
-                >
+              {completedGoals.map((goal) => (
+                <article key={goal.id} className="rounded-xl border p-4">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
-                      <h3 className="font-bold">{entry.date}</h3>
-                      <p className="text-sm text-slate-500">
-                        {formatMoney(entry.income)} · {entry.workHours} giờ ·{" "}
-                        {moodLabels[entry.mood]}
+                      <h3 className="font-bold">{goal.name}</h3>
+                      <p className="mt-1 text-sm text-slate-500">
+                        Hoàn thành ngày: {goal.completedAt}
                       </p>
                     </div>
 
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => editEntry(entry)}
-                        className="rounded-lg bg-slate-100 px-3 py-1 text-sm font-medium text-slate-700 hover:bg-slate-200"
-                      >
-                        Sửa
-                      </button>
+                    <div className="flex flex-wrap gap-2">
+                      <span className="rounded-full bg-green-50 px-3 py-1 text-sm font-medium text-green-700">
+                        Đã hoàn thành
+                      </span>
 
                       <button
-                        onClick={() => deleteEntry(entry.id)}
-                        className="rounded-lg bg-red-50 px-3 py-1 text-sm font-medium text-red-600 hover:bg-red-100"
+                        type="button"
+                        onClick={() => deleteCompletedGoal(goal.id)}
+                        className="rounded-full bg-red-50 px-3 py-1 text-sm font-medium text-red-600 hover:bg-red-100"
                       >
                         Xóa
                       </button>
                     </div>
                   </div>
 
-                  {entry.diary && (
-                    <p className="mt-3 whitespace-pre-line">{entry.diary}</p>
-                  )}
+                  <div className="mt-4 grid gap-3 text-sm md:grid-cols-3">
+                    <div className="rounded-xl bg-slate-100 p-3">
+                      <p className="text-slate-500">Mục tiêu</p>
+                      <p className="font-bold">{formatMoney(goal.target)}</p>
+                    </div>
 
-                  {entry.note && (
-                    <p className="mt-2 rounded-lg bg-slate-100 p-3 text-sm text-slate-700">
-                      {entry.note}
-                    </p>
-                  )}
+                    <div className="rounded-xl bg-slate-100 p-3">
+                      <p className="text-slate-500">Đã có khi hoàn thành</p>
+                      <p className="font-bold">{formatMoney(goal.saved)}</p>
+                    </div>
+
+                    <div className="rounded-xl bg-slate-100 p-3">
+                      <p className="text-slate-500">Hạn mục tiêu</p>
+                      <p className="font-bold">{goal.deadline}</p>
+                    </div>
+                  </div>
                 </article>
               ))}
             </div>
           )}
         </section>
-      </main>
+      </>
+    )}
+  </>
+)}
+
+  {page === "entry" && (
+    <>
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold">
+            {editingDate ? "Sửa nhật kí" : "Ghi nhật kí"}
+          </h2>
+          <p className="text-sm text-slate-500">
+            Ghi lại một ngày của bạn.
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setPage("home")}
+          className="rounded-xl border bg-white px-4 py-2 font-medium shadow-sm hover:bg-slate-100"
+        >
+          Về trang chủ
+        </button>
+      </div>
+
+      <form
+        onSubmit={handleSubmit}
+        className="rounded-2xl bg-white p-5 shadow-sm"
+      >
+        <h2 className="text-xl font-bold">
+          {editingDate ? `Sửa nhật ký ngày ${editingDate}` : "Ghi nhật ký hôm nay"}
+        </h2>
+
+        <div className="mt-4 grid gap-4 md:grid-cols-2">
+          <div>
+            <label className="text-sm font-medium">Ngày</label>
+            <input
+              type="date"
+              value={form.date}
+              onChange={(e) =>
+                setForm((prev) => ({ ...prev, date: e.target.value }))
+              }
+              className="mt-1 w-full rounded-xl border px-3 py-2"
+            />
+          </div>
+
+          <div>
+            <label className="text-sm font-medium">Tâm trạng</label>
+            <select
+              value={form.mood}
+              onChange={(e) =>
+                setForm((prev) => ({
+                  ...prev,
+                  mood: e.target.value as Mood,
+                }))
+              }
+              className="mt-1 w-full rounded-xl border px-3 py-2"
+            >
+              <option value="good">Vui</option>
+              <option value="normal">Bình thường</option>
+              <option value="tired">Mệt</option>
+              <option value="bad">Tệ</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="text-sm font-medium">Tiền kiếm được</label>
+            <input
+              type="number"
+              placeholder="VD: 250000"
+              value={form.income}
+              onChange={(e) =>
+                setForm((prev) => ({ ...prev, income: e.target.value }))
+              }
+              className="mt-1 w-full rounded-xl border px-3 py-2"
+            />
+          </div>
+
+          <div>
+            <label className="text-sm font-medium">Số giờ làm việc</label>
+            <input
+              type="number"
+              step="0.5"
+              placeholder="VD: 4"
+              value={form.workHours}
+              onChange={(e) =>
+                setForm((prev) => ({ ...prev, workHours: e.target.value }))
+              }
+              className="mt-1 w-full rounded-xl border px-3 py-2"
+            />
+          </div>
+        </div>
+
+        <div className="mt-4">
+          <label className="text-sm font-medium">
+            Hôm nay mình đã làm gì?
+          </label>
+          <textarea
+            rows={4}
+            value={form.diary}
+            onChange={(e) =>
+              setForm((prev) => ({ ...prev, diary: e.target.value }))
+            }
+            placeholder="VD: Hôm nay chạy đơn buổi sáng, hơi mệt nhưng vẫn cố hoàn thành..."
+            className="mt-1 w-full rounded-xl border px-3 py-2"
+          />
+        </div>
+
+        <div className="mt-4">
+          <label className="text-sm font-medium">Ghi chú thêm</label>
+          <textarea
+            rows={3}
+            value={form.note}
+            onChange={(e) =>
+              setForm((prev) => ({ ...prev, note: e.target.value }))
+            }
+            placeholder="VD: Mai cần dậy sớm hơn, tối ưu khung giờ làm việc..."
+            className="mt-1 w-full rounded-xl border px-3 py-2"
+          />
+        </div>
+
+        <div className="mt-4 flex flex-wrap gap-2">
+          <button
+            type="submit"
+            className="rounded-xl bg-slate-900 px-5 py-2 font-medium text-white hover:bg-slate-700"
+          >
+            {editingDate ? "Cập nhật nhật ký" : "Lưu nhật ký"}
+          </button>
+
+          {editingDate && (
+            <button
+              type="button"
+              onClick={() => {
+                setEditingDate(null);
+                setForm({
+                  date: getToday(),
+                  diary: "",
+                  income: "",
+                  workHours: "",
+                  mood: "normal",
+                  note: "",
+                });
+              }}
+              className="rounded-xl border bg-white px-5 py-2 font-medium hover:bg-slate-100"
+            >
+              Hủy sửa
+            </button>
+          )}
+        </div>
+      </form>
+    </>
+  )}
+
+  {page === "history" && (
+    <>
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold">Lịch sử nhật kí</h2>
+          <p className="text-sm text-slate-500">
+            Xem lại, sửa hoặc xóa các ngày đã ghi.
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setPage("home")}
+          className="rounded-xl border bg-white px-4 py-2 font-medium shadow-sm hover:bg-slate-100"
+        >
+          Về trang chủ
+        </button>
+      </div>
+
+      <section className="rounded-2xl bg-white p-5 shadow-sm">
+        {sortedEntries.length === 0 ? (
+          <p className="text-slate-500">
+            Chưa có nhật ký nào. Hãy nhập ngày đầu tiên của bạn.
+          </p>
+        ) : (
+          <div className="grid gap-3">
+            {sortedEntries.map((entry) => (
+              <article key={entry.id} className="rounded-xl border p-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <h3 className="font-bold">{entry.date}</h3>
+                    <p className="text-sm text-slate-500">
+                      {formatMoney(entry.income)} · {entry.workHours} giờ ·{" "}
+                      {moodLabels[entry.mood]}
+                    </p>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => editEntry(entry)}
+                      className="rounded-lg bg-slate-100 px-3 py-1 text-sm font-medium text-slate-700 hover:bg-slate-200"
+                    >
+                      Sửa
+                    </button>
+
+                    <button
+                      onClick={() => deleteEntry(entry.id)}
+                      className="rounded-lg bg-red-50 px-3 py-1 text-sm font-medium text-red-600 hover:bg-red-100"
+                    >
+                      Xóa
+                    </button>
+                  </div>
+                </div>
+
+                {entry.diary && (
+                  <p className="mt-3 whitespace-pre-line">{entry.diary}</p>
+                )}
+
+                {entry.note && (
+                  <p className="mt-2 rounded-lg bg-slate-100 p-3 text-sm text-slate-700">
+                    {entry.note}
+                  </p>
+                )}
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
+    </>
+  )}
+</main>
     </div>
   );
 }
