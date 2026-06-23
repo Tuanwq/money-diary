@@ -500,8 +500,8 @@ useEffect(() => {
   setCompletedGoals((prev) => prev.filter((goal) => goal.id !== id));
 }
 
-  async function loadCloudData(userId: string) {
-  setSyncStatus("Đang tải dữ liệu cloud...");
+async function loadCloudData(userId: string) {
+  setSyncStatus("Đang tải và gộp dữ liệu...");
 
   const { data, error } = await supabase
     .from("money_diary_state")
@@ -515,31 +515,69 @@ useEffect(() => {
     return;
   }
 
-  if (data) {
-    setEntries((data.entries || []) as unknown as DailyEntry[]);
-    setCompletedGoals((data.completed_goals || []) as unknown as CompletedGoal[]);
+  const localEntries = entries;
+  const localGoals = goals;
+  const localCompletedGoals = completedGoals;
 
-    setGoals({
-      ...defaultGoals,
-      ...((data.goals || {}) as unknown as Goals),
-    });
+  const cloudEntries = data?.entries
+    ? ((data.entries || []) as unknown as DailyEntry[])
+    : [];
 
-  } else {
-    const { error: insertError } = await supabase
-      .from("money_diary_state")
-      .insert({
-        user_id: userId,
-        entries,
-        goals,
-        completed_goals: completedGoals,
-        updated_at: new Date().toISOString(),
-      });
+  const cloudGoals = data?.goals
+    ? ({
+        ...defaultGoals,
+        ...((data.goals || {}) as unknown as Goals),
+      } as Goals)
+    : null;
 
-    if (insertError) {
-      console.error(insertError);
-      setSyncStatus("Lỗi tạo dữ liệu cloud");
-      return;
-    }
+  const cloudCompletedGoals = data?.completed_goals
+    ? ((data.completed_goals || []) as unknown as CompletedGoal[])
+    : [];
+
+  const mergedEntriesMap = new Map<string, DailyEntry>();
+
+  cloudEntries.forEach((entry) => {
+    mergedEntriesMap.set(entry.date, entry);
+  });
+
+  localEntries.forEach((entry) => {
+    mergedEntriesMap.set(entry.date, entry);
+  });
+
+  const mergedEntries = Array.from(mergedEntriesMap.values()).sort((a, b) =>
+    b.date.localeCompare(a.date)
+  );
+
+  const mergedCompletedGoalsMap = new Map<string, CompletedGoal>();
+
+  cloudCompletedGoals.forEach((goal) => {
+    mergedCompletedGoalsMap.set(goal.id, goal);
+  });
+
+  localCompletedGoals.forEach((goal) => {
+    mergedCompletedGoalsMap.set(goal.id, goal);
+  });
+
+  const mergedCompletedGoals = Array.from(mergedCompletedGoalsMap.values());
+
+  const mergedGoals = cloudGoals ?? localGoals;
+
+  setEntries(mergedEntries);
+  setGoals(mergedGoals);
+  setCompletedGoals(mergedCompletedGoals);
+
+  const { error: upsertError } = await supabase.from("money_diary_state").upsert({
+    user_id: userId,
+    entries: mergedEntries,
+    goals: mergedGoals,
+    completed_goals: mergedCompletedGoals,
+    updated_at: new Date().toISOString(),
+  });
+
+  if (upsertError) {
+    console.error(upsertError);
+    setSyncStatus("Lỗi đẩy dữ liệu local lên cloud");
+    return;
   }
 
   setCloudLoaded(true);
