@@ -40,6 +40,10 @@ type Goals = {
 
 type Page = "home" | "goals" | "entry" | "history";
 type GoalScreen = "menu" | "current" | "completed";
+type AppHistoryState = {
+  page: Page;
+  goalScreen: GoalScreen;
+};
 
 type CompletedGoal = {
   id: string;
@@ -198,6 +202,34 @@ export default function App() {
   const [authPassword, setAuthPassword] = useState("");
   const [cloudLoaded, setCloudLoaded] = useState(false);
   const [syncStatus, setSyncStatus] = useState("Chưa đồng bộ");
+
+  useEffect(() => {
+  const initialState: AppHistoryState = {
+    page: "home",
+    goalScreen: "menu",
+  };
+
+  window.history.replaceState(initialState, "", window.location.href);
+
+  function handleBrowserBack(event: PopStateEvent) {
+    const state = event.state as AppHistoryState | null;
+
+    if (state?.page) {
+      setPage(state.page);
+      setGoalScreen(state.goalScreen ?? "menu");
+      return;
+    }
+
+    setPage("home");
+    setGoalScreen("menu");
+  }
+
+  window.addEventListener("popstate", handleBrowserBack);
+
+  return () => {
+    window.removeEventListener("popstate", handleBrowserBack);
+  };
+}, []);
 
   const [form, setForm] = useState({
     date: getToday(),
@@ -387,6 +419,18 @@ useEffect(() => {
     setSelectedDate(value);
   }
 
+  function navigateTo(nextPage: Page, nextGoalScreen: GoalScreen = "menu") {
+  const nextState: AppHistoryState = {
+    page: nextPage,
+    goalScreen: nextGoalScreen,
+  };
+
+  window.history.pushState(nextState, "", window.location.href);
+
+  setPage(nextPage);
+  setGoalScreen(nextGoalScreen);
+}
+
   function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
 
@@ -434,7 +478,7 @@ useEffect(() => {
 
   setEditingDate(null);
   setSelectedDate(savedDate);
-  setPage("home");
+  navigateTo("home", "menu");
   }
 
   function editEntry(entry: DailyEntry) {
@@ -449,7 +493,7 @@ useEffect(() => {
 
   setSelectedDate(entry.date);
   setEditingDate(entry.date);
-  setPage("entry");
+  navigateTo("entry");
 
   window.scrollTo({
     top: 0,
@@ -490,7 +534,7 @@ useEffect(() => {
     bigGoalDeadline: getToday(),
   }));
 
-  setGoalScreen("completed");
+  navigateTo("goals", "completed");
 }
   function deleteCompletedGoal(id: string) {
   const confirmed = confirm("Bạn có chắc muốn xóa mục tiêu đã hoàn thành này không?");
@@ -838,9 +882,7 @@ async function handleLogout() {
       <section className="grid gap-4 md:grid-cols-3">
         <button
           type="button"
-          onClick={() => {setPage("goals");
-                          setGoalScreen("menu");}
-          }
+          onClick={() => navigateTo("goals", "menu")}
           className="rounded-2xl bg-white p-6 text-left shadow-sm hover:bg-slate-50"
         >
           <p className="text-3xl">🎯</p>
@@ -852,7 +894,7 @@ async function handleLogout() {
 
         <button
           type="button"
-          onClick={() => setPage("entry")}
+          onClick={() => navigateTo("entry")}
           className="rounded-2xl bg-white p-6 text-left shadow-sm hover:bg-slate-50"
         >
           <p className="text-3xl">📝</p>
@@ -864,7 +906,7 @@ async function handleLogout() {
 
         <button
           type="button"
-          onClick={() => setPage("history")}
+          onClick={() => navigateTo("history")}
           className="rounded-2xl bg-white p-6 text-left shadow-sm hover:bg-slate-50"
         >
           <p className="text-3xl">📚</p>
@@ -889,10 +931,7 @@ async function handleLogout() {
 
       <button
         type="button"
-        onClick={() => {
-          setPage("home");
-          setGoalScreen("menu");
-        }}
+        onClick={() => navigateTo("home", "menu")}
         className="rounded-xl border bg-white px-4 py-2 font-medium shadow-sm hover:bg-slate-100"
       >
         Về trang chủ
@@ -903,7 +942,7 @@ async function handleLogout() {
       <section className="grid gap-4 md:grid-cols-2">
         <button
           type="button"
-          onClick={() => setGoalScreen("current")}
+          onClick={() => navigateTo("goals", "current")}
           className="rounded-2xl bg-white p-8 text-left shadow-sm hover:bg-slate-50"
         >
           <p className="text-4xl">🎯</p>
@@ -937,7 +976,7 @@ async function handleLogout() {
 
         <button
           type="button"
-          onClick={() => setGoalScreen("completed")}
+          onClick={() => navigateTo("goals", "completed")}
           className="rounded-2xl bg-white p-8 text-left shadow-sm hover:bg-slate-50"
         >
           <p className="text-4xl">🏆</p>
@@ -972,7 +1011,7 @@ async function handleLogout() {
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
-            onClick={() => setGoalScreen("menu")}
+            onClick={() => navigateTo("goals", "menu")}
             className="rounded-xl border bg-white px-4 py-2 font-medium shadow-sm hover:bg-slate-100"
           >
             Quay lại
@@ -1254,7 +1293,7 @@ async function handleLogout() {
 
         <button
           type="button"
-          onClick={() => setPage("home")}
+          onClick={() => navigateTo("home", "menu")}
           className="rounded-xl border bg-white px-4 py-2 font-medium shadow-sm hover:bg-slate-100"
         >
           Về trang chủ
@@ -1401,7 +1440,7 @@ async function handleLogout() {
 
         <button
           type="button"
-          onClick={() => setPage("home")}
+          onClick={() => navigateTo("home", "menu")}
           className="rounded-xl border bg-white px-4 py-2 font-medium shadow-sm hover:bg-slate-100"
         >
           Về trang chủ
