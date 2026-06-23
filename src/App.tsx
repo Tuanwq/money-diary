@@ -25,6 +25,7 @@ type DailyEntry = {
   mood: Mood;
   note: string;
   createdAt: string;
+  updatedAt?: string;
 };
 
 type ExpenseEntry = {
@@ -36,6 +37,7 @@ type ExpenseEntry = {
   other: number;
   note: string;
   createdAt: string;
+  updatedAt?: string;
 };
 
 type Goals = {
@@ -428,6 +430,35 @@ useEffect(() => {
   return () => clearTimeout(timeout);
 }, [entries, expenses, goals, completedGoals, session?.user.id, cloudLoaded]);
 
+useEffect(() => {
+  if (!session?.user) return;
+
+  let refreshing = false;
+
+  async function refreshWhenBackToApp() {
+    if (!session?.user || refreshing) return;
+
+    refreshing = true;
+    setCloudLoaded(false);
+    await loadCloudData(session.user.id);
+    refreshing = false;
+  }
+
+  function handleVisibilityChange() {
+    if (document.visibilityState === "visible") {
+      refreshWhenBackToApp();
+    }
+  }
+
+  window.addEventListener("focus", refreshWhenBackToApp);
+  document.addEventListener("visibilitychange", handleVisibilityChange);
+
+  return () => {
+    window.removeEventListener("focus", refreshWhenBackToApp);
+    document.removeEventListener("visibilitychange", handleVisibilityChange);
+  };
+}, [session?.user.id]);
+
   const todayString = getToday();
   const isSelectedToday = selectedDate === todayString;
   const selectedDateObject = toDate(selectedDate);
@@ -672,6 +703,35 @@ function getTotalEntryMoney(entry: DailyEntry) {
   return getMainIncome(entry) + getBonusMoney(entry) + getReceivedMoney(entry);
 }
 
+type SyncableDatedItem = {
+  date: string;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+function getSyncTime(item: SyncableDatedItem) {
+  return new Date(
+    item.updatedAt ?? item.createdAt ?? "1970-01-01T00:00:00.000Z"
+  ).getTime();
+}
+
+function mergeByNewestDate<T extends SyncableDatedItem>(
+  cloudItems: T[],
+  localItems: T[]
+) {
+  const map = new Map<string, T>();
+
+  [...localItems, ...cloudItems].forEach((item) => {
+    const current = map.get(item.date);
+
+    if (!current || getSyncTime(item) >= getSyncTime(current)) {
+      map.set(item.date, item);
+    }
+  });
+
+  return Array.from(map.values()).sort((a, b) => b.date.localeCompare(a.date));
+}
+
 function getExpenseTotal(expense: ExpenseEntry) {
   return expense.breakfast + expense.lunch + expense.dinner + expense.other;
 }
@@ -834,6 +894,8 @@ function handleExpenseSubmit(event: React.FormEvent) {
   const dinner = parseMoneyInput(expenseForm.dinner);
   const other = parseMoneyInput(expenseForm.other);
 
+  const now = new Date().toISOString();
+
   if (breakfast < 0 || lunch < 0 || dinner < 0 || other < 0) {
     alert("Chi tiêu không được âm.");
     return;
@@ -844,16 +906,17 @@ function handleExpenseSubmit(event: React.FormEvent) {
       (expense) => expense.date === expenseForm.date
     );
 
-    const newExpense: ExpenseEntry = {
-      id: existingExpense?.id ?? crypto.randomUUID(),
-      date: expenseForm.date,
-      breakfast,
-      lunch,
-      dinner,
-      other,
-      note: expenseForm.note,
-      createdAt: existingExpense?.createdAt ?? new Date().toISOString(),
-    };
+  const newExpense: ExpenseEntry = {
+    id: existingExpense?.id ?? crypto.randomUUID(),
+    date: expenseForm.date,
+    breakfast,
+    lunch,
+    dinner,
+    other,
+    note: expenseForm.note,
+    createdAt: existingExpense?.createdAt ?? now,
+    updatedAt: now,
+  };
 
     const withoutSameDate = prev.filter(
       (expense) => expense.date !== expenseForm.date
@@ -902,6 +965,7 @@ function handleExpenseSubmit(event: React.FormEvent) {
     }
 
     const savedDate = form.date;
+    const now = new Date().toISOString();
 
     setEntries((prev) => {
       const existingEntry = prev.find((entry) => entry.date === form.date);
@@ -917,7 +981,8 @@ function handleExpenseSubmit(event: React.FormEvent) {
       workHours,
       mood: form.mood,
       note: form.note,
-      createdAt: existingEntry?.createdAt ?? new Date().toISOString(),
+      createdAt: existingEntry?.createdAt ?? now,
+      updatedAt: now,
     };
 
       const withoutSameDate = prev.filter((entry) => entry.date !== form.date);
@@ -1112,35 +1177,11 @@ async function loadCloudData(userId: string) {
     ? ((data.completed_goals || []) as unknown as CompletedGoal[])
     : [];
 
-  const mergedExpensesMap = new Map<string, ExpenseEntry>();
-
-  cloudExpenses.forEach((expense) => {
-    mergedExpensesMap.set(expense.date, expense);
-  });
-
-  expenses.forEach((expense) => {
-    mergedExpensesMap.set(expense.date, expense);
-  });
-
-  const mergedExpenses = Array.from(mergedExpensesMap.values()).sort((a, b) =>
-    b.date.localeCompare(a.date)
-  );
+  const mergedExpenses = mergeByNewestDate(cloudExpenses, expenses);
 
   setExpenses(mergedExpenses);
 
-  const mergedEntriesMap = new Map<string, DailyEntry>();
-
-  cloudEntries.forEach((entry) => {
-    mergedEntriesMap.set(entry.date, entry);
-  });
-
-  localEntries.forEach((entry) => {
-    mergedEntriesMap.set(entry.date, entry);
-  });
-
-  const mergedEntries = Array.from(mergedEntriesMap.values()).sort((a, b) =>
-    b.date.localeCompare(a.date)
-  );
+  const mergedEntries = mergeByNewestDate(cloudEntries, localEntries);
 
   const mergedCompletedGoalsMap = new Map<string, CompletedGoal>();
 
