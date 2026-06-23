@@ -244,6 +244,9 @@ export default function App() {
   const [page, setPage] = useState<Page>("home");
   const [goalScreen, setGoalScreen] = useState<GoalScreen>("menu");
   const [chartDays, setChartDays] = useState(7);
+  const [balanceChartDays, setBalanceChartDays] = useState<"all" | number>(
+  "all"
+);
   const [session, setSession] = useState<Session | null>(null);
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
@@ -730,6 +733,18 @@ const currentBalanceMovementData = buildBalanceMovementData(
   getToday(),
   goals.bigGoalSaved
 );
+
+const visibleBalanceMovementData =
+  balanceChartDays === "all"
+    ? currentBalanceMovementData
+    : currentBalanceMovementData.slice(
+        -Math.min(balanceChartDays, currentBalanceMovementData.length)
+      );
+
+const balanceChartTitle =
+  balanceChartDays === "all"
+    ? `Từ ngày bắt đầu hành trình: ${currentGoalStartDate}`
+    : `${balanceChartDays} ngày gần nhất`;
 
 const actualMoney = goals.bigGoalSaved + totalIncome - totalExpense;
 
@@ -1486,15 +1501,92 @@ async function handleLogout() {
         </section>
 
         <section className="rounded-2xl bg-white p-5 shadow-sm">
-          <h3 className="text-xl font-bold">Biểu đồ biến động</h3>
-          <p className="text-sm text-slate-500">
-            Đường tổng tiền và tiền thực tế hiện có trong mục tiêu hiện tại.
-          </p>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h3 className="text-xl font-bold">Biểu đồ biến động</h3>
+              <p className="text-sm text-slate-500">
+                {balanceChartTitle}
+              </p>
+              <p className="text-xs text-slate-500">
+                Đường tổng tiền và tiền thực tế hiện có trong mục tiêu hiện tại.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setBalanceChartDays("all")}
+                className={`rounded-full px-3 py-1 text-sm font-medium ${
+                  balanceChartDays === "all"
+                    ? "bg-slate-900 text-white"
+                    : "bg-slate-100 hover:bg-slate-200"
+                }`}
+              >
+                Tất cả
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setBalanceChartDays(7)}
+                className={`rounded-full px-3 py-1 text-sm font-medium ${
+                  balanceChartDays === 7
+                    ? "bg-slate-900 text-white"
+                    : "bg-slate-100 hover:bg-slate-200"
+                }`}
+              >
+                7 ngày
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setBalanceChartDays(14)}
+                className={`rounded-full px-3 py-1 text-sm font-medium ${
+                  balanceChartDays === 14
+                    ? "bg-slate-900 text-white"
+                    : "bg-slate-100 hover:bg-slate-200"
+                }`}
+              >
+                14 ngày
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setBalanceChartDays(30)}
+                className={`rounded-full px-3 py-1 text-sm font-medium ${
+                  balanceChartDays === 30
+                    ? "bg-slate-900 text-white"
+                    : "bg-slate-100 hover:bg-slate-200"
+                }`}
+              >
+                30 ngày
+              </button>
+
+              <input
+                type="text"
+                inputMode="numeric"
+                value={balanceChartDays === "all" ? "" : String(balanceChartDays)}
+                onChange={(e) => {
+                  const onlyDigits = e.target.value.replace(/[^\d]/g, "");
+
+                  if (!onlyDigits) {
+                    setBalanceChartDays("all");
+                    return;
+                  }
+
+                  const value = Number(onlyDigits);
+
+                  setBalanceChartDays(Math.min(Math.max(value, 1), 365));
+                }}
+                className="w-24 rounded-xl border px-3 py-1 text-sm"
+                placeholder="Tất cả"
+              />
+            </div>
+          </div>
 
           <div className="mt-4 h-72">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart
-                data={currentBalanceMovementData.map((item: BalanceSnapshot) => ({
+                data={visibleBalanceMovementData.map((item: BalanceSnapshot) => ({
                   ...item,
                   label: item.date.slice(5),
                 }))}
