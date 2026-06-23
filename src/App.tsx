@@ -72,6 +72,16 @@ type CompletedGoal = {
   deadline: string;
   completedAt: string;
   startDate?: string;
+
+  totalIncome?: number;
+  totalExpense?: number;
+  actualMoney?: number;
+  totalJourneyMoney?: number;
+  totalHours?: number;
+  totalOrders?: number;
+
+  entriesSnapshot?: DailyEntry[];
+  expensesSnapshot?: ExpenseEntry[];
   balanceSnapshots?: BalanceSnapshot[];
 };
 
@@ -145,7 +155,10 @@ function formatMoneyInput(value: string) {
 
 function getProgress(current: number, target: number) {
   if (target <= 0) return 0;
-  return Math.min(Math.round((current / target) * 100), 100);
+
+  const progress = Math.round((current / target) * 100);
+
+  return Math.min(Math.max(progress, 0), 100);
 }
 
 function toDate(dateString: string) {
@@ -965,12 +978,51 @@ function deleteExpense(id: string) {
   }
 
 function completeCurrentGoal() {
-  const confirmed = confirm("Bạn có chắc muốn hoàn thành mục tiêu này không?");
+  const confirmed = confirm(
+    "Bạn có chắc muốn hoàn thành mục tiêu này không? Hành trình hiện tại sẽ được lưu vào mục tiêu đã hoàn thành và dữ liệu hiện tại sẽ reset về 0."
+  );
+
   if (!confirmed) return;
 
+  const startDate = goals.bigGoalStartDate ?? getToday();
+  const endDate = getToday();
+
+  const entriesSnapshot = entries.filter(
+    (entry) => entry.date >= startDate && entry.date <= endDate
+  );
+
+  const expensesSnapshot = expenses.filter(
+    (expense) => expense.date >= startDate && expense.date <= endDate
+  );
+
+  const goalTotalIncome = entriesSnapshot.reduce(
+    (sum, entry) => sum + getTotalEntryMoney(entry),
+    0
+  );
+
+  const goalTotalExpense = expensesSnapshot.reduce(
+    (sum, expense) => sum + getExpenseTotal(expense),
+    0
+  );
+
+  const goalTotalHours = entriesSnapshot.reduce(
+    (sum, entry) => sum + entry.workHours,
+    0
+  );
+
+  const goalTotalOrders = entriesSnapshot.reduce(
+    (sum, entry) => sum + (entry.orderCount ?? 0),
+    0
+  );
+
+  const goalTotalJourneyMoney = goalTotalIncome;
+
+  const goalActualMoney =
+    goals.bigGoalSaved + goalTotalIncome - goalTotalExpense;
+
   const balanceSnapshots = buildBalanceMovementData(
-    goals.bigGoalStartDate ?? getToday(),
-    getToday(),
+    startDate,
+    endDate,
     goals.bigGoalSaved
   );
 
@@ -978,14 +1030,27 @@ function completeCurrentGoal() {
     id: crypto.randomUUID(),
     name: goals.bigGoalName,
     target: goals.bigGoalTarget,
-    saved: totalSavedForBigGoal,
+    saved: goalActualMoney,
     deadline: goals.bigGoalDeadline,
     completedAt: getToday(),
-    startDate: goals.bigGoalStartDate ?? getToday(),
+    startDate,
+
+    totalIncome: goalTotalIncome,
+    totalExpense: goalTotalExpense,
+    actualMoney: goalActualMoney,
+    totalJourneyMoney: goalTotalJourneyMoney,
+    totalHours: goalTotalHours,
+    totalOrders: goalTotalOrders,
+
+    entriesSnapshot,
+    expensesSnapshot,
     balanceSnapshots,
   };
 
   setCompletedGoals((prev) => [completedGoal, ...prev]);
+
+  setEntries([]);
+  setExpenses([]);
 
   setGoals((prev) => ({
     ...prev,
@@ -995,6 +1060,9 @@ function completeCurrentGoal() {
     bigGoalDeadline: getToday(),
     bigGoalStartDate: getToday(),
   }));
+
+  setSelectedDate(getToday());
+  setEditingDate(null);
 
   navigateTo("goals", "completed");
 }
@@ -1111,14 +1179,18 @@ async function loadCloudData(userId: string) {
   setSyncStatus("Đã đồng bộ");
 }
 
-  function updateGoal(key: keyof Goals, value: string) {
-    const textFields: Array<keyof Goals> = ["bigGoalName", "bigGoalDeadline"];
+function updateGoal(key: keyof Goals, value: string) {
+  const textFields: Array<keyof Goals> = [
+    "bigGoalName",
+    "bigGoalDeadline",
+    "bigGoalStartDate",
+  ];
 
-    setGoals((prev) => ({
-      ...prev,
-      [key]: textFields.includes(key) ? value : Number(value),
-    }));
-  }
+  setGoals((prev) => ({
+    ...prev,
+    [key]: textFields.includes(key) ? value : Number(value),
+  }));
+}
 
 async function handleSignUp() {
   const email = authEmail.trim();
@@ -1366,16 +1438,16 @@ async function handleLogout() {
           <StatCard
             title="Tiền thực tế hiện có"
             value={formatMoney(actualMoney)}
-            target="Sau khi trừ chi tiêu"
-            progress={100}
+            target={formatMoney(goals.bigGoalTarget)}
+            progress={getProgress(actualMoney, goals.bigGoalTarget)}
           />
 
           <StatCard
             title="Tổng tiền hành trình"
             value={formatMoney(totalJourneyMoney)}
-            target="Tổng tiền đã kiếm"
-            progress={100}
-          />
+            target={formatMoney(goals.bigGoalTarget)}
+            progress={getProgress(totalJourneyMoney, goals.bigGoalTarget)}
+          />      
         </div>
       </section>
 
@@ -1853,6 +1925,21 @@ async function handleLogout() {
               </div>
 
               <div>
+                <label className="text-sm font-medium">Ngày bắt đầu mục tiêu</label>
+                <input
+                  type="date"
+                  value={goals.bigGoalStartDate ?? getToday()}
+                  max={todayString}
+                  onChange={(e) => updateGoal("bigGoalStartDate", e.target.value)}
+                  className="mt-1 w-full rounded-xl border px-3 py-2"
+                />
+                <p className="mt-1 text-xs text-slate-500">
+                  Biến động tiền sẽ được tính từ ngày này. Khi hoàn thành mục tiêu, hành trình
+                  mới sẽ bắt đầu lại từ đầu.
+                </p>
+              </div>
+
+              <div>
                 <label className="text-sm font-medium">Hạn mục tiêu</label>
                 <input
                   type="date"
@@ -1867,7 +1954,9 @@ async function handleLogout() {
 
             <div className="mt-5 rounded-xl bg-slate-100 p-4">
               <p className="font-bold">{goals.bigGoalName}</p>
-
+              <p className="mt-1 text-sm">
+                Bắt đầu: <strong>{goals.bigGoalStartDate ?? getToday()}</strong>
+              </p>
               <p className="mt-2 text-sm">
                 Đã có: <strong>{formatMoney(totalSavedForBigGoal)}</strong>
               </p>
@@ -2162,38 +2251,167 @@ async function handleLogout() {
           )}
         </section>
 
+        <section className="grid grid-cols-2 gap-3 lg:grid-cols-6">
+  <div className="rounded-2xl bg-white p-4 shadow-sm">
+    <p className="text-sm text-slate-500">Tổng thu</p>
+    <p className="mt-1 text-lg font-bold">
+      {formatMoney(selectedCompletedGoal.totalIncome ?? 0)}
+    </p>
+  </div>
+
+  <div className="rounded-2xl bg-white p-4 shadow-sm">
+    <p className="text-sm text-slate-500">Tổng chi</p>
+    <p className="mt-1 text-lg font-bold">
+      {formatMoney(selectedCompletedGoal.totalExpense ?? 0)}
+    </p>
+  </div>
+
+  <div className="rounded-2xl bg-white p-4 shadow-sm">
+    <p className="text-sm text-slate-500">Tiền thực tế</p>
+    <p className="mt-1 text-lg font-bold">
+      {formatMoney(selectedCompletedGoal.actualMoney ?? 0)}
+    </p>
+  </div>
+
+  <div className="rounded-2xl bg-white p-4 shadow-sm">
+    <p className="text-sm text-slate-500">Tổng hành trình</p>
+    <p className="mt-1 text-lg font-bold">
+      {formatMoney(selectedCompletedGoal.totalJourneyMoney ?? 0)}
+    </p>
+  </div>
+
+  <div className="rounded-2xl bg-white p-4 shadow-sm">
+    <p className="text-sm text-slate-500">Tổng giờ</p>
+    <p className="mt-1 text-lg font-bold">
+      {selectedCompletedGoal.totalHours ?? 0} giờ
+    </p>
+  </div>
+
+  <div className="rounded-2xl bg-white p-4 shadow-sm">
+    <p className="text-sm text-slate-500">Tổng đơn</p>
+    <p className="mt-1 text-lg font-bold">
+      {selectedCompletedGoal.totalOrders ?? 0} đơn
+    </p>
+  </div>
+</section>
+
         {selectedCompletedGoal.balanceSnapshots &&
-  selectedCompletedGoal.balanceSnapshots.length > 0 && (
+        selectedCompletedGoal.balanceSnapshots.length > 0 && (
+          <section className="rounded-2xl bg-white p-5 shadow-sm">
+            <h3 className="text-xl font-bold">Chi tiết từng ngày</h3>
+
+            <div className="mt-4 grid gap-3">
+              {selectedCompletedGoal.balanceSnapshots.map((item: BalanceSnapshot) => (
+                <article
+                  key={item.date}
+                  className="rounded-xl border p-4"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <h4 className="font-bold">{item.date}</h4>
+                      <p className="text-sm text-slate-500">
+                        Thu: {formatMoney(item.income)} · Chi:{" "}
+                        {formatMoney(item.expense)}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
+                    <div className="rounded-xl bg-slate-100 p-3">
+                      <p className="text-slate-500">Tổng tiền</p>
+                      <p className="font-bold">{formatMoney(item.totalMoney)}</p>
+                    </div>
+
+                    <div className="rounded-xl bg-slate-100 p-3">
+                      <p className="text-slate-500">Tiền thực tế</p>
+                      <p className="font-bold">{formatMoney(item.actualMoney)}</p>
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </section>
+        )}
+  
+  {selectedCompletedGoal.expensesSnapshot &&
+  selectedCompletedGoal.expensesSnapshot.length > 0 && (
     <section className="rounded-2xl bg-white p-5 shadow-sm">
-      <h3 className="text-xl font-bold">Chi tiết từng ngày</h3>
+      <h3 className="text-xl font-bold">Chi tiêu trong mục tiêu này</h3>
 
       <div className="mt-4 grid gap-3">
-        {selectedCompletedGoal.balanceSnapshots.map((item: BalanceSnapshot) => (
-          <article
-            key={item.date}
-            className="rounded-xl border p-4"
-          >
-            <div className="flex flex-wrap items-center justify-between gap-3">
+        {selectedCompletedGoal.expensesSnapshot.map((expense) => {
+          const total = getExpenseTotal(expense);
+
+          return (
+            <article key={expense.id} className="rounded-xl border p-4">
               <div>
-                <h4 className="font-bold">{item.date}</h4>
+                <h4 className="font-bold">{expense.date}</h4>
                 <p className="text-sm text-slate-500">
-                  Thu: {formatMoney(item.income)} · Chi:{" "}
-                  {formatMoney(item.expense)}
+                  Tổng chi: {formatMoney(total)}
+                </p>
+              </div>
+
+              <div className="mt-3 grid grid-cols-2 gap-2 text-sm lg:grid-cols-4">
+                <div className="rounded-xl bg-slate-100 p-3">
+                  <p className="text-slate-500">Sáng</p>
+                  <p className="font-bold">{formatMoney(expense.breakfast)}</p>
+                </div>
+
+                <div className="rounded-xl bg-slate-100 p-3">
+                  <p className="text-slate-500">Trưa</p>
+                  <p className="font-bold">{formatMoney(expense.lunch)}</p>
+                </div>
+
+                <div className="rounded-xl bg-slate-100 p-3">
+                  <p className="text-slate-500">Tối</p>
+                  <p className="font-bold">{formatMoney(expense.dinner)}</p>
+                </div>
+
+                <div className="rounded-xl bg-slate-100 p-3">
+                  <p className="text-slate-500">Khác</p>
+                  <p className="font-bold">{formatMoney(expense.other)}</p>
+                </div>
+              </div>
+
+              {expense.note && (
+                <p className="mt-3 rounded-lg bg-slate-100 p-3 text-sm text-slate-700">
+                  {expense.note}
+                </p>
+              )}
+            </article>
+          );
+        })}
+      </div>
+    </section>
+  )}
+
+  {selectedCompletedGoal.entriesSnapshot &&
+  selectedCompletedGoal.entriesSnapshot.length > 0 && (
+    <section className="rounded-2xl bg-white p-5 shadow-sm">
+      <h3 className="text-xl font-bold">Nhật ký trong mục tiêu này</h3>
+
+      <div className="mt-4 grid gap-3">
+        {selectedCompletedGoal.entriesSnapshot.map((entry) => (
+          <article key={entry.id} className="rounded-xl border p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h4 className="font-bold">{entry.date}</h4>
+                <p className="text-sm text-slate-500">
+                  Thu: {formatMoney(getTotalEntryMoney(entry))} ·{" "}
+                  {entry.workHours} giờ · {entry.orderCount ?? 0} đơn
                 </p>
               </div>
             </div>
 
-            <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
-              <div className="rounded-xl bg-slate-100 p-3">
-                <p className="text-slate-500">Tổng tiền</p>
-                <p className="font-bold">{formatMoney(item.totalMoney)}</p>
-              </div>
+            {entry.diary && (
+              <p className="mt-3 whitespace-pre-line text-sm">{entry.diary}</p>
+            )}
 
-              <div className="rounded-xl bg-slate-100 p-3">
-                <p className="text-slate-500">Tiền thực tế</p>
-                <p className="font-bold">{formatMoney(item.actualMoney)}</p>
-              </div>
-            </div>
+            {entry.note && (
+              <p className="mt-2 rounded-lg bg-slate-100 p-3 text-sm text-slate-700">
+                {entry.note}
+              </p>
+            )}
           </article>
         ))}
       </div>
@@ -2793,6 +3011,7 @@ async function handleLogout() {
           </div>
         )}
       </section>
+
     </>
   )}
 
