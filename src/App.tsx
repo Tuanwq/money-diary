@@ -18,8 +18,21 @@ type DailyEntry = {
   date: string;
   diary: string;
   income: number;
+  receivedMoney: number;
+  bonusMoney: number;
   workHours: number;
   mood: Mood;
+  note: string;
+  createdAt: string;
+};
+
+type ExpenseEntry = {
+  id: string;
+  date: string;
+  breakfast: number;
+  lunch: number;
+  dinner: number;
+  other: number;
   note: string;
   createdAt: string;
 };
@@ -38,7 +51,7 @@ type Goals = {
   bigGoalDeadline: string;
 };
 
-type Page = "home" | "goals" | "entry" | "history";
+type Page = "home" | "goals" | "entry" | "history" | "expenses";
 type GoalScreen = "menu" | "current" | "completed";
 type AppHistoryState = {
   page: Page;
@@ -57,6 +70,9 @@ type CompletedGoal = {
 const STORAGE_ENTRIES_KEY = "money_diary_entries";
 const STORAGE_GOALS_KEY = "money_diary_goals";
 const STORAGE_COMPLETED_GOALS_KEY = "money_diary_completed_goals";
+const STORAGE_EXPENSES_KEY = "money_diary_expenses";
+
+const ITEMS_PER_PAGE = 7;
 
 const defaultGoals: Goals = {
   dailyIncome: 200000,
@@ -96,6 +112,18 @@ function formatMoney(value: number) {
     style: "currency",
     currency: "VND",
   }).format(value);
+}
+
+function parseMoneyInput(value: string) {
+  return Number(value.replace(/[^\d]/g, ""));
+}
+
+function formatMoneyInput(value: string) {
+  const onlyDigits = value.replace(/[^\d]/g, "");
+
+  if (!onlyDigits) return "";
+
+  return new Intl.NumberFormat("vi-VN").format(Number(onlyDigits));
 }
 
 function getProgress(current: number, target: number) {
@@ -193,15 +221,30 @@ export default function App() {
   const [entries, setEntries] = useState<DailyEntry[]>([]);
   const [goals, setGoals] = useState<Goals>(defaultGoals);
   const [completedGoals, setCompletedGoals] = useState<CompletedGoal[]>([]);
+  const [expenses, setExpenses] = useState<ExpenseEntry[]>([]);
   const [selectedDate, setSelectedDate] = useState(getToday());
   const [editingDate, setEditingDate] = useState<string | null>(null);
   const [page, setPage] = useState<Page>("home");
   const [goalScreen, setGoalScreen] = useState<GoalScreen>("menu");
+  const [chartDays, setChartDays] = useState(7);
   const [session, setSession] = useState<Session | null>(null);
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
   const [cloudLoaded, setCloudLoaded] = useState(false);
   const [syncStatus, setSyncStatus] = useState("Chưa đồng bộ");
+
+  const [historySearch, setHistorySearch] = useState("");
+  const [historyFromDate, setHistoryFromDate] = useState("");
+  const [historyToDate, setHistoryToDate] = useState("");
+
+  const [expenseSearch, setExpenseSearch] = useState("");
+  const [expenseFromDate, setExpenseFromDate] = useState("");
+  const [expenseToDate, setExpenseToDate] = useState("");
+
+  const [historyCurrentPage, setHistoryCurrentPage] = useState(1);
+  const [expenseCurrentPage, setExpenseCurrentPage] = useState(1);
+
+  
 
   useEffect(() => {
   const initialState: AppHistoryState = {
@@ -235,15 +278,35 @@ export default function App() {
     date: getToday(),
     diary: "",
     income: "",
+    receivedMoney: "",
+    bonusMoney: "",
     workHours: "",
     mood: "normal" as Mood,
     note: "",
   });
 
+  const [expenseForm, setExpenseForm] = useState({
+  date: getToday(),
+  breakfast: "",
+  lunch: "",
+  dinner: "",
+  other: "",
+  note: "",
+});
+
+useEffect(() => {
+  setHistoryCurrentPage(1);
+}, [historySearch, historyFromDate, historyToDate]);
+
+useEffect(() => {
+  setExpenseCurrentPage(1);
+}, [expenseSearch, expenseFromDate, expenseToDate]);
+
   useEffect(() => {
     const savedEntries = localStorage.getItem(STORAGE_ENTRIES_KEY);
     const savedGoals = localStorage.getItem(STORAGE_GOALS_KEY);
     const savedCompletedGoals = localStorage.getItem(STORAGE_COMPLETED_GOALS_KEY);
+    const savedExpenses = localStorage.getItem(STORAGE_EXPENSES_KEY);
 
     if (savedEntries) {
       setEntries(JSON.parse(savedEntries));
@@ -260,19 +323,24 @@ export default function App() {
       setCompletedGoals(JSON.parse(savedCompletedGoals));
     }
 
+    if (savedExpenses) {
+      setExpenses(JSON.parse(savedExpenses));
+}
+
     setLoaded(true);
   }, []);
 
-  useEffect(() => {
-    if (!loaded) return;
+useEffect(() => {
+  if (!loaded) return;
 
-    localStorage.setItem(STORAGE_ENTRIES_KEY, JSON.stringify(entries));
-    localStorage.setItem(STORAGE_GOALS_KEY, JSON.stringify(goals));
-    localStorage.setItem(
-      STORAGE_COMPLETED_GOALS_KEY,
-      JSON.stringify(completedGoals)
-    );
-  }, [entries, goals, completedGoals, loaded]);
+  localStorage.setItem(STORAGE_ENTRIES_KEY, JSON.stringify(entries));
+  localStorage.setItem(STORAGE_EXPENSES_KEY, JSON.stringify(expenses));
+  localStorage.setItem(STORAGE_GOALS_KEY, JSON.stringify(goals));
+  localStorage.setItem(
+    STORAGE_COMPLETED_GOALS_KEY,
+    JSON.stringify(completedGoals)
+  );
+}, [entries, expenses, goals, completedGoals, loaded]);
 
   useEffect(() => {
   supabase.auth.getSession().then(({ data }) => {
@@ -306,6 +374,7 @@ useEffect(() => {
     const { error } = await supabase.from("money_diary_state").upsert({
       user_id: session.user.id,
       entries,
+      expenses,
       goals,
       completed_goals: completedGoals,
       updated_at: new Date().toISOString(),
@@ -321,7 +390,7 @@ useEffect(() => {
   }, 700);
 
   return () => clearTimeout(timeout);
-}, [entries, goals, completedGoals, session?.user.id, cloudLoaded]);
+}, [entries, expenses, goals, completedGoals, session?.user.id, cloudLoaded]);
 
   const todayString = getToday();
   const isSelectedToday = selectedDate === todayString;
@@ -329,8 +398,24 @@ useEffect(() => {
 
   const selectedEntry = entries.find((entry) => entry.date === selectedDate);
 
-  const selectedIncome = selectedEntry?.income ?? 0;
+  const selectedMainIncome = selectedEntry ? getMainIncome(selectedEntry) : 0;
+  const selectedBonusMoney = selectedEntry ? getBonusMoney(selectedEntry) : 0;
+  const selectedReceivedMoney = selectedEntry
+    ? getReceivedMoney(selectedEntry)
+    : 0;
+
+  const selectedIncome = selectedMainIncome + selectedBonusMoney;
   const selectedHours = selectedEntry?.workHours ?? 0;
+  const selectedExpense = expenses.find((expense) => expense.date === selectedDate);
+
+const selectedExpenseTotal = selectedExpense
+  ? selectedExpense.breakfast +
+    selectedExpense.lunch +
+    selectedExpense.dinner +
+    selectedExpense.other
+  : 0;
+
+const selectedActualIncome = selectedIncome - selectedExpenseTotal;
 
   const weekEntries = entries.filter((entry) =>
     isThisWeek(entry.date, selectedDateObject)
@@ -340,10 +425,16 @@ useEffect(() => {
     isSameMonth(entry.date, selectedDateObject)
   );
 
-  const weekIncome = weekEntries.reduce((sum, entry) => sum + entry.income, 0);
+  const weekIncome = weekEntries.reduce(
+  (sum, entry) => sum + getTotalEntryMoney(entry),
+  0
+);
   // const weekHours = weekEntries.reduce((sum, entry) => sum + entry.workHours, 0);
 
-  const monthIncome = monthEntries.reduce((sum, entry) => sum + entry.income, 0);
+  const monthIncome = monthEntries.reduce(
+  (sum, entry) => sum + getTotalEntryMoney(entry),
+  0
+);
   const monthHours = monthEntries.reduce(
     (sum, entry) => sum + entry.workHours,
     0
@@ -353,28 +444,214 @@ useEffect(() => {
     return [...entries].sort((a, b) => b.date.localeCompare(a.date));
   }, [entries]);
 
-  const chartData = useMemo(() => {
-  const result = [];
+  const filteredEntries = sortedEntries.filter((entry) => {
+  const keyword = historySearch.trim().toLowerCase();
 
-  for (let i = 6; i >= 0; i--) {
-    const date = new Date();
-    date.setDate(date.getDate() - i);
+  const matchKeyword =
+    !keyword ||
+    entry.date.toLowerCase().includes(keyword) ||
+    entry.diary.toLowerCase().includes(keyword) ||
+    entry.note.toLowerCase().includes(keyword);
 
-    const dateString = getDateString(date);
-    const entry = entries.find((item) => item.date === dateString);
+  const matchDate = isDateInRange(
+    entry.date,
+    historyFromDate,
+    historyToDate
+  );
 
-    result.push({
-      date: formatDateShort(dateString),
-      income: entry?.income ?? 0,
-      hours: entry?.workHours ?? 0,
-    });
+  return matchKeyword && matchDate;
+});
+
+const historyTotalPages = Math.max(
+  1,
+  Math.ceil(filteredEntries.length / ITEMS_PER_PAGE)
+);
+
+const paginatedEntries = filteredEntries.slice(
+  (historyCurrentPage - 1) * ITEMS_PER_PAGE,
+  historyCurrentPage * ITEMS_PER_PAGE
+);
+
+const filteredEntriesTotalMoney = filteredEntries.reduce(
+  (sum, entry) => sum + getTotalEntryMoney(entry),
+  0
+);
+
+const filteredEntriesNormalMoney = filteredEntries.reduce(
+  (sum, entry) => sum + getNormalIncome(entry),
+  0
+);
+
+const filteredEntriesHours = filteredEntries.reduce(
+  (sum, entry) => sum + entry.workHours,
+  0
+);
+
+const sortedExpenses = [...expenses].sort((a, b) =>
+  b.date.localeCompare(a.date)
+);
+
+const filteredExpenses = sortedExpenses.filter((expense) => {
+  const keyword = expenseSearch.trim().toLowerCase();
+
+  const matchKeyword =
+    !keyword ||
+    expense.date.toLowerCase().includes(keyword) ||
+    expense.note.toLowerCase().includes(keyword);
+
+  const matchDate = isDateInRange(
+    expense.date,
+    expenseFromDate,
+    expenseToDate
+  );
+
+  return matchKeyword && matchDate;
+});
+
+const expenseTotalPages = Math.max(
+  1,
+  Math.ceil(filteredExpenses.length / ITEMS_PER_PAGE)
+);
+
+const paginatedExpenses = filteredExpenses.slice(
+  (expenseCurrentPage - 1) * ITEMS_PER_PAGE,
+  expenseCurrentPage * ITEMS_PER_PAGE
+);
+
+const filteredExpensesTotal = filteredExpenses.reduce((sum, expense) => {
+  return (
+    sum +
+    expense.breakfast +
+    expense.lunch +
+    expense.dinner +
+    expense.other
+  );
+}, 0);
+
+const safeChartDays = Math.min(Math.max(chartDays, 1), 365);
+
+const chartData = Array.from({ length: safeChartDays }).map((_, index) => {
+  const date = new Date();
+  date.setDate(date.getDate() - (safeChartDays - 1 - index));
+
+  const dateString = date.toISOString().slice(0, 10);
+  const entry = entries.find((item) => item.date === dateString);
+
+  return {
+    date: dateString.slice(5),
+    income: entry ? getNormalIncome(entry) : 0,
+  };
+});
+
+function isDateInRange(date: string, fromDate: string, toDate: string) {
+  if (fromDate && date < fromDate) return false;
+  if (toDate && date > toDate) return false;
+  return true;
+}
+
+function getDateDaysAgo(days: number) {
+  const date = new Date();
+  date.setDate(date.getDate() - days);
+  return date.toISOString().slice(0, 10);
+}
+
+function getMonthStart() {
+  const date = new Date();
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+
+  return `${year}-${month}-01`;
+}
+
+function setHistoryQuickFilter(type: "today" | "7days" | "month" | "all") {
+  if (type === "today") {
+    setHistoryFromDate(getToday());
+    setHistoryToDate(getToday());
   }
 
-    return result;
-  }, [entries]);
+  if (type === "7days") {
+    setHistoryFromDate(getDateDaysAgo(6));
+    setHistoryToDate(getToday());
+  }
 
-  const totalIncome = entries.reduce((sum, entry) => sum + entry.income, 0);
-  const totalSavedForBigGoal = goals.bigGoalSaved + totalIncome;
+  if (type === "month") {
+    setHistoryFromDate(getMonthStart());
+    setHistoryToDate(getToday());
+  }
+
+  if (type === "all") {
+    setHistoryFromDate("");
+    setHistoryToDate("");
+    setHistorySearch("");
+  }
+}
+
+function setExpenseQuickFilter(type: "today" | "7days" | "month" | "all") {
+  if (type === "today") {
+    setExpenseFromDate(getToday());
+    setExpenseToDate(getToday());
+  }
+
+  if (type === "7days") {
+    setExpenseFromDate(getDateDaysAgo(6));
+    setExpenseToDate(getToday());
+  }
+
+  if (type === "month") {
+    setExpenseFromDate(getMonthStart());
+    setExpenseToDate(getToday());
+  }
+
+  if (type === "all") {
+    setExpenseFromDate("");
+    setExpenseToDate("");
+    setExpenseSearch("");
+  }
+}
+
+function getMainIncome(entry: DailyEntry) {
+  return entry.income ?? 0;
+}
+
+function getReceivedMoney(entry: DailyEntry) {
+  return entry.receivedMoney ?? 0;
+}
+
+function getBonusMoney(entry: DailyEntry) {
+  return entry.bonusMoney ?? 0;
+}
+
+// Thu nhập tính bình thường: dùng cho tiền thực tế hôm nay và biểu đồ
+function getNormalIncome(entry: DailyEntry) {
+  return getMainIncome(entry) + getBonusMoney(entry);
+}
+
+// Tổng tiền thực sự nhận được: dùng cho tuần, tháng, tổng hành trình, tiền hiện có
+function getTotalEntryMoney(entry: DailyEntry) {
+  return getMainIncome(entry) + getBonusMoney(entry) + getReceivedMoney(entry);
+}
+
+const totalIncome = entries.reduce(
+  (sum, entry) => sum + getTotalEntryMoney(entry),
+  0
+);
+
+const totalExpense = expenses.reduce((sum, expense) => {
+  return (
+    sum +
+    expense.breakfast +
+    expense.lunch +
+    expense.dinner +
+    expense.other
+  );
+}, 0);
+
+const actualMoney = goals.bigGoalSaved + totalIncome - totalExpense;
+
+const totalJourneyMoney = totalIncome;
+
+const totalSavedForBigGoal = actualMoney;
+
   const bigGoalProgress = getProgress(totalSavedForBigGoal, goals.bigGoalTarget);
   const remainingBigGoal = Math.max(goals.bigGoalTarget - totalSavedForBigGoal, 0);
   const daysLeft = getDaysLeft(goals.bigGoalDeadline);
@@ -431,10 +708,67 @@ useEffect(() => {
   setGoalScreen(nextGoalScreen);
 }
 
+function handleExpenseSubmit(event: React.FormEvent) {
+  event.preventDefault();
+
+  if (!expenseForm.date) {
+    alert("Bạn chưa chọn ngày chi tiêu.");
+    return;
+  }
+
+  const breakfast = parseMoneyInput(expenseForm.breakfast);
+  const lunch = parseMoneyInput(expenseForm.lunch);
+  const dinner = parseMoneyInput(expenseForm.dinner);
+  const other = parseMoneyInput(expenseForm.other);
+
+  if (breakfast < 0 || lunch < 0 || dinner < 0 || other < 0) {
+    alert("Chi tiêu không được âm.");
+    return;
+  }
+
+  setExpenses((prev) => {
+    const existingExpense = prev.find(
+      (expense) => expense.date === expenseForm.date
+    );
+
+    const newExpense: ExpenseEntry = {
+      id: existingExpense?.id ?? crypto.randomUUID(),
+      date: expenseForm.date,
+      breakfast,
+      lunch,
+      dinner,
+      other,
+      note: expenseForm.note,
+      createdAt: existingExpense?.createdAt ?? new Date().toISOString(),
+    };
+
+    const withoutSameDate = prev.filter(
+      (expense) => expense.date !== expenseForm.date
+    );
+
+    return [...withoutSameDate, newExpense];
+  });
+
+  setSelectedDate(expenseForm.date);
+
+  setExpenseForm({
+    date: getToday(),
+    breakfast: "",
+    lunch: "",
+    dinner: "",
+    other: "",
+    note: "",
+  });
+
+  alert("Đã lưu chi tiêu.");
+}
+
   function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
 
-    const income = Number(form.income);
+    const income = parseMoneyInput(form.income);
+    const receivedMoney = parseMoneyInput(form.receivedMoney);
+    const bonusMoney = parseMoneyInput(form.bonusMoney);
     const workHours = Number(form.workHours);
 
     if (!form.date) {
@@ -442,8 +776,8 @@ useEffect(() => {
       return;
     }
 
-    if (income < 0 || workHours < 0) {
-      alert("Tiền và số giờ làm không được âm.");
+    if (income < 0 || receivedMoney < 0 || bonusMoney < 0 || workHours < 0) {
+      alert("Số tiền, tiền nhận được, tiền thưởng và giờ làm không được âm.");
       return;
     }
 
@@ -457,6 +791,8 @@ useEffect(() => {
         date: form.date,
         diary: form.diary,
         income,
+        receivedMoney,
+        bonusMoney,
         workHours,
         mood: form.mood,
         note: form.note,
@@ -471,6 +807,8 @@ useEffect(() => {
       date: getToday(),
       diary: "",
       income: "",
+      receivedMoney: "",
+      bonusMoney: "",
       workHours: "",
       mood: "normal",
       note: "",
@@ -485,8 +823,10 @@ useEffect(() => {
   setForm({
     date: entry.date,
     diary: entry.diary,
-    income: String(entry.income),
-    workHours: String(entry.workHours),
+    income: formatMoneyInput(String(entry.income ?? 0)),
+    receivedMoney: formatMoneyInput(String(entry.receivedMoney ?? 0)),
+    bonusMoney: formatMoneyInput(String(entry.bonusMoney ?? 0)),
+    workHours: String(entry.workHours ?? 0),
     mood: entry.mood,
     note: entry.note,
   });
@@ -499,6 +839,13 @@ useEffect(() => {
     top: 0,
     behavior: "smooth",
   });
+}
+
+function deleteExpense(id: string) {
+  const confirmed = confirm("Bạn có chắc muốn xóa chi tiêu này không?");
+  if (!confirmed) return;
+
+  setExpenses((prev) => prev.filter((expense) => expense.id !== id));
 }
 
   function deleteEntry(id: string) {
@@ -549,7 +896,7 @@ async function loadCloudData(userId: string) {
 
   const { data, error } = await supabase
     .from("money_diary_state")
-    .select("entries, goals, completed_goals")
+    .select("entries, goals, completed_goals, expenses")
     .eq("user_id", userId)
     .maybeSingle();
 
@@ -562,6 +909,10 @@ async function loadCloudData(userId: string) {
   const localEntries = entries;
   const localGoals = goals;
   const localCompletedGoals = completedGoals;
+
+  const cloudExpenses = data?.expenses
+    ? ((data.expenses || []) as unknown as ExpenseEntry[])
+    : [];
 
   const cloudEntries = data?.entries
     ? ((data.entries || []) as unknown as DailyEntry[])
@@ -577,6 +928,22 @@ async function loadCloudData(userId: string) {
   const cloudCompletedGoals = data?.completed_goals
     ? ((data.completed_goals || []) as unknown as CompletedGoal[])
     : [];
+
+  const mergedExpensesMap = new Map<string, ExpenseEntry>();
+
+  cloudExpenses.forEach((expense) => {
+    mergedExpensesMap.set(expense.date, expense);
+  });
+
+  expenses.forEach((expense) => {
+    mergedExpensesMap.set(expense.date, expense);
+  });
+
+  const mergedExpenses = Array.from(mergedExpensesMap.values()).sort((a, b) =>
+    b.date.localeCompare(a.date)
+  );
+
+  setExpenses(mergedExpenses);
 
   const mergedEntriesMap = new Map<string, DailyEntry>();
 
@@ -615,6 +982,7 @@ async function loadCloudData(userId: string) {
     entries: mergedEntries,
     goals: mergedGoals,
     completed_goals: mergedCompletedGoals,
+    expenses: mergedExpenses,
     updated_at: new Date().toISOString(),
   });
 
@@ -848,12 +1216,16 @@ async function handleLogout() {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
           <StatCard
-            title={isSelectedToday ? "Tiền hôm nay" : "Tiền ngày này"}
-            value={formatMoney(selectedIncome)}
-            target={formatMoney(goals.dailyIncome)}
-            progress={getProgress(selectedIncome, goals.dailyIncome)}
+            title={isSelectedToday ? "Tiền thực tế hôm nay" : "Tiền thực tế ngày này"}
+            value={formatMoney(selectedActualIncome)}
+            target={`Làm: ${formatMoney(selectedMainIncome)} + Thưởng: ${formatMoney(
+              selectedBonusMoney
+            )} - Chi: ${formatMoney(selectedExpenseTotal)} | Nhận: ${formatMoney(
+              selectedReceivedMoney
+            )}`}
+            progress={getProgress(selectedActualIncome, goals.dailyIncome)}
           />
 
           <StatCard
@@ -876,10 +1248,23 @@ async function handleLogout() {
             target={formatMoney(goals.monthlyIncome)}
             progress={getProgress(monthIncome, goals.monthlyIncome)}
           />
+          <StatCard
+            title="Tiền thực tế hiện có"
+            value={formatMoney(actualMoney)}
+            target="Sau khi trừ chi tiêu"
+            progress={100}
+          />
+
+          <StatCard
+            title="Tổng tiền hành trình"
+            value={formatMoney(totalJourneyMoney)}
+            target="Tổng tiền đã kiếm"
+            progress={100}
+          />
         </div>
       </section>
 
-      <section className="grid gap-4 md:grid-cols-3">
+      <section className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <button
           type="button"
           onClick={() => navigateTo("goals", "menu")}
@@ -913,6 +1298,17 @@ async function handleLogout() {
           <h3 className="mt-3 text-xl font-bold">Lịch sử nhật kí</h3>
           <p className="mt-1 text-sm text-slate-500">
             Xem lại, sửa hoặc xóa các ngày đã ghi.
+          </p>
+        </button>
+        <button
+          type="button"
+          onClick={() => navigateTo("expenses")}
+          className="rounded-2xl bg-white p-6 text-left shadow-sm hover:bg-slate-50"
+        >
+          <p className="text-3xl">💸</p>
+          <h3 className="mt-3 text-xl font-bold">Lịch sử chi tiêu</h3>
+          <p className="mt-1 text-sm text-slate-500">
+            Xem lại chi tiêu ăn uống và các khoản khác theo ngày.
           </p>
         </button>
       </section>
@@ -1030,7 +1426,74 @@ async function handleLogout() {
           <div className="rounded-2xl bg-white p-5 shadow-sm lg:col-span-2">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <h2 className="text-xl font-bold">Biểu đồ 7 ngày gần nhất</h2>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-xl font-bold">
+                      Thu nhập {safeChartDays} ngày gần nhất
+                    </h2>
+                    <p className="text-sm text-slate-500">
+                      Biểu đồ tính tiền làm được + tiền thưởng, không tính tiền nhận được.
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setChartDays(7)}
+                      className={`rounded-full px-3 py-1 text-sm font-medium ${
+                        chartDays === 7
+                          ? "bg-slate-900 text-white"
+                          : "bg-slate-100 hover:bg-slate-200"
+                      }`}
+                    >
+                      7 ngày
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setChartDays(14)}
+                      className={`rounded-full px-3 py-1 text-sm font-medium ${
+                        chartDays === 14
+                          ? "bg-slate-900 text-white"
+                          : "bg-slate-100 hover:bg-slate-200"
+                      }`}
+                    >
+                      14 ngày
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setChartDays(30)}
+                      className={`rounded-full px-3 py-1 text-sm font-medium ${
+                        chartDays === 30
+                          ? "bg-slate-900 text-white"
+                          : "bg-slate-100 hover:bg-slate-200"
+                      }`}
+                    >
+                      30 ngày
+                    </button>
+
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      value={String(chartDays)}
+                      onChange={(e) => {
+                        const onlyDigits = e.target.value.replace(/[^\d]/g, "");
+                        const value = Number(onlyDigits);
+
+                        if (!value) {
+                          setChartDays(1);
+                          return;
+                        }
+
+                        setChartDays(Math.min(Math.max(value, 1), 365));
+                      }}
+                      className="w-24 rounded-xl border px-3 py-1 text-sm"
+                      placeholder="Số ngày"
+                    />
+                  </div>
+                </div>
                 <p className="text-sm text-slate-500">
                   Theo dõi tiền kiếm được từng ngày.
                 </p>
@@ -1062,6 +1525,48 @@ async function handleLogout() {
                   />
                 </LineChart>
               </ResponsiveContainer>
+            </div>
+            <div>
+              <label className="text-sm font-medium">Tiền nhận được</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  placeholder="VD: 500.000"
+                  value={form.receivedMoney}
+                  onChange={(e) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      receivedMoney: formatMoneyInput(e.target.value),
+                    }))
+                  }
+                  className="mt-1 w-full rounded-xl border px-3 py-2"
+                />
+              <p className="mt-1 text-xs text-slate-500">
+                Khoản này tính vào tổng tiền, tuần, tháng và tiền hiện có, nhưng không tính
+                vào tiền thực tế hôm nay và biểu đồ 7 ngày.
+              </p>
+            </div>
+
+            <div>
+              <label className="text-sm font-medium">Tiền thưởng</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  placeholder="VD: 100.000"
+                  value={form.bonusMoney}
+                  onChange={(e) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      bonusMoney: formatMoneyInput(e.target.value),
+                    }))
+                  }
+                  className="mt-1 w-full rounded-xl border px-3 py-2"
+                />
+              <p className="mt-1 text-xs text-slate-500">
+                Khoản này được tính như thu nhập bình thường.
+              </p>
             </div>
           </div>
 
@@ -1299,6 +1804,137 @@ async function handleLogout() {
           Về trang chủ
         </button>
       </div>
+      
+      <section className="grid gap-6 lg:grid-cols-2">
+      <form
+        onSubmit={handleExpenseSubmit}
+        className="rounded-2xl bg-white p-5 shadow-sm"
+      >
+        <h2 className="text-xl font-bold">Chi tiêu hôm nay</h2>
+
+        <p className="mt-1 text-sm text-slate-500">
+          Nhập chi tiêu ăn uống và khoản khác trong ngày.
+        </p>
+
+        <div className="mt-4 grid gap-4 md:grid-cols-2">
+          <div>
+            <label className="text-sm font-medium">Ngày</label>
+            <input
+              type="date"
+              value={expenseForm.date}
+              max={todayString}
+              onChange={(e) =>
+                setExpenseForm((prev) => ({ ...prev, date: e.target.value }))
+              }
+              className="mt-1 w-full rounded-xl border px-3 py-2"
+            />
+          </div>
+
+          <div>
+            <label className="text-sm font-medium">Ăn sáng</label>
+              <input
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                placeholder="VD: 30.000"
+                value={expenseForm.breakfast}
+                onChange={(e) =>
+                  setExpenseForm((prev) => ({
+                    ...prev,
+                    breakfast: formatMoneyInput(e.target.value),
+                  }))
+                }
+                className="mt-1 w-full rounded-xl border px-3 py-2"
+              />
+          </div>
+
+          <div>
+            <label className="text-sm font-medium">Ăn trưa</label>
+              <input
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                placeholder="VD: 50.000"
+                value={expenseForm.lunch}
+                onChange={(e) =>
+                  setExpenseForm((prev) => ({
+                    ...prev,
+                    lunch: formatMoneyInput(e.target.value),
+                  }))
+                }
+                className="mt-1 w-full rounded-xl border px-3 py-2"
+              />
+          </div>
+
+          <div>
+            <label className="text-sm font-medium">Ăn tối</label>
+              <input
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                placeholder="VD: 40.000"
+                value={expenseForm.dinner}
+                onChange={(e) =>
+                  setExpenseForm((prev) => ({
+                    ...prev,
+                    dinner: formatMoneyInput(e.target.value),
+                  }))
+                }
+                className="mt-1 w-full rounded-xl border px-3 py-2"
+              />
+          </div>
+
+          <div>
+            <label className="text-sm font-medium">Khác</label>
+              <input
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                placeholder="VD: 20.000"
+                value={expenseForm.other}
+                onChange={(e) =>
+                  setExpenseForm((prev) => ({
+                    ...prev,
+                    other: formatMoneyInput(e.target.value),
+                  }))
+                }
+                className="mt-1 w-full rounded-xl border px-3 py-2"
+              />
+          </div>
+
+          <div className="rounded-xl bg-slate-100 p-3 text-sm">
+            <p className="text-slate-500">Tổng chi tiêu đang nhập</p>
+            <p className="mt-1 text-lg font-bold">
+                {formatMoney(
+                  parseMoneyInput(expenseForm.breakfast) +
+                    parseMoneyInput(expenseForm.lunch) +
+                    parseMoneyInput(expenseForm.dinner) +
+                    parseMoneyInput(expenseForm.other)
+                )}
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-4">
+          <label className="text-sm font-medium">Ghi chú chi tiêu</label>
+          <textarea
+            rows={3}
+            value={expenseForm.note}
+            onChange={(e) =>
+              setExpenseForm((prev) => ({ ...prev, note: e.target.value }))
+            }
+            placeholder="VD: Ăn trưa với bạn, mua nước, gửi xe..."
+            className="mt-1 w-full rounded-xl border px-3 py-2"
+          />
+        </div>
+
+        <button
+          type="submit"
+          className="mt-4 rounded-xl bg-slate-900 px-5 py-2 font-medium text-white hover:bg-slate-700"
+        >
+          Lưu chi tiêu
+        </button>
+      </form>
 
       <form
         onSubmit={handleSubmit}
@@ -1342,15 +1978,56 @@ async function handleLogout() {
 
           <div>
             <label className="text-sm font-medium">Tiền kiếm được</label>
+              <input
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                placeholder="VD: 250.000"
+                value={form.income}
+                onChange={(e) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    income: formatMoneyInput(e.target.value),
+                  }))
+                }
+                className="mt-1 w-full rounded-xl border px-3 py-2"
+              />
+          </div>
+
+          <div>
+            <label className="text-sm font-medium">Tiền nhận được</label>
             <input
               type="number"
-              placeholder="VD: 250000"
-              value={form.income}
+              placeholder="VD: 800000"
+              value={form.receivedMoney}
               onChange={(e) =>
-                setForm((prev) => ({ ...prev, income: e.target.value }))
+                setForm((prev) => ({
+                  ...prev,
+                  receivedMoney: e.target.value,
+                }))
               }
               className="mt-1 w-full rounded-xl border px-3 py-2"
             />
+            <p className="mt-1 text-xs text-slate-500">
+            </p>
+          </div>
+
+          <div>
+            <label className="text-sm font-medium">Tiền thưởng</label>
+            <input
+              type="number"
+              placeholder="VD: 100000"
+              value={form.bonusMoney}
+              onChange={(e) =>
+                setForm((prev) => ({
+                  ...prev,
+                  bonusMoney: e.target.value,
+                }))
+              }
+              className="mt-1 w-full rounded-xl border px-3 py-2"
+            />
+            <p className="mt-1 text-xs text-slate-500">
+            </p>
           </div>
 
           <div>
@@ -1413,6 +2090,8 @@ async function handleLogout() {
                   date: getToday(),
                   diary: "",
                   income: "",
+                  receivedMoney: "",
+                  bonusMoney: "",
                   workHours: "",
                   mood: "normal",
                   note: "",
@@ -1425,6 +2104,7 @@ async function handleLogout() {
           )}
         </div>
       </form>
+      </section>
     </>
   )}
 
@@ -1447,26 +2127,129 @@ async function handleLogout() {
         </button>
       </div>
 
+      <section className="rounded-2xl bg-white p-4 shadow-sm">
+        <div className="grid gap-3 lg:grid-cols-4">
+          <div className="lg:col-span-2">
+            <label className="text-sm font-medium">Tìm kiếm</label>
+            <input
+              type="text"
+              value={historySearch}
+              onChange={(e) => setHistorySearch(e.target.value)}
+              placeholder="Tìm theo ngày, nhật kí, ghi chú..."
+              className="mt-1 w-full rounded-xl border px-3 py-2"
+            />
+          </div>
+
+          <div>
+            <label className="text-sm font-medium">Từ ngày</label>
+            <input
+              type="date"
+              value={historyFromDate}
+              onChange={(e) => setHistoryFromDate(e.target.value)}
+              className="mt-1 w-full rounded-xl border px-3 py-2"
+            />
+          </div>
+
+          <div>
+            <label className="text-sm font-medium">Đến ngày</label>
+            <input
+              type="date"
+              value={historyToDate}
+              onChange={(e) => setHistoryToDate(e.target.value)}
+              className="mt-1 w-full rounded-xl border px-3 py-2"
+            />
+          </div>
+        </div>
+
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => setHistoryQuickFilter("today")}
+            className="rounded-full bg-slate-100 px-3 py-1 text-sm font-medium hover:bg-slate-200"
+          >
+            Hôm nay
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setHistoryQuickFilter("7days")}
+            className="rounded-full bg-slate-100 px-3 py-1 text-sm font-medium hover:bg-slate-200"
+          >
+            7 ngày
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setHistoryQuickFilter("month")}
+            className="rounded-full bg-slate-100 px-3 py-1 text-sm font-medium hover:bg-slate-200"
+          >
+            Tháng này
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setHistoryQuickFilter("all")}
+            className="rounded-full bg-red-50 px-3 py-1 text-sm font-medium text-red-600 hover:bg-red-100"
+          >
+            Xóa lọc
+          </button>
+        </div>
+      </section>
+
+      <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <div className="rounded-2xl bg-white p-4 shadow-sm">
+          <p className="text-sm text-slate-500">Số bản ghi</p>
+          <p className="mt-1 text-xl font-bold">{filteredEntries.length}</p>
+        </div>
+
+        <div className="rounded-2xl bg-white p-4 shadow-sm">
+          <p className="text-sm text-slate-500">Tổng ngày lọc</p>
+          <p className="mt-1 text-xl font-bold">
+            {formatMoney(filteredEntriesTotalMoney)}
+          </p>
+        </div>
+
+        <div className="rounded-2xl bg-white p-4 shadow-sm">
+          <p className="text-sm text-slate-500">Tính cho biểu đồ</p>
+          <p className="mt-1 text-xl font-bold">
+            {formatMoney(filteredEntriesNormalMoney)}
+          </p>
+        </div>
+
+        <div className="rounded-2xl bg-white p-4 shadow-sm">
+          <p className="text-sm text-slate-500">Tổng giờ</p>
+          <p className="mt-1 text-xl font-bold">{filteredEntriesHours} giờ</p>
+        </div>
+      </section>
+
       <section className="rounded-2xl bg-white p-5 shadow-sm">
         {sortedEntries.length === 0 ? (
           <p className="text-slate-500">
             Chưa có nhật ký nào. Hãy nhập ngày đầu tiên của bạn.
           </p>
         ) : (
-          <div className="grid gap-3">
-            {sortedEntries.map((entry) => (
+        <div className="grid gap-3">
+          {paginatedEntries.map((entry) => {
+            const mainIncome = getMainIncome(entry);
+            const receivedMoney = getReceivedMoney(entry);
+            const bonusMoney = getBonusMoney(entry);
+            const normalIncome = getNormalIncome(entry);
+            const totalEntryMoney = getTotalEntryMoney(entry);
+
+            return (
               <article key={entry.id} className="rounded-xl border p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <h3 className="font-bold">{entry.date}</h3>
                     <p className="text-sm text-slate-500">
-                      {formatMoney(entry.income)} · {entry.workHours} giờ ·{" "}
-                      {moodLabels[entry.mood]}
+                      Tổng ngày này: {formatMoney(totalEntryMoney)} ·{" "}
+                      {entry.workHours} giờ · {moodLabels[entry.mood]}
                     </p>
                   </div>
 
                   <div className="flex gap-2">
                     <button
+                      type="button"
                       onClick={() => editEntry(entry)}
                       className="rounded-lg bg-slate-100 px-3 py-1 text-sm font-medium text-slate-700 hover:bg-slate-200"
                     >
@@ -1474,11 +2257,44 @@ async function handleLogout() {
                     </button>
 
                     <button
+                      type="button"
                       onClick={() => deleteEntry(entry.id)}
                       className="rounded-lg bg-red-50 px-3 py-1 text-sm font-medium text-red-600 hover:bg-red-100"
                     >
                       Xóa
                     </button>
+                  </div>
+                </div>
+
+                <div className="mt-4 grid gap-3 text-sm md:grid-cols-3 lg:grid-cols-6">
+                  <div className="rounded-xl bg-slate-100 p-3">
+                    <p className="text-slate-500">Tiền làm được</p>
+                    <p className="font-bold">{formatMoney(mainIncome)}</p>
+                  </div>
+
+                  <div className="rounded-xl bg-slate-100 p-3">
+                    <p className="text-slate-500">Tiền thưởng</p>
+                    <p className="font-bold">{formatMoney(bonusMoney)}</p>
+                  </div>
+
+                  <div className="rounded-xl bg-slate-100 p-3">
+                    <p className="text-slate-500">Tiền nhận được</p>
+                    <p className="font-bold">{formatMoney(receivedMoney)}</p>
+                  </div>
+
+                  <div className="rounded-xl bg-slate-100 p-3">
+                    <p className="text-slate-500">Tính cho biểu đồ</p>
+                    <p className="font-bold">{formatMoney(normalIncome)}</p>
+                  </div>
+
+                  <div className="rounded-xl bg-slate-100 p-3">
+                    <p className="text-slate-500">Tổng ngày này</p>
+                    <p className="font-bold">{formatMoney(totalEntryMoney)}</p>
+                  </div>
+
+                  <div className="rounded-xl bg-slate-100 p-3">
+                    <p className="text-slate-500">Giờ làm</p>
+                    <p className="font-bold">{entry.workHours} giờ</p>
                   </div>
                 </div>
 
@@ -1492,11 +2308,264 @@ async function handleLogout() {
                   </p>
                 )}
               </article>
-            ))}
+            );
+          })}
+        </div>
+        )}
+        {filteredEntries.length > ITEMS_PER_PAGE && (
+          <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+            <button
+              type="button"
+              onClick={() =>
+                setHistoryCurrentPage((prev) => Math.max(prev - 1, 1))
+              }
+              disabled={historyCurrentPage === 1}
+              className="rounded-xl border bg-white px-4 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Trước
+            </button>
+
+            <span className="rounded-xl bg-slate-100 px-4 py-2 text-sm font-medium">
+              Trang {historyCurrentPage} / {historyTotalPages}
+            </span>
+
+            <button
+              type="button"
+              onClick={() =>
+                setHistoryCurrentPage((prev) =>
+                  Math.min(prev + 1, historyTotalPages)
+                )
+              }
+              disabled={historyCurrentPage === historyTotalPages}
+              className="rounded-xl border bg-white px-4 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Sau
+            </button>
           </div>
         )}
       </section>
     </>
+  )}
+
+  {page === "expenses" && (
+  <>
+    <div className="flex items-center justify-between">
+      <div>
+        <h2 className="text-2xl font-bold">Lịch sử chi tiêu</h2>
+        <p className="text-sm text-slate-500">
+          Xem lại chi tiêu ăn uống và các khoản khác theo ngày.
+        </p>
+      </div>
+
+      <button
+        type="button"
+        onClick={() => navigateTo("home", "menu")}
+        className="rounded-xl border bg-white px-4 py-2 font-medium shadow-sm hover:bg-slate-100"
+      >
+        Về trang chủ
+      </button>
+    </div>
+
+    <section className="rounded-2xl bg-white p-4 shadow-sm">
+      <div className="grid gap-3 lg:grid-cols-4">
+        <div className="lg:col-span-2">
+          <label className="text-sm font-medium">Tìm kiếm</label>
+          <input
+            type="text"
+            value={expenseSearch}
+            onChange={(e) => setExpenseSearch(e.target.value)}
+            placeholder="Tìm theo ngày hoặc ghi chú chi tiêu..."
+            className="mt-1 w-full rounded-xl border px-3 py-2"
+          />
+        </div>
+
+        <div>
+          <label className="text-sm font-medium">Từ ngày</label>
+          <input
+            type="date"
+            value={expenseFromDate}
+            onChange={(e) => setExpenseFromDate(e.target.value)}
+            className="mt-1 w-full rounded-xl border px-3 py-2"
+          />
+        </div>
+
+        <div>
+          <label className="text-sm font-medium">Đến ngày</label>
+          <input
+            type="date"
+            value={expenseToDate}
+            onChange={(e) => setExpenseToDate(e.target.value)}
+            className="mt-1 w-full rounded-xl border px-3 py-2"
+          />
+        </div>
+      </div>
+
+      <div className="mt-3 flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={() => setExpenseQuickFilter("today")}
+          className="rounded-full bg-slate-100 px-3 py-1 text-sm font-medium hover:bg-slate-200"
+        >
+          Hôm nay
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setExpenseQuickFilter("7days")}
+          className="rounded-full bg-slate-100 px-3 py-1 text-sm font-medium hover:bg-slate-200"
+        >
+          7 ngày
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setExpenseQuickFilter("month")}
+          className="rounded-full bg-slate-100 px-3 py-1 text-sm font-medium hover:bg-slate-200"
+        >
+          Tháng này
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setExpenseQuickFilter("all")}
+          className="rounded-full bg-red-50 px-3 py-1 text-sm font-medium text-red-600 hover:bg-red-100"
+        >
+          Xóa lọc
+        </button>
+      </div>
+    </section>
+
+    <section className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+      <div className="rounded-2xl bg-white p-4 shadow-sm">
+        <p className="text-sm text-slate-500">Số bản ghi</p>
+        <p className="mt-1 text-xl font-bold">{filteredExpenses.length}</p>
+      </div>
+
+      <div className="rounded-2xl bg-white p-4 shadow-sm">
+        <p className="text-sm text-slate-500">Tổng chi tiêu</p>
+        <p className="mt-1 text-xl font-bold">
+          {formatMoney(filteredExpensesTotal)}
+        </p>
+      </div>
+
+      <div className="rounded-2xl bg-white p-4 shadow-sm">
+        <p className="text-sm text-slate-500">Trung bình / bản ghi</p>
+        <p className="mt-1 text-xl font-bold">
+          {formatMoney(
+            filteredExpenses.length > 0
+              ? Math.round(filteredExpensesTotal / filteredExpenses.length)
+              : 0
+          )}
+        </p>
+      </div>
+    </section>
+
+    <section className="rounded-2xl bg-white p-5 shadow-sm">
+      {expenses.length === 0 ? (
+        <p className="text-slate-500">
+          Chưa có dữ liệu chi tiêu nào.
+        </p>
+      ) : (
+        <div className="grid gap-3">
+          {paginatedExpenses.map((expense) => {
+              const total =
+                expense.breakfast +
+                expense.lunch +
+                expense.dinner +
+                expense.other;
+
+              return (
+                <article key={expense.id} className="rounded-xl border p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <h3 className="font-bold">{expense.date}</h3>
+                      <p className="text-sm text-slate-500">
+                        Tổng chi tiêu: {formatMoney(total)}
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => deleteExpense(expense.id)}
+                      className="rounded-lg bg-red-50 px-3 py-1 text-sm font-medium text-red-600 hover:bg-red-100"
+                    >
+                      Xóa
+                    </button>
+                  </div>
+
+                  <div className="mt-4 grid gap-3 text-sm md:grid-cols-4">
+                    <div className="rounded-xl bg-slate-100 p-3">
+                      <p className="text-slate-500">Ăn sáng</p>
+                      <p className="font-bold">
+                        {formatMoney(expense.breakfast)}
+                      </p>
+                    </div>
+
+                    <div className="rounded-xl bg-slate-100 p-3">
+                      <p className="text-slate-500">Ăn trưa</p>
+                      <p className="font-bold">
+                        {formatMoney(expense.lunch)}
+                      </p>
+                    </div>
+
+                    <div className="rounded-xl bg-slate-100 p-3">
+                      <p className="text-slate-500">Ăn tối</p>
+                      <p className="font-bold">
+                        {formatMoney(expense.dinner)}
+                      </p>
+                    </div>
+
+                    <div className="rounded-xl bg-slate-100 p-3">
+                      <p className="text-slate-500">Khác</p>
+                      <p className="font-bold">
+                        {formatMoney(expense.other)}
+                      </p>
+                    </div>
+                  </div>
+
+                  {expense.note && (
+                    <p className="mt-3 rounded-lg bg-slate-100 p-3 text-sm text-slate-700">
+                      {expense.note}
+                    </p>
+                  )}
+                </article>
+              );
+            })}
+        </div>
+      )}
+      {filteredExpenses.length > ITEMS_PER_PAGE && (
+        <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+          <button
+            type="button"
+            onClick={() =>
+              setExpenseCurrentPage((prev) => Math.max(prev - 1, 1))
+            }
+            disabled={expenseCurrentPage === 1}
+            className="rounded-xl border bg-white px-4 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Trước
+          </button>
+
+          <span className="rounded-xl bg-slate-100 px-4 py-2 text-sm font-medium">
+            Trang {expenseCurrentPage} / {expenseTotalPages}
+          </span>
+
+          <button
+            type="button"
+            onClick={() =>
+              setExpenseCurrentPage((prev) =>
+                Math.min(prev + 1, expenseTotalPages)
+              )
+            }
+            disabled={expenseCurrentPage === expenseTotalPages}
+            className="rounded-xl border bg-white px-4 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Sau
+          </button>
+        </div>
+      )}
+    </section>
+  </>
   )}
 </main>
 )}
