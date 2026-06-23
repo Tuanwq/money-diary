@@ -2266,7 +2266,7 @@ async function handleLogout() {
                   </div>
                 </div>
 
-                <div className="mt-4 grid gap-3 text-sm md:grid-cols-3 lg:grid-cols-6">
+                <div className="mt-4 grid grid-cols-3 gap-2 text-xs sm:text-sm lg:grid-cols-6">
                   <div className="rounded-xl bg-slate-100 p-3">
                     <p className="text-slate-500">Tiền làm được</p>
                     <p className="font-bold">{formatMoney(mainIncome)}</p>
