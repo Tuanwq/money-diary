@@ -20,6 +20,7 @@ type DailyEntry = {
   income: number;
   receivedMoney: number;
   bonusMoney: number;
+  orderCount: number;
   workHours: number;
   mood: Mood;
   note: string;
@@ -44,15 +45,20 @@ type Goals = {
   weeklyHours: number;
   monthlyIncome: number;
   monthlyHours: number;
-
   bigGoalName: string;
   bigGoalTarget: number;
   bigGoalSaved: number;
   bigGoalDeadline: string;
+  bigGoalStartDate: string;
 };
 
 type Page = "home" | "goals" | "entry" | "history" | "expenses";
-type GoalScreen = "menu" | "current" | "completed";
+type GoalScreen =
+  | "menu"
+  | "current"
+  | "balance"
+  | "completed"
+  | "completedDetail";
 type AppHistoryState = {
   page: Page;
   goalScreen: GoalScreen;
@@ -65,6 +71,16 @@ type CompletedGoal = {
   saved: number;
   deadline: string;
   completedAt: string;
+  startDate?: string;
+  balanceSnapshots?: BalanceSnapshot[];
+};
+
+type BalanceSnapshot = {
+  date: string;
+  totalMoney: number;
+  actualMoney: number;
+  income: number;
+  expense: number;
 };
 
 const STORAGE_ENTRIES_KEY = "money_diary_entries";
@@ -86,6 +102,7 @@ const defaultGoals: Goals = {
   bigGoalTarget: 40000000,
   bigGoalSaved: 10000000,
   bigGoalDeadline: "2026-08-16",
+  bigGoalStartDate: getToday(),
 };
 
 const moodLabels: Record<Mood, string> = {
@@ -244,9 +261,11 @@ export default function App() {
   const [historyCurrentPage, setHistoryCurrentPage] = useState(1);
   const [expenseCurrentPage, setExpenseCurrentPage] = useState(1);
 
-  
+  const [selectedCompletedGoalId, setSelectedCompletedGoalId] = useState<
+  string | null
+>(null);
 
-  useEffect(() => {
+useEffect(() => {
   const initialState: AppHistoryState = {
     page: "home",
     goalScreen: "menu",
@@ -280,6 +299,7 @@ export default function App() {
     income: "",
     receivedMoney: "",
     bonusMoney: "",
+    orderCount: "",
     workHours: "",
     mood: "normal" as Mood,
     note: "",
@@ -487,6 +507,11 @@ const filteredEntriesHours = filteredEntries.reduce(
   0
 );
 
+const filteredEntriesOrders = filteredEntries.reduce(
+  (sum, entry) => sum + (entry.orderCount ?? 0),
+  0
+);
+
 const sortedExpenses = [...expenses].sort((a, b) =>
   b.date.localeCompare(a.date)
 );
@@ -631,6 +656,54 @@ function getTotalEntryMoney(entry: DailyEntry) {
   return getMainIncome(entry) + getBonusMoney(entry) + getReceivedMoney(entry);
 }
 
+function getExpenseTotal(expense: ExpenseEntry) {
+  return expense.breakfast + expense.lunch + expense.dinner + expense.other;
+}
+
+function buildBalanceMovementData(
+  startDate: string,
+  endDate: string,
+  startingMoney: number
+): BalanceSnapshot[] {
+  const result: BalanceSnapshot[] = [];
+
+  const currentDate = new Date(startDate);
+  const lastDate = new Date(endDate);
+
+  let runningIncome = 0;
+  let runningExpense = 0;
+
+  while (currentDate <= lastDate) {
+    const dateString = currentDate.toISOString().slice(0, 10);
+
+    const dayIncome = entries
+      .filter((entry) => entry.date === dateString)
+      .reduce((sum, entry) => sum + getTotalEntryMoney(entry), 0);
+
+    const dayExpense = expenses
+      .filter((expense) => expense.date === dateString)
+      .reduce((sum, expense) => sum + getExpenseTotal(expense), 0);
+
+    runningIncome += dayIncome;
+    runningExpense += dayExpense;
+
+    const totalMoney = startingMoney + runningIncome;
+    const actualMoney = totalMoney - runningExpense;
+
+    result.push({
+      date: dateString,
+      totalMoney,
+      actualMoney,
+      income: dayIncome,
+      expense: dayExpense,
+    });
+
+    currentDate.setDate(currentDate.getDate() + 1);
+  }
+
+  return result;
+}
+
 const totalIncome = entries.reduce(
   (sum, entry) => sum + getTotalEntryMoney(entry),
   0
@@ -645,6 +718,18 @@ const totalExpense = expenses.reduce((sum, expense) => {
     expense.other
   );
 }, 0);
+
+const currentGoalStartDate = goals.bigGoalStartDate ?? getToday();
+
+const selectedCompletedGoal = completedGoals.find(
+  (goal) => goal.id === selectedCompletedGoalId
+);
+
+const currentBalanceMovementData = buildBalanceMovementData(
+  currentGoalStartDate,
+  getToday(),
+  goals.bigGoalSaved
+);
 
 const actualMoney = goals.bigGoalSaved + totalIncome - totalExpense;
 
@@ -769,6 +854,7 @@ function handleExpenseSubmit(event: React.FormEvent) {
     const income = parseMoneyInput(form.income);
     const receivedMoney = parseMoneyInput(form.receivedMoney);
     const bonusMoney = parseMoneyInput(form.bonusMoney);
+    const orderCount = Number(form.orderCount);
     const workHours = Number(form.workHours);
 
     if (!form.date) {
@@ -776,8 +862,14 @@ function handleExpenseSubmit(event: React.FormEvent) {
       return;
     }
 
-    if (income < 0 || receivedMoney < 0 || bonusMoney < 0 || workHours < 0) {
-      alert("Số tiền, tiền nhận được, tiền thưởng và giờ làm không được âm.");
+    if (
+      income < 0 ||
+      receivedMoney < 0 ||
+      bonusMoney < 0 ||
+      orderCount < 0 ||
+      workHours < 0
+    ) {
+      alert("Số tiền, số lượng đơn và giờ làm không được âm.");
       return;
     }
 
@@ -786,18 +878,19 @@ function handleExpenseSubmit(event: React.FormEvent) {
     setEntries((prev) => {
       const existingEntry = prev.find((entry) => entry.date === form.date);
 
-      const newEntry: DailyEntry = {
-        id: existingEntry?.id ?? crypto.randomUUID(),
-        date: form.date,
-        diary: form.diary,
-        income,
-        receivedMoney,
-        bonusMoney,
-        workHours,
-        mood: form.mood,
-        note: form.note,
-        createdAt: existingEntry?.createdAt ?? new Date().toISOString(),
-      };
+    const newEntry: DailyEntry = {
+      id: existingEntry?.id ?? crypto.randomUUID(),
+      date: form.date,
+      diary: form.diary,
+      income,
+      receivedMoney,
+      bonusMoney,
+      orderCount,
+      workHours,
+      mood: form.mood,
+      note: form.note,
+      createdAt: existingEntry?.createdAt ?? new Date().toISOString(),
+    };
 
       const withoutSameDate = prev.filter((entry) => entry.date !== form.date);
       return [...withoutSameDate, newEntry];
@@ -809,11 +902,11 @@ function handleExpenseSubmit(event: React.FormEvent) {
       income: "",
       receivedMoney: "",
       bonusMoney: "",
+      orderCount: "",
       workHours: "",
       mood: "normal",
       note: "",
     });
-
   setEditingDate(null);
   setSelectedDate(savedDate);
   navigateTo("home", "menu");
@@ -826,6 +919,7 @@ function handleExpenseSubmit(event: React.FormEvent) {
     income: formatMoneyInput(String(entry.income ?? 0)),
     receivedMoney: formatMoneyInput(String(entry.receivedMoney ?? 0)),
     bonusMoney: formatMoneyInput(String(entry.bonusMoney ?? 0)),
+    orderCount: String(entry.orderCount ?? 0),
     workHours: String(entry.workHours ?? 0),
     mood: entry.mood,
     note: entry.note,
@@ -855,12 +949,15 @@ function deleteExpense(id: string) {
     setEntries((prev) => prev.filter((entry) => entry.id !== id));
   }
 
-  function completeCurrentGoal() {
-  const confirmed = confirm(
-    `Bạn có chắc muốn hoàn thành mục tiêu "${goals.bigGoalName}" không?`
-  );
-
+function completeCurrentGoal() {
+  const confirmed = confirm("Bạn có chắc muốn hoàn thành mục tiêu này không?");
   if (!confirmed) return;
+
+  const balanceSnapshots = buildBalanceMovementData(
+    goals.bigGoalStartDate ?? getToday(),
+    getToday(),
+    goals.bigGoalSaved
+  );
 
   const completedGoal: CompletedGoal = {
     id: crypto.randomUUID(),
@@ -869,6 +966,8 @@ function deleteExpense(id: string) {
     saved: totalSavedForBigGoal,
     deadline: goals.bigGoalDeadline,
     completedAt: getToday(),
+    startDate: goals.bigGoalStartDate ?? getToday(),
+    balanceSnapshots,
   };
 
   setCompletedGoals((prev) => [completedGoal, ...prev]);
@@ -879,6 +978,7 @@ function deleteExpense(id: string) {
     bigGoalTarget: 0,
     bigGoalSaved: 0,
     bigGoalDeadline: getToday(),
+    bigGoalStartDate: getToday(),
   }));
 
   navigateTo("goals", "completed");
@@ -1271,7 +1371,7 @@ async function handleLogout() {
           className="rounded-2xl bg-white p-6 text-left shadow-sm hover:bg-slate-50"
         >
           <p className="text-3xl">🎯</p>
-          <h3 className="mt-3 text-xl font-bold">Các mục tiêu</h3>
+          <h3 className="mt-3 text-xl font-bold">Các mục tiêu và biến động số dư</h3>
           <p className="mt-1 text-sm text-slate-500">
             Xem mục tiêu lớn, mục tiêu ngày, tuần và tháng.
           </p>
@@ -1334,70 +1434,130 @@ async function handleLogout() {
       </button>
     </div>
 
+    {goalScreen === "balance" && (
+      <>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-2xl font-bold">Biến động tiền</h2>
+            <p className="text-sm text-slate-500">
+              Tính từ ngày bắt đầu mục tiêu: {currentGoalStartDate}
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => navigateTo("goals", "menu")}
+            className="rounded-xl border bg-white px-4 py-2 font-medium shadow-sm hover:bg-slate-100"
+          >
+            Quay lại
+          </button>
+        </div>
+
+        <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <div className="rounded-2xl bg-white p-4 shadow-sm">
+            <p className="text-sm text-slate-500">Mục tiêu</p>
+            <p className="mt-1 font-bold">{goals.bigGoalName}</p>
+          </div>
+
+          <div className="rounded-2xl bg-white p-4 shadow-sm">
+            <p className="text-sm text-slate-500">Tổng tiền hiện tại</p>
+            <p className="mt-1 font-bold">
+              {formatMoney(
+                currentBalanceMovementData.at(-1)?.totalMoney ?? goals.bigGoalSaved
+              )}
+            </p>
+          </div>
+
+          <div className="rounded-2xl bg-white p-4 shadow-sm">
+            <p className="text-sm text-slate-500">Tiền thực tế hiện có</p>
+            <p className="mt-1 font-bold">
+              {formatMoney(
+                currentBalanceMovementData.at(-1)?.actualMoney ?? goals.bigGoalSaved
+              )}
+            </p>
+          </div>
+
+          <div className="rounded-2xl bg-white p-4 shadow-sm">
+            <p className="text-sm text-slate-500">Số ngày theo dõi</p>
+            <p className="mt-1 font-bold">
+              {currentBalanceMovementData.length} ngày
+            </p>
+          </div>
+        </section>
+
+        <section className="rounded-2xl bg-white p-5 shadow-sm">
+          <h3 className="text-xl font-bold">Biểu đồ biến động</h3>
+          <p className="text-sm text-slate-500">
+            Đường tổng tiền và tiền thực tế hiện có trong mục tiêu hiện tại.
+          </p>
+
+          <div className="mt-4 h-72">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart
+                data={currentBalanceMovementData.map((item: BalanceSnapshot) => ({
+                  ...item,
+                  label: item.date.slice(5),
+                }))}
+              >
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="label" />
+                <YAxis />
+                <Tooltip formatter={(value) => formatMoney(Number(value))} />
+                <Line
+                  type="monotone"
+                  dataKey="totalMoney"
+                  name="Tổng tiền"
+                  strokeWidth={3}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="actualMoney"
+                  name="Tiền thực tế"
+                  strokeWidth={3}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </section>
+      </>
+)}
+
     {goalScreen === "menu" && (
-      <section className="grid gap-4 md:grid-cols-2">
+      <section className="grid gap-4 md:grid-cols-3">
         <button
           type="button"
           onClick={() => navigateTo("goals", "current")}
-          className="rounded-2xl bg-white p-8 text-left shadow-sm hover:bg-slate-50"
+          className="rounded-2xl bg-white p-6 text-left shadow-sm hover:bg-slate-50"
         >
-          <p className="text-4xl">🎯</p>
-
-          <h3 className="mt-4 text-2xl font-bold">Mục tiêu hiện tại</h3>
-
-          <p className="mt-2 text-sm text-slate-500">
-            Xem và chỉnh sửa mục tiêu lớn, mục tiêu ngày, tuần và tháng.
+          <p className="text-3xl">🎯</p>
+          <h3 className="mt-3 text-xl font-bold">Mục tiêu hiện tại</h3>
+          <p className="mt-1 text-sm text-slate-500">
+            Xem và chỉnh sửa mục tiêu đang thực hiện.
           </p>
+        </button>
 
-          <div className="mt-5 rounded-xl bg-slate-100 p-4 text-sm">
-            <p>
-              Mục tiêu: <strong>{goals.bigGoalName}</strong>
-            </p>
-
-            <p className="mt-1">
-              Đã có: <strong>{formatMoney(totalSavedForBigGoal)}</strong>
-            </p>
-
-            <p className="mt-1">
-              Còn thiếu: <strong>{formatMoney(remainingBigGoal)}</strong>
-            </p>
-
-            <ProgressBar value={bigGoalProgress} />
-
-            <p className="mt-2 font-medium">
-              Hoàn thành {bigGoalProgress}%
-            </p>
-          </div>
+        <button
+          type="button"
+          onClick={() => navigateTo("goals", "balance")}
+          className="rounded-2xl bg-white p-6 text-left shadow-sm hover:bg-slate-50"
+        >
+          <p className="text-3xl">📈</p>
+          <h3 className="mt-3 text-xl font-bold">Biến động tiền</h3>
+          <p className="mt-1 text-sm text-slate-500">
+            Theo dõi tiền thực tế hiện có và tổng tiền theo từng ngày.
+          </p>
         </button>
 
         <button
           type="button"
           onClick={() => navigateTo("goals", "completed")}
-          className="rounded-2xl bg-white p-8 text-left shadow-sm hover:bg-slate-50"
+          className="rounded-2xl bg-white p-6 text-left shadow-sm hover:bg-slate-50"
         >
-          <p className="text-4xl">🏆</p>
-
-          <h3 className="mt-4 text-2xl font-bold">
-            Các mục tiêu đã hoàn thành
-          </h3>
-
-          <p className="mt-2 text-sm text-slate-500">
-            Xem lại những mục tiêu bạn đã hoàn thành trong quá khứ.
+          <p className="text-3xl">✅</p>
+          <h3 className="mt-3 text-xl font-bold">Mục tiêu đã hoàn thành</h3>
+          <p className="mt-1 text-sm text-slate-500">
+            Xem lại các mục tiêu cũ và lịch sử biến động tiền.
           </p>
-
-          <div className="mt-5 rounded-xl bg-slate-100 p-4 text-sm">
-            <p>
-              Đã hoàn thành:{" "}
-              <strong>{completedGoals.length}</strong> mục tiêu
-            </p>
-
-            <p className="mt-1">
-              Gần nhất:{" "}
-              <strong>
-                {completedGoals[0]?.name ?? "Chưa có mục tiêu nào"}
-              </strong>
-            </p>
-          </div>
         </button>
       </section>
     )}
@@ -1476,7 +1636,6 @@ async function handleLogout() {
                     <input
                       type="text"
                       inputMode="numeric"
-                      pattern="[0-9]*"
                       value={String(chartDays)}
                       onChange={(e) => {
                         const onlyDigits = e.target.value.replace(/[^\d]/g, "");
@@ -1531,7 +1690,6 @@ async function handleLogout() {
                 <input
                   type="text"
                   inputMode="numeric"
-                  pattern="[0-9]*"
                   placeholder="VD: 500.000"
                   value={form.receivedMoney}
                   onChange={(e) =>
@@ -1553,7 +1711,6 @@ async function handleLogout() {
                 <input
                   type="text"
                   inputMode="numeric"
-                  pattern="[0-9]*"
                   placeholder="VD: 100.000"
                   value={form.bonusMoney}
                   onChange={(e) =>
@@ -1750,6 +1907,17 @@ async function handleLogout() {
 
                       <button
                         type="button"
+                        onClick={() => {
+                          setSelectedCompletedGoalId(goal.id);
+                          navigateTo("goals", "completedDetail");
+                        }}
+                        className="rounded-full bg-slate-100 px-3 py-1 text-sm font-medium hover:bg-slate-200"
+                      >
+                        Xem chi tiết
+                      </button>
+
+                      <button
+                        type="button"
                         onClick={() => deleteCompletedGoal(goal.id)}
                         className="rounded-full bg-red-50 px-3 py-1 text-sm font-medium text-red-600 hover:bg-red-100"
                       >
@@ -1781,7 +1949,169 @@ async function handleLogout() {
         </section>
       </>
     )}
+
+    {goalScreen === "completedDetail" && (
+  <>
+    {!selectedCompletedGoal ? (
+      <section className="rounded-2xl bg-white p-5 shadow-sm">
+        <h2 className="text-xl font-bold">Không tìm thấy mục tiêu</h2>
+
+        <p className="mt-2 text-sm text-slate-500">
+          Có thể mục tiêu này đã bị xóa hoặc chưa được chọn.
+        </p>
+
+        <button
+          type="button"
+          onClick={() => navigateTo("goals", "completed")}
+          className="mt-4 rounded-xl border bg-white px-4 py-2 font-medium hover:bg-slate-100"
+        >
+          Quay lại
+        </button>
+      </section>
+    ) : (
+      <>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-2xl font-bold">
+              {selectedCompletedGoal.name}
+            </h2>
+
+            <p className="text-sm text-slate-500">
+              Từ {selectedCompletedGoal.startDate ?? "Không rõ"} đến{" "}
+              {selectedCompletedGoal.completedAt}
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => navigateTo("goals", "completed")}
+            className="rounded-xl border bg-white px-4 py-2 font-medium shadow-sm hover:bg-slate-100"
+          >
+            Quay lại
+          </button>
+        </div>
+
+        <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <div className="rounded-2xl bg-white p-4 shadow-sm">
+            <p className="text-sm text-slate-500">Mục tiêu</p>
+            <p className="mt-1 text-lg font-bold">
+              {formatMoney(selectedCompletedGoal.target)}
+            </p>
+          </div>
+
+          <div className="rounded-2xl bg-white p-4 shadow-sm">
+            <p className="text-sm text-slate-500">Đã đạt</p>
+            <p className="mt-1 text-lg font-bold">
+              {formatMoney(selectedCompletedGoal.saved)}
+            </p>
+          </div>
+
+          <div className="rounded-2xl bg-white p-4 shadow-sm">
+            <p className="text-sm text-slate-500">Deadline</p>
+            <p className="mt-1 text-lg font-bold">
+              {selectedCompletedGoal.deadline}
+            </p>
+          </div>
+
+          <div className="rounded-2xl bg-white p-4 shadow-sm">
+            <p className="text-sm text-slate-500">Ngày hoàn thành</p>
+            <p className="mt-1 text-lg font-bold">
+              {selectedCompletedGoal.completedAt}
+            </p>
+          </div>
+        </section>
+
+        <section className="rounded-2xl bg-white p-5 shadow-sm">
+          <h3 className="text-xl font-bold">
+            Biến động tiền của mục tiêu này
+          </h3>
+
+          <p className="mt-1 text-sm text-slate-500">
+            Gồm tổng tiền và tiền thực tế hiện có trong thời gian thực hiện mục
+            tiêu.
+          </p>
+
+          {!selectedCompletedGoal.balanceSnapshots ||
+          selectedCompletedGoal.balanceSnapshots.length === 0 ? (
+            <p className="mt-4 rounded-xl bg-slate-100 p-4 text-sm text-slate-500">
+              Mục tiêu này chưa có dữ liệu biến động tiền. Những mục tiêu hoàn
+              thành trước khi thêm chức năng này có thể sẽ không có biểu đồ.
+            </p>
+          ) : (
+            <div className="mt-4 h-72">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart
+                  data={selectedCompletedGoal.balanceSnapshots.map((item: BalanceSnapshot) => ({
+                    ...item,
+                    label: item.date.slice(5),
+                  }))}
+                >
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="label" />
+                  <YAxis />
+                  <Tooltip formatter={(value) => formatMoney(Number(value))} />
+
+                  <Line
+                    type="monotone"
+                    dataKey="totalMoney"
+                    name="Tổng tiền"
+                    strokeWidth={3}
+                  />
+
+                  <Line
+                    type="monotone"
+                    dataKey="actualMoney"
+                    name="Tiền thực tế"
+                    strokeWidth={3}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </section>
+
+        {selectedCompletedGoal.balanceSnapshots &&
+  selectedCompletedGoal.balanceSnapshots.length > 0 && (
+    <section className="rounded-2xl bg-white p-5 shadow-sm">
+      <h3 className="text-xl font-bold">Chi tiết từng ngày</h3>
+
+      <div className="mt-4 grid gap-3">
+        {selectedCompletedGoal.balanceSnapshots.map((item: BalanceSnapshot) => (
+          <article
+            key={item.date}
+            className="rounded-xl border p-4"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h4 className="font-bold">{item.date}</h4>
+                <p className="text-sm text-slate-500">
+                  Thu: {formatMoney(item.income)} · Chi:{" "}
+                  {formatMoney(item.expense)}
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
+              <div className="rounded-xl bg-slate-100 p-3">
+                <p className="text-slate-500">Tổng tiền</p>
+                <p className="font-bold">{formatMoney(item.totalMoney)}</p>
+              </div>
+
+              <div className="rounded-xl bg-slate-100 p-3">
+                <p className="text-slate-500">Tiền thực tế</p>
+                <p className="font-bold">{formatMoney(item.actualMoney)}</p>
+              </div>
+            </div>
+          </article>
+        ))}
+      </div>
+    </section>
+  )}
+      </>
+    )}
   </>
+    )}
+      </>
 )}
 
   {page === "entry" && (
@@ -1835,7 +2165,6 @@ async function handleLogout() {
               <input
                 type="text"
                 inputMode="numeric"
-                pattern="[0-9]*"
                 placeholder="VD: 30.000"
                 value={expenseForm.breakfast}
                 onChange={(e) =>
@@ -1853,7 +2182,6 @@ async function handleLogout() {
               <input
                 type="text"
                 inputMode="numeric"
-                pattern="[0-9]*"
                 placeholder="VD: 50.000"
                 value={expenseForm.lunch}
                 onChange={(e) =>
@@ -1871,7 +2199,6 @@ async function handleLogout() {
               <input
                 type="text"
                 inputMode="numeric"
-                pattern="[0-9]*"
                 placeholder="VD: 40.000"
                 value={expenseForm.dinner}
                 onChange={(e) =>
@@ -1889,7 +2216,6 @@ async function handleLogout() {
               <input
                 type="text"
                 inputMode="numeric"
-                pattern="[0-9]*"
                 placeholder="VD: 20.000"
                 value={expenseForm.other}
                 onChange={(e) =>
@@ -1980,8 +2306,7 @@ async function handleLogout() {
             <label className="text-sm font-medium">Tiền kiếm được</label>
               <input
                 type="text"
-                inputMode="numeric"
-                pattern="[0-9]*"
+                inputMode="numeric"  
                 placeholder="VD: 250.000"
                 value={form.income}
                 onChange={(e) =>
@@ -2028,6 +2353,25 @@ async function handleLogout() {
             />
             <p className="mt-1 text-xs text-slate-500">
             </p>
+          </div>
+
+          <div>
+            <label className="text-sm font-medium">Số lượng đơn</label>
+            <input
+              type="text"
+              inputMode="numeric"
+              placeholder="VD: 12"
+              value={form.orderCount}
+              onChange={(e) => {
+                const onlyDigits = e.target.value.replace(/[^\d]/g, "");
+
+                setForm((prev) => ({
+                  ...prev,
+                  orderCount: onlyDigits,
+                }));
+              }}
+              className="mt-1 w-full rounded-xl border px-3 py-2"
+            />
           </div>
 
           <div>
@@ -2092,8 +2436,9 @@ async function handleLogout() {
                   income: "",
                   receivedMoney: "",
                   bonusMoney: "",
+                  orderCount: "",
                   workHours: "",
-                  mood: "normal",
+                  mood: "normal" as Mood,
                   note: "",
                 });
               }}
@@ -2196,7 +2541,7 @@ async function handleLogout() {
         </div>
       </section>
 
-      <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <section className="grid grid-cols-2 gap-3 lg:grid-cols-5">
         <div className="rounded-2xl bg-white p-4 shadow-sm">
           <p className="text-sm text-slate-500">Số bản ghi</p>
           <p className="mt-1 text-xl font-bold">{filteredEntries.length}</p>
@@ -2220,6 +2565,11 @@ async function handleLogout() {
           <p className="text-sm text-slate-500">Tổng giờ</p>
           <p className="mt-1 text-xl font-bold">{filteredEntriesHours} giờ</p>
         </div>
+
+        <div className="rounded-2xl bg-white p-4 shadow-sm">
+          <p className="text-sm text-slate-500">Tổng đơn</p>
+          <p className="mt-1 text-xl font-bold">{filteredEntriesOrders} đơn</p>
+        </div>
       </section>
 
       <section className="rounded-2xl bg-white p-5 shadow-sm">
@@ -2233,7 +2583,7 @@ async function handleLogout() {
             const mainIncome = getMainIncome(entry);
             const receivedMoney = getReceivedMoney(entry);
             const bonusMoney = getBonusMoney(entry);
-            const normalIncome = getNormalIncome(entry);
+            // const normalIncome = getNormalIncome(entry);
             const totalEntryMoney = getTotalEntryMoney(entry);
 
             return (
@@ -2282,10 +2632,10 @@ async function handleLogout() {
                     <p className="font-bold">{formatMoney(receivedMoney)}</p>
                   </div>
 
-                  <div className="rounded-xl bg-slate-100 p-3">
+                  {/* <div className="rounded-xl bg-slate-100 p-3">
                     <p className="text-slate-500">Tính cho biểu đồ</p>
                     <p className="font-bold">{formatMoney(normalIncome)}</p>
-                  </div>
+                  </div> */}
 
                   <div className="rounded-xl bg-slate-100 p-3">
                     <p className="text-slate-500">Tổng ngày này</p>
@@ -2295,6 +2645,13 @@ async function handleLogout() {
                   <div className="rounded-xl bg-slate-100 p-3">
                     <p className="text-slate-500">Giờ làm</p>
                     <p className="font-bold">{entry.workHours} giờ</p>
+                  </div>
+
+                  <div className="min-w-0 rounded-xl bg-slate-100 p-2 sm:p-3">
+                    <p className="truncate text-slate-500">Số đơn</p>
+                    <p className="break-words text-sm font-bold sm:text-base">
+                      {entry.orderCount ?? 0} đơn
+                    </p>
                   </div>
                 </div>
 
