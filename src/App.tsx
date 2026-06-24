@@ -81,6 +81,7 @@ type Page =
 type GoalScreen =
   | "menu"
   | "current"
+  | "subGoals"
   | "balance"
   | "completed"
   | "completedDetail";
@@ -2398,6 +2399,589 @@ function renderBalanceCheckCard(title = "Kiểm kê số dư hôm nay") {
       </button>
     </div>
 
+    {goalScreen === "subGoals" && (
+  <>
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <h2 className="text-2xl font-bold">Mục tiêu phụ</h2>
+        <p className="text-sm text-slate-500">
+          Quản lý các mục tiêu phụ và góp tiền thủ công vào từng mục tiêu.
+        </p>
+      </div>
+
+      <button
+        type="button"
+        onClick={() => navigateTo("goals", "menu")}
+        className="rounded-xl border bg-white px-4 py-2 font-medium shadow-sm hover:bg-slate-100"
+      >
+        Quay lại
+      </button>
+    </div>
+
+          <section className="rounded-2xl bg-white p-5 shadow-sm">
+
+  <div className="flex flex-wrap items-center justify-between gap-3">
+
+    <div>
+
+      <h2 className="text-xl font-bold">Mục tiêu phụ</h2>
+
+      <p className="text-sm text-slate-500">
+
+        Chia thủ công tiền vào từng mục tiêu phụ, ví dụ: Lens, quỹ dự phòng,
+
+        trả nợ.
+
+      </p>
+
+    </div>
+
+  </div>
+
+
+
+  <div className="mt-4 grid gap-3 md:grid-cols-2 lg:grid-cols-5">
+
+    <div>
+
+      <label className="text-sm font-medium">Tên mục tiêu</label>
+
+      <input
+
+        value={subGoalForm.name}
+
+        onChange={(e) =>
+
+          setSubGoalForm((prev) => ({
+
+            ...prev,
+
+            name: e.target.value,
+
+          }))
+
+        }
+
+        placeholder="VD: Mục tiêu phụ"
+
+        className="mt-1 w-full rounded-xl border px-3 py-2"
+
+      />
+
+    </div>
+
+
+
+    <div>
+
+      <label className="text-sm font-medium">Số tiền cần đạt</label>
+
+      <input
+
+        type="text"
+
+        inputMode="numeric"
+
+        value={subGoalForm.target}
+
+        onChange={(e) =>
+
+          setSubGoalForm((prev) => ({
+
+            ...prev,
+
+            target: formatMoneyInput(e.target.value),
+
+          }))
+
+        }
+
+        placeholder="VD: 7.000.000"
+
+        className="mt-1 w-full rounded-xl border px-3 py-2"
+
+      />
+
+    </div>
+
+
+
+    <div>
+
+      <label className="text-sm font-medium">Đã có sẵn</label>
+
+      <input
+
+        type="text"
+
+        inputMode="numeric"
+
+        value={subGoalForm.saved}
+
+        onChange={(e) =>
+
+          setSubGoalForm((prev) => ({
+
+            ...prev,
+
+            saved: formatMoneyInput(e.target.value),
+
+          }))
+
+        }
+
+        placeholder="VD: 500.000"
+
+        className="mt-1 w-full rounded-xl border px-3 py-2"
+
+      />
+
+    </div>
+
+
+
+    <div>
+
+      <label className="text-sm font-medium">Bắt đầu</label>
+
+      <input
+
+        type="date"
+
+        value={subGoalForm.startDate}
+
+        max={todayString}
+
+        onChange={(e) =>
+
+          setSubGoalForm((prev) => ({
+
+            ...prev,
+
+            startDate: e.target.value,
+
+          }))
+
+        }
+
+        className="mt-1 w-full rounded-xl border px-3 py-2"
+
+      />
+
+    </div>
+
+
+
+    <div>
+
+      <label className="text-sm font-medium">Deadline</label>
+
+      <input
+
+        type="date"
+
+        value={subGoalForm.deadline}
+
+        onChange={(e) =>
+
+          setSubGoalForm((prev) => ({
+
+            ...prev,
+
+            deadline: e.target.value,
+
+          }))
+
+        }
+
+        className="mt-1 w-full rounded-xl border px-3 py-2"
+
+      />
+
+    </div>
+
+  </div>
+
+
+
+  <button
+
+    type="button"
+
+    onClick={addSubGoal}
+
+    className="mt-4 rounded-xl bg-slate-900 px-5 py-2 font-medium text-white hover:bg-slate-700"
+
+  >
+
+    Thêm mục tiêu phụ
+
+  </button>
+
+
+
+  <div className="mt-6 grid gap-4">
+
+    {(goals.subGoals ?? []).length === 0 ? (
+
+      <p className="rounded-xl bg-slate-100 p-4 text-sm text-slate-500">
+
+        Chưa có mục tiêu phụ nào.
+
+      </p>
+
+    ) : (
+
+      (goals.subGoals ?? []).map((goal) => {
+
+        const currentSaved = getSubGoalSaved(goal);
+
+        const progress = getProgress(currentSaved, goal.target);
+
+        const remaining = Math.max(goal.target - currentSaved, 0);
+
+        const dailyNeed = getDailyNeedForGoal(
+
+          goal.target,
+
+          currentSaved,
+
+          goal.deadline
+
+        );
+
+        const behind = isGoalBehind(goal);
+
+        const progressData = buildSubGoalProgressData(goal);
+
+
+
+        const contributionForm = subGoalContributionForms[goal.id] ?? {
+
+          amount: "",
+
+          note: "",
+
+        };
+
+
+
+        return (
+
+          <article key={goal.id} className="rounded-2xl border p-4">
+
+            <div className="flex flex-wrap items-start justify-between gap-3">
+
+              <div>
+
+                <h3 className="text-lg font-bold">{goal.name}</h3>
+
+                <p className="text-sm text-slate-500">
+
+                  Từ {goal.startDate} đến {goal.deadline}
+
+                </p>
+
+              </div>
+
+
+
+              <div className="flex flex-wrap gap-2">
+
+                <button
+
+                  type="button"
+
+                  onClick={() => completeSubGoal(goal.id)}
+
+                  className="rounded-lg bg-green-50 px-3 py-1 text-sm font-medium text-green-700 hover:bg-green-100"
+
+                >
+
+                  Hoàn thành
+
+                </button>
+
+
+
+                <button
+
+                  type="button"
+
+                  onClick={() => deleteSubGoal(goal.id)}
+
+                  className="rounded-lg bg-red-50 px-3 py-1 text-sm font-medium text-red-600 hover:bg-red-100"
+
+                >
+
+                  Xóa
+
+                </button>
+
+              </div>
+
+            </div>
+
+
+
+            <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-5">
+
+              <div className="rounded-xl bg-slate-100 p-3">
+
+                <p className="text-sm text-slate-500">Đã có</p>
+
+                <p className="font-bold">{formatMoney(currentSaved)}</p>
+
+              </div>
+
+
+
+              <div className="rounded-xl bg-slate-100 p-3">
+
+                <p className="text-sm text-slate-500">Mục tiêu</p>
+
+                <p className="font-bold">{formatMoney(goal.target)}</p>
+
+              </div>
+
+
+
+              <div className="rounded-xl bg-slate-100 p-3">
+
+                <p className="text-sm text-slate-500">Còn thiếu</p>
+
+                <p className="font-bold">{formatMoney(remaining)}</p>
+
+              </div>
+
+
+
+              <div className="rounded-xl bg-slate-100 p-3">
+
+                <p className="text-sm text-slate-500">Cần mỗi ngày</p>
+
+                <p className="font-bold">{formatMoney(dailyNeed)}</p>
+
+              </div>
+
+
+
+              <div
+
+                className={`rounded-xl p-3 ${
+
+                  behind ? "bg-red-50" : "bg-green-50"
+
+                }`}
+
+              >
+
+                <p className="text-sm text-slate-500">Trạng thái</p>
+
+                <p
+
+                  className={`font-bold ${
+
+                    behind ? "text-red-600" : "text-green-700"
+
+                  }`}
+
+                >
+
+                  {behind ? "Đang chậm tiến độ" : "Đúng tiến độ"}
+
+                </p>
+
+              </div>
+
+            </div>
+
+
+
+            <div className="mt-4">
+
+              <ProgressBar value={progress} />
+
+              <p className="mt-2 text-sm font-medium">
+
+                Hoàn thành {progress}%
+
+              </p>
+
+            </div>
+
+
+
+            <div className="mt-4 grid gap-3 md:grid-cols-3">
+
+              <div>
+
+                <label className="text-sm font-medium">Góp thêm</label>
+
+                <input
+
+                  type="text"
+
+                  inputMode="numeric"
+
+                  value={contributionForm.amount}
+
+                  onChange={(e) =>
+
+                    setSubGoalContributionForms((prev) => ({
+
+                      ...prev,
+
+                      [goal.id]: {
+
+                        ...contributionForm,
+
+                        amount: formatMoneyInput(e.target.value),
+
+                      },
+
+                    }))
+
+                  }
+
+                  placeholder="VD: 200.000"
+
+                  className="mt-1 w-full rounded-xl border px-3 py-2"
+
+                />
+
+              </div>
+
+
+
+              <div>
+
+                <label className="text-sm font-medium">Ghi chú</label>
+
+                <input
+
+                  value={contributionForm.note}
+
+                  onChange={(e) =>
+
+                    setSubGoalContributionForms((prev) => ({
+
+                      ...prev,
+
+                      [goal.id]: {
+
+                        ...contributionForm,
+
+                        note: e.target.value,
+
+                      },
+
+                    }))
+
+                  }
+
+                  placeholder="VD: Góp từ tiền hôm nay"
+
+                  className="mt-1 w-full rounded-xl border px-3 py-2"
+
+                />
+
+              </div>
+
+
+
+              <div className="flex items-end">
+
+                <button
+
+                  type="button"
+
+                  onClick={() => addContributionToSubGoal(goal.id)}
+
+                  className="w-full rounded-xl bg-slate-900 px-5 py-2 font-medium text-white hover:bg-slate-700"
+
+                >
+
+                  Góp vào mục tiêu
+
+                </button>
+
+              </div>
+
+            </div>
+
+
+
+            {progressData.length > 0 && (
+
+              <div className="mt-5 h-56">
+
+                <ResponsiveContainer width="100%" height="100%">
+
+                  <LineChart
+
+                    data={progressData.map((item) => ({
+
+                      ...item,
+
+                      label: item.date.slice(5),
+
+                    }))}
+
+                  >
+
+                    <CartesianGrid strokeDasharray="3 3" />
+
+                    <XAxis dataKey="label" />
+
+                    <YAxis />
+
+                    <Tooltip
+
+                      formatter={(value, name) => {
+
+                        if (name === "progress") return `${value}%`;
+
+                        return formatMoney(Number(value));
+
+                      }}
+
+                    />
+
+                    <Line
+
+                      type="monotone"
+
+                      dataKey="saved"
+
+                      name="Đã có"
+
+                      strokeWidth={3}
+
+                    />
+
+                  </LineChart>
+
+                </ResponsiveContainer>
+
+              </div>
+
+            )}
+
+          </article>
+
+        );
+
+      })
+
+    )}
+
+  </div>
+
+        </section>
+  </>
+)}
+
     {goalScreen === "balance" && (
       <>
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -2594,45 +3178,57 @@ function renderBalanceCheckCard(title = "Kiểm kê số dư hôm nay") {
       </>
 )}
 
-    {goalScreen === "menu" && (
-      <section className="grid gap-4 md:grid-cols-3">
-        <button
-          type="button"
-          onClick={() => navigateTo("goals", "current")}
-          className="rounded-2xl bg-white p-6 text-left shadow-sm hover:bg-slate-50"
-        >
-          <p className="text-3xl">🎯</p>
-          <h3 className="mt-3 text-xl font-bold">Mục tiêu hiện tại</h3>
-          <p className="mt-1 text-sm text-slate-500">
-            Xem và chỉnh sửa mục tiêu đang thực hiện.
-          </p>
-        </button>
+{goalScreen === "menu" && (
+  <section className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+    <button
+      type="button"
+      onClick={() => navigateTo("goals", "current")}
+      className="rounded-2xl bg-white p-6 text-left shadow-sm hover:bg-slate-50"
+    >
+      <p className="text-3xl">🎯</p>
+      <h3 className="mt-3 text-xl font-bold">Mục tiêu hiện tại</h3>
+      <p className="mt-1 text-sm text-slate-500">
+        Xem và chỉnh sửa mục tiêu chính, mục tiêu ngày, tuần và tháng.
+      </p>
+    </button>
 
-        <button
-          type="button"
-          onClick={() => navigateTo("goals", "balance")}
-          className="rounded-2xl bg-white p-6 text-left shadow-sm hover:bg-slate-50"
-        >
-          <p className="text-3xl">📈</p>
-          <h3 className="mt-3 text-xl font-bold">Biến động tiền</h3>
-          <p className="mt-1 text-sm text-slate-500">
-            Theo dõi tiền thực tế hiện có và tổng tiền theo từng ngày.
-          </p>
-        </button>
+    <button
+      type="button"
+      onClick={() => navigateTo("goals", "subGoals")}
+      className="rounded-2xl bg-white p-6 text-left shadow-sm hover:bg-slate-50"
+    >
+      <p className="text-3xl">📌</p>
+      <h3 className="mt-3 text-xl font-bold">Mục tiêu phụ</h3>
+      <p className="mt-1 text-sm text-slate-500">
+        Quản lý các mục tiêu phụ như lens, quỹ dự phòng, trả nợ.
+      </p>
+    </button>
 
-        <button
-          type="button"
-          onClick={() => navigateTo("goals", "completed")}
-          className="rounded-2xl bg-white p-6 text-left shadow-sm hover:bg-slate-50"
-        >
-          <p className="text-3xl">✅</p>
-          <h3 className="mt-3 text-xl font-bold">Mục tiêu đã hoàn thành</h3>
-          <p className="mt-1 text-sm text-slate-500">
-            Xem lại các mục tiêu cũ và lịch sử biến động tiền.
-          </p>
-        </button>
-      </section>
-    )}
+    <button
+      type="button"
+      onClick={() => navigateTo("goals", "balance")}
+      className="rounded-2xl bg-white p-6 text-left shadow-sm hover:bg-slate-50"
+    >
+      <p className="text-3xl">📈</p>
+      <h3 className="mt-3 text-xl font-bold">Biến động tiền</h3>
+      <p className="mt-1 text-sm text-slate-500">
+        Theo dõi tiền thực tế hiện có và tổng tiền theo từng ngày.
+      </p>
+    </button>
+
+    <button
+      type="button"
+      onClick={() => navigateTo("goals", "completed")}
+      className="rounded-2xl bg-white p-6 text-left shadow-sm hover:bg-slate-50"
+    >
+      <p className="text-3xl">✅</p>
+      <h3 className="mt-3 text-xl font-bold">Mục tiêu đã hoàn thành</h3>
+      <p className="mt-1 text-sm text-slate-500">
+        Xem lại các mục tiêu cũ và lịch sử biến động tiền.
+      </p>
+    </button>
+  </section>
+)}
 
     {goalScreen === "current" && (
       <>
@@ -3007,288 +3603,6 @@ function renderBalanceCheckCard(title = "Kiểm kê số dư hôm nay") {
               />
             </div>
           </div>
-        </section>
-
-        <section className="rounded-2xl bg-white p-5 shadow-sm">
-  <div className="flex flex-wrap items-center justify-between gap-3">
-    <div>
-      <h2 className="text-xl font-bold">Mục tiêu phụ</h2>
-      <p className="text-sm text-slate-500">
-        Chia thủ công tiền vào từng mục tiêu phụ, ví dụ: Lens, quỹ dự phòng,
-        trả nợ.
-      </p>
-    </div>
-  </div>
-
-  <div className="mt-4 grid gap-3 md:grid-cols-2 lg:grid-cols-5">
-    <div>
-      <label className="text-sm font-medium">Tên mục tiêu</label>
-      <input
-        value={subGoalForm.name}
-        onChange={(e) =>
-          setSubGoalForm((prev) => ({
-            ...prev,
-            name: e.target.value,
-          }))
-        }
-        placeholder="VD: Mục tiêu phụ"
-        className="mt-1 w-full rounded-xl border px-3 py-2"
-      />
-    </div>
-
-    <div>
-      <label className="text-sm font-medium">Số tiền cần đạt</label>
-      <input
-        type="text"
-        inputMode="numeric"
-        value={subGoalForm.target}
-        onChange={(e) =>
-          setSubGoalForm((prev) => ({
-            ...prev,
-            target: formatMoneyInput(e.target.value),
-          }))
-        }
-        placeholder="VD: 7.000.000"
-        className="mt-1 w-full rounded-xl border px-3 py-2"
-      />
-    </div>
-
-    <div>
-      <label className="text-sm font-medium">Đã có sẵn</label>
-      <input
-        type="text"
-        inputMode="numeric"
-        value={subGoalForm.saved}
-        onChange={(e) =>
-          setSubGoalForm((prev) => ({
-            ...prev,
-            saved: formatMoneyInput(e.target.value),
-          }))
-        }
-        placeholder="VD: 500.000"
-        className="mt-1 w-full rounded-xl border px-3 py-2"
-      />
-    </div>
-
-    <div>
-      <label className="text-sm font-medium">Bắt đầu</label>
-      <input
-        type="date"
-        value={subGoalForm.startDate}
-        max={todayString}
-        onChange={(e) =>
-          setSubGoalForm((prev) => ({
-            ...prev,
-            startDate: e.target.value,
-          }))
-        }
-        className="mt-1 w-full rounded-xl border px-3 py-2"
-      />
-    </div>
-
-    <div>
-      <label className="text-sm font-medium">Deadline</label>
-      <input
-        type="date"
-        value={subGoalForm.deadline}
-        onChange={(e) =>
-          setSubGoalForm((prev) => ({
-            ...prev,
-            deadline: e.target.value,
-          }))
-        }
-        className="mt-1 w-full rounded-xl border px-3 py-2"
-      />
-    </div>
-  </div>
-
-  <button
-    type="button"
-    onClick={addSubGoal}
-    className="mt-4 rounded-xl bg-slate-900 px-5 py-2 font-medium text-white hover:bg-slate-700"
-  >
-    Thêm mục tiêu phụ
-  </button>
-
-  <div className="mt-6 grid gap-4">
-    {(goals.subGoals ?? []).length === 0 ? (
-      <p className="rounded-xl bg-slate-100 p-4 text-sm text-slate-500">
-        Chưa có mục tiêu phụ nào.
-      </p>
-    ) : (
-      (goals.subGoals ?? []).map((goal) => {
-        const currentSaved = getSubGoalSaved(goal);
-        const progress = getProgress(currentSaved, goal.target);
-        const remaining = Math.max(goal.target - currentSaved, 0);
-        const dailyNeed = getDailyNeedForGoal(
-          goal.target,
-          currentSaved,
-          goal.deadline
-        );
-        const behind = isGoalBehind(goal);
-        const progressData = buildSubGoalProgressData(goal);
-
-        const contributionForm = subGoalContributionForms[goal.id] ?? {
-          amount: "",
-          note: "",
-        };
-
-        return (
-          <article key={goal.id} className="rounded-2xl border p-4">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <h3 className="text-lg font-bold">{goal.name}</h3>
-                <p className="text-sm text-slate-500">
-                  Từ {goal.startDate} đến {goal.deadline}
-                </p>
-              </div>
-
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => completeSubGoal(goal.id)}
-                  className="rounded-lg bg-green-50 px-3 py-1 text-sm font-medium text-green-700 hover:bg-green-100"
-                >
-                  Hoàn thành
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => deleteSubGoal(goal.id)}
-                  className="rounded-lg bg-red-50 px-3 py-1 text-sm font-medium text-red-600 hover:bg-red-100"
-                >
-                  Xóa
-                </button>
-              </div>
-            </div>
-
-            <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-5">
-              <div className="rounded-xl bg-slate-100 p-3">
-                <p className="text-sm text-slate-500">Đã có</p>
-                <p className="font-bold">{formatMoney(currentSaved)}</p>
-              </div>
-
-              <div className="rounded-xl bg-slate-100 p-3">
-                <p className="text-sm text-slate-500">Mục tiêu</p>
-                <p className="font-bold">{formatMoney(goal.target)}</p>
-              </div>
-
-              <div className="rounded-xl bg-slate-100 p-3">
-                <p className="text-sm text-slate-500">Còn thiếu</p>
-                <p className="font-bold">{formatMoney(remaining)}</p>
-              </div>
-
-              <div className="rounded-xl bg-slate-100 p-3">
-                <p className="text-sm text-slate-500">Cần mỗi ngày</p>
-                <p className="font-bold">{formatMoney(dailyNeed)}</p>
-              </div>
-
-              <div
-                className={`rounded-xl p-3 ${
-                  behind ? "bg-red-50" : "bg-green-50"
-                }`}
-              >
-                <p className="text-sm text-slate-500">Trạng thái</p>
-                <p
-                  className={`font-bold ${
-                    behind ? "text-red-600" : "text-green-700"
-                  }`}
-                >
-                  {behind ? "Đang chậm tiến độ" : "Đúng tiến độ"}
-                </p>
-              </div>
-            </div>
-
-            <div className="mt-4">
-              <ProgressBar value={progress} />
-              <p className="mt-2 text-sm font-medium">
-                Hoàn thành {progress}%
-              </p>
-            </div>
-
-            <div className="mt-4 grid gap-3 md:grid-cols-3">
-              <div>
-                <label className="text-sm font-medium">Góp thêm</label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  value={contributionForm.amount}
-                  onChange={(e) =>
-                    setSubGoalContributionForms((prev) => ({
-                      ...prev,
-                      [goal.id]: {
-                        ...contributionForm,
-                        amount: formatMoneyInput(e.target.value),
-                      },
-                    }))
-                  }
-                  placeholder="VD: 200.000"
-                  className="mt-1 w-full rounded-xl border px-3 py-2"
-                />
-              </div>
-
-              <div>
-                <label className="text-sm font-medium">Ghi chú</label>
-                <input
-                  value={contributionForm.note}
-                  onChange={(e) =>
-                    setSubGoalContributionForms((prev) => ({
-                      ...prev,
-                      [goal.id]: {
-                        ...contributionForm,
-                        note: e.target.value,
-                      },
-                    }))
-                  }
-                  placeholder="VD: Góp từ tiền hôm nay"
-                  className="mt-1 w-full rounded-xl border px-3 py-2"
-                />
-              </div>
-
-              <div className="flex items-end">
-                <button
-                  type="button"
-                  onClick={() => addContributionToSubGoal(goal.id)}
-                  className="w-full rounded-xl bg-slate-900 px-5 py-2 font-medium text-white hover:bg-slate-700"
-                >
-                  Góp vào mục tiêu
-                </button>
-              </div>
-            </div>
-
-            {progressData.length > 0 && (
-              <div className="mt-5 h-56">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart
-                    data={progressData.map((item) => ({
-                      ...item,
-                      label: item.date.slice(5),
-                    }))}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="label" />
-                    <YAxis />
-                    <Tooltip
-                      formatter={(value, name) => {
-                        if (name === "progress") return `${value}%`;
-                        return formatMoney(Number(value));
-                      }}
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="saved"
-                      name="Đã có"
-                      strokeWidth={3}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            )}
-          </article>
-        );
-      })
-    )}
-  </div>
         </section>
       </>
     )}
