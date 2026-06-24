@@ -2654,7 +2654,7 @@ async function handleLogout() {
             name: e.target.value,
           }))
         }
-        placeholder="VD: Lens Sony"
+        placeholder="VD: Mục tiêu phụ"
         className="mt-1 w-full rounded-xl border px-3 py-2"
       />
     </div>
@@ -4121,7 +4121,7 @@ async function handleLogout() {
                     </div>
                   </div>
 
-                  <div className="mt-4 grid gap-3 text-sm md:grid-cols-4">
+                  <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
                     <div className="rounded-xl bg-slate-100 p-3">
                       <p className="text-slate-500">Ăn sáng</p>
                       <p className="font-bold">
