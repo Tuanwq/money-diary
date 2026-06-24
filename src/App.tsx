@@ -1108,7 +1108,7 @@ function handleExpenseSubmit(event: React.FormEvent) {
 }
 
 function markLocalChanged(message = "Có thay đổi, đang chờ đồng bộ...") {
-  markLocalChanged("Đã hoàn thành mục tiêu phụ, đang lưu cloud...");
+  localDirtyRef.current = true;
   setSyncStatus(message);
 }
 
@@ -1368,7 +1368,7 @@ function addSubGoal() {
     updatedAt: now,
   };
 
-  markLocalChanged("Đã hoàn thành mục tiêu phụ, đang lưu cloud...");
+  markLocalChanged("Đã thêm mục tiêu phụ, đang lưu cloud...");
 
   setGoals((prev) => ({
     ...prev,
@@ -1420,7 +1420,7 @@ function addContributionToSubGoal(goalId: string) {
     updatedAt: now,
   };
 
-  markLocalChanged("Đã hoàn thành mục tiêu phụ, đang lưu cloud...");
+  markLocalChanged("Đã góp tiền vào mục tiêu phụ, đang lưu cloud...");
 
   setGoals((prev) => ({
     ...prev,
@@ -1614,7 +1614,7 @@ function updateGoal(key: keyof Goals, value: string) {
     "bigGoalStartDate",
   ];
 
-  markLocalChanged("Đã hoàn thành mục tiêu phụ, đang lưu cloud...");
+  markLocalChanged("Đã cập nhật mục tiêu, đang lưu cloud...");
 
   setGoals((prev) => ({
     ...prev,
@@ -1642,7 +1642,7 @@ function saveMainGoal() {
     return;
   }
 
-  markLocalChanged("Đã hoàn thành mục tiêu phụ, đang lưu cloud...");
+  markLocalChanged("Đã lưu mục tiêu lớn, đang lưu cloud...");
 
   setGoals((prev) => ({
     ...prev,
