@@ -2538,12 +2538,43 @@ function renderBalanceCheckCard(title = "Kiểm kê số dư hôm nay") {
                 data={visibleBalanceMovementData.map((item: BalanceSnapshot) => ({
                   ...item,
                   label: item.date.slice(5),
+                  balanceGap: item.totalMoney - item.actualMoney,
                 }))}
               >
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="label" />
                 <YAxis />
-                <Tooltip formatter={(value) => formatMoney(Number(value))} />
+                <Tooltip
+                  content={({ active, payload, label }) => {
+                    if (!active || !payload || payload.length === 0) return null;
+
+                    const data = payload[0].payload as BalanceSnapshot & {
+                      label: string;
+                      balanceGap: number;
+                    };
+
+                    return (
+                      <div className="rounded-xl border bg-white p-3 text-sm shadow-sm">
+                        <p className="mb-2 font-bold">{label}</p>
+
+                        <p className="text-slate-700">
+                          Tổng tiền:{" "}
+                          <strong>{formatMoney(data.totalMoney)}</strong>
+                        </p>
+
+                        <p className="text-slate-700">
+                          Tiền thực tế:{" "}
+                          <strong>{formatMoney(data.actualMoney)}</strong>
+                        </p>
+
+                        <p className="text-slate-700">
+                          Chênh lệch:{" "}
+                          <strong>{formatMoney(data.balanceGap)}</strong>
+                        </p>
+                      </div>
+                    );
+                  }}
+                />
                 <Line
                   type="monotone"
                   dataKey="totalMoney"
