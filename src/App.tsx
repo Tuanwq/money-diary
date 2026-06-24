@@ -40,6 +40,19 @@ type ExpenseEntry = {
   updatedAt?: string;
 };
 
+type BalanceCheckEntry = {
+  id: string;
+  date: string;
+  cash: number;
+  bank: number;
+  appMoney: number;
+  actualMoney: number;
+  difference: number;
+  note: string;
+  createdAt: string;
+  updatedAt?: string;
+};
+
 type Goals = {
   dailyIncome: number;
   dailyHours: number;
@@ -57,13 +70,21 @@ type Goals = {
   subGoals: SubGoal[];
 };
 
-type Page = "home" | "goals" | "entry" | "history" | "expenses";
+type Page =
+  | "home"
+  | "goals"
+  | "entry"
+  | "history"
+  | "expenses"
+  | "balanceChecks";
+
 type GoalScreen =
   | "menu"
   | "current"
   | "balance"
   | "completed"
   | "completedDetail";
+
 type AppHistoryState = {
   page: Page;
   goalScreen: GoalScreen;
@@ -90,6 +111,7 @@ type CompletedGoal = {
   entriesSnapshot?: DailyEntry[];
   expensesSnapshot?: ExpenseEntry[];
   balanceSnapshots?: BalanceSnapshot[];
+  balanceChecksSnapshot?: BalanceCheckEntry[];
 
   contributionsSnapshot?: GoalContribution[];
   goalProgressSnapshots?: GoalProgressSnapshot[];
@@ -135,6 +157,7 @@ const STORAGE_ENTRIES_KEY = "money_diary_entries";
 const STORAGE_GOALS_KEY = "money_diary_goals";
 const STORAGE_COMPLETED_GOALS_KEY = "money_diary_completed_goals";
 const STORAGE_EXPENSES_KEY = "money_diary_expenses";
+const STORAGE_BALANCE_CHECKS_KEY = "money_diary_balance_checks";
 
 const ITEMS_PER_PAGE = 7;
 
@@ -292,6 +315,15 @@ export default function App() {
   const [goals, setGoals] = useState<Goals>(defaultGoals);
   const [completedGoals, setCompletedGoals] = useState<CompletedGoal[]>([]);
   const [expenses, setExpenses] = useState<ExpenseEntry[]>([]);
+  const [balanceChecks, setBalanceChecks] = useState<BalanceCheckEntry[]>([]);
+  const [balanceCheckCurrentPage, setBalanceCheckCurrentPage] = useState(1);
+
+  const [balanceCheckForm, setBalanceCheckForm] = useState({
+    date: getToday(),
+    cash: "",
+    bank: "",
+    note: "",
+  });
   const [selectedDate, setSelectedDate] = useState(getToday());
   const [editingDate, setEditingDate] = useState<string | null>(null);
   const [editingExpenseDate, setEditingExpenseDate] = useState<string | null>(
@@ -362,6 +394,17 @@ useEffect(() => {
 ]);
 
 useEffect(() => {
+  const existing = balanceChecks.find((item) => item.date === selectedDate);
+
+  setBalanceCheckForm({
+    date: selectedDate,
+    cash: existing ? formatMoneyInput(String(existing.cash)) : "",
+    bank: existing ? formatMoneyInput(String(existing.bank)) : "",
+    note: existing?.note ?? "",
+  });
+}, [selectedDate, balanceChecks]);
+
+useEffect(() => {
   const initialState: AppHistoryState = {
     page: "home",
     goalScreen: "menu",
@@ -423,9 +466,14 @@ useEffect(() => {
     const savedGoals = localStorage.getItem(STORAGE_GOALS_KEY);
     const savedCompletedGoals = localStorage.getItem(STORAGE_COMPLETED_GOALS_KEY);
     const savedExpenses = localStorage.getItem(STORAGE_EXPENSES_KEY);
+    const savedBalanceChecks = localStorage.getItem(STORAGE_BALANCE_CHECKS_KEY);
 
     if (savedEntries) {
       setEntries(JSON.parse(savedEntries));
+    }
+
+    if (savedBalanceChecks) {
+      setBalanceChecks(JSON.parse(savedBalanceChecks));
     }
 
     if (savedGoals) {
@@ -453,10 +501,14 @@ useEffect(() => {
   localStorage.setItem(STORAGE_EXPENSES_KEY, JSON.stringify(expenses));
   localStorage.setItem(STORAGE_GOALS_KEY, JSON.stringify(goals));
   localStorage.setItem(
+    STORAGE_BALANCE_CHECKS_KEY,
+    JSON.stringify(balanceChecks)
+  );
+  localStorage.setItem(
     STORAGE_COMPLETED_GOALS_KEY,
     JSON.stringify(completedGoals)
   );
-}, [entries, expenses, goals, completedGoals, loaded]);
+}, [entries, expenses, balanceChecks, goals, completedGoals, loaded]);
 
   useEffect(() => {
   supabase.auth.getSession().then(({ data }) => {
@@ -491,6 +543,7 @@ useEffect(() => {
       user_id: session.user.id,
       entries,
       expenses,
+      balance_checks: balanceChecks,
       goals,
       completed_goals: completedGoals,
       updated_at: new Date().toISOString(),
@@ -507,7 +560,7 @@ useEffect(() => {
   }, 700);
 
   return () => clearTimeout(timeout);
-}, [entries, expenses, goals, completedGoals, session?.user.id, cloudLoaded]);
+}, [entries, expenses, balanceChecks, goals, completedGoals, session?.user.id, cloudLoaded]);
 
 useEffect(() => {
   if (!session?.user) return;
@@ -644,6 +697,20 @@ const filteredEntriesOrders = filteredEntries.reduce(
 
 const sortedExpenses = [...expenses].sort((a, b) =>
   b.date.localeCompare(a.date)
+);
+
+const sortedBalanceChecks = [...balanceChecks].sort((a, b) =>
+  b.date.localeCompare(a.date)
+);
+
+const balanceCheckTotalPages = Math.max(
+  1,
+  Math.ceil(sortedBalanceChecks.length / ITEMS_PER_PAGE)
+);
+
+const paginatedBalanceChecks = sortedBalanceChecks.slice(
+  (balanceCheckCurrentPage - 1) * ITEMS_PER_PAGE,
+  balanceCheckCurrentPage * ITEMS_PER_PAGE
 );
 
 const filteredExpenses = sortedExpenses.filter((expense) => {
@@ -939,6 +1006,30 @@ function buildBalanceMovementData(
   return result;
 }
 
+function getAppMoneyAtDate(date: string) {
+  const startDate = goals.bigGoalStartDate ?? getToday();
+
+  if (date < startDate) {
+    return goals.bigGoalSaved;
+  }
+
+  const data = buildBalanceMovementData(startDate, date, goals.bigGoalSaved);
+
+  return data.at(-1)?.actualMoney ?? goals.bigGoalSaved;
+}
+
+function getBalanceStatus(difference: number) {
+  if (difference === 0) return "Khớp số dư";
+  if (difference < 0) return "Hao hụt";
+  return "Dư tiền";
+}
+
+function getBalanceStatusClass(difference: number) {
+  if (difference === 0) return "bg-green-50 text-green-700";
+  if (difference < 0) return "bg-red-50 text-red-600";
+  return "bg-yellow-50 text-yellow-700";
+}
+
 const totalIncome = entries.reduce(
   (sum, entry) => sum + getTotalEntryMoney(entry),
   0
@@ -1107,6 +1198,82 @@ function handleExpenseSubmit(event: React.FormEvent) {
   setSyncStatus(editingExpenseDate ? "Đã cập nhật chi tiêu" : "Đã lưu chi tiêu");
 }
 
+function handleBalanceCheckSubmit(event: React.FormEvent) {
+  event.preventDefault();
+
+  if (!balanceCheckForm.date) {
+    alert("Bạn chưa chọn ngày kiểm kê.");
+    return;
+  }
+
+  const cash = parseMoneyInput(balanceCheckForm.cash);
+  const bank = parseMoneyInput(balanceCheckForm.bank);
+
+  if (cash < 0 || bank < 0) {
+    alert("Tiền mặt và tiền tài khoản không được âm.");
+    return;
+  }
+
+  const appMoney = getAppMoneyAtDate(balanceCheckForm.date);
+  const actualMoney = cash + bank;
+  const difference = actualMoney - appMoney;
+  const now = new Date().toISOString();
+
+  markLocalChanged("Đã lưu kiểm kê số dư, đang lưu cloud...");
+
+  setBalanceChecks((prev) => {
+    const existing = prev.find((item) => item.date === balanceCheckForm.date);
+
+    const newCheck: BalanceCheckEntry = {
+      id: existing?.id ?? crypto.randomUUID(),
+      date: balanceCheckForm.date,
+      cash,
+      bank,
+      appMoney,
+      actualMoney,
+      difference,
+      note: balanceCheckForm.note,
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now,
+    };
+
+    const withoutSameDate = prev.filter(
+      (item) => item.date !== balanceCheckForm.date
+    );
+
+    return [...withoutSameDate, newCheck];
+  });
+
+  setSyncStatus("Đã lưu kiểm kê số dư");
+}
+
+function deleteBalanceCheck(id: string) {
+  const confirmed = confirm("Bạn có chắc muốn xóa kiểm kê số dư này không?");
+  if (!confirmed) return;
+
+  markLocalChanged("Đã xóa kiểm kê số dư, đang lưu cloud...");
+
+  setBalanceChecks((prev) => prev.filter((item) => item.id !== id));
+}
+
+function editBalanceCheck(item: BalanceCheckEntry) {
+  setSelectedDate(item.date);
+
+  setBalanceCheckForm({
+    date: item.date,
+    cash: formatMoneyInput(String(item.cash ?? 0)),
+    bank: formatMoneyInput(String(item.bank ?? 0)),
+    note: item.note ?? "",
+  });
+
+  navigateTo("home", "menu");
+
+  window.scrollTo({
+    top: 0,
+    behavior: "smooth",
+  });
+}
+
 function markLocalChanged(message = "Có thay đổi, đang chờ đồng bộ...") {
   localDirtyRef.current = true;
   setSyncStatus(message);
@@ -1261,6 +1428,10 @@ function completeCurrentGoal() {
     (expense) => expense.date >= startDate && expense.date <= endDate
   );
 
+  const balanceChecksSnapshot = balanceChecks.filter(
+    (item) => item.date >= startDate && item.date <= endDate
+  );
+
   const goalTotalIncome = entriesSnapshot.reduce(
     (sum, entry) => sum + getTotalEntryMoney(entry),
     0
@@ -1312,12 +1483,14 @@ function completeCurrentGoal() {
     entriesSnapshot,
     expensesSnapshot,
     balanceSnapshots,
+    balanceChecksSnapshot,
   };
 
   setCompletedGoals((prev) => [completedGoal, ...prev]);
 
   setEntries([]);
   setExpenses([]);
+  setBalanceChecks([]);
 
   setGoals((prev) => ({
     ...prev,
@@ -1531,7 +1704,7 @@ async function loadCloudData(userId: string) {
 
   const { data, error } = await supabase
     .from("money_diary_state")
-    .select("entries, goals, completed_goals, expenses")
+    .select("entries, goals, completed_goals, expenses, balance_checks")
     .eq("user_id", userId)
     .maybeSingle();
 
@@ -1549,6 +1722,10 @@ async function loadCloudData(userId: string) {
     ? ((data.expenses || []) as unknown as ExpenseEntry[])
     : [];
 
+  const cloudBalanceChecks = data?.balance_checks
+  ? ((data.balance_checks || []) as unknown as BalanceCheckEntry[])
+  : [];
+
   const cloudEntries = data?.entries
     ? ((data.entries || []) as unknown as DailyEntry[])
     : [];
@@ -1565,8 +1742,13 @@ async function loadCloudData(userId: string) {
     : [];
 
   const mergedExpenses = mergeByNewestDate(cloudExpenses, expenses);
+  const mergedBalanceChecks = mergeByNewestDate(
+    cloudBalanceChecks,
+    balanceChecks
+  );
 
   setExpenses(mergedExpenses);
+  setBalanceChecks(mergedBalanceChecks);
 
   const mergedEntries = mergeByNewestDate(cloudEntries, localEntries);
 
@@ -1594,6 +1776,7 @@ async function loadCloudData(userId: string) {
     goals: mergedGoals,
     completed_goals: mergedCompletedGoals,
     expenses: mergedExpenses,
+    balance_checks: mergedBalanceChecks,
     updated_at: new Date().toISOString(),
   });
 
@@ -1706,6 +1889,140 @@ async function handleLogout() {
   setSession(null);
   setCloudLoaded(false);
   setSyncStatus("Chưa đồng bộ");
+}
+
+function BalanceCheckCard({
+  title = "Kiểm kê số dư hôm nay",
+}: {
+  title?: string;
+}) {
+  const cash = parseMoneyInput(balanceCheckForm.cash);
+  const bank = parseMoneyInput(balanceCheckForm.bank);
+  const checkedMoney = cash + bank;
+  const appMoney = getAppMoneyAtDate(balanceCheckForm.date);
+  const difference = checkedMoney - appMoney;
+
+  return (
+    <section className="rounded-2xl bg-white p-5 shadow-sm">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-bold">{title}</h2>
+          <p className="text-sm text-slate-500">
+            Đối chiếu tiền thật ngoài đời với số tiền app đang tính.
+          </p>
+        </div>
+
+        <span
+          className={`rounded-full px-3 py-1 text-sm font-bold ${getBalanceStatusClass(
+            difference
+          )}`}
+        >
+          {getBalanceStatus(difference)}
+        </span>
+      </div>
+
+      <form onSubmit={handleBalanceCheckSubmit} className="mt-4 grid gap-4">
+        <div className="grid gap-3 md:grid-cols-3">
+          <div>
+            <label className="text-sm font-medium">Ngày kiểm kê</label>
+            <input
+              type="date"
+              value={balanceCheckForm.date}
+              max={todayString}
+              onChange={(e) => {
+                setSelectedDate(e.target.value);
+                setBalanceCheckForm((prev) => ({
+                  ...prev,
+                  date: e.target.value,
+                }));
+              }}
+              className="mt-1 w-full rounded-xl border px-3 py-2"
+            />
+          </div>
+
+          <div>
+            <label className="text-sm font-medium">Tiền mặt</label>
+            <input
+              type="text"
+              inputMode="numeric"
+              value={balanceCheckForm.cash}
+              onChange={(e) =>
+                setBalanceCheckForm((prev) => ({
+                  ...prev,
+                  cash: formatMoneyInput(e.target.value),
+                }))
+              }
+              placeholder="VD: 500.000"
+              className="mt-1 w-full rounded-xl border px-3 py-2"
+            />
+          </div>
+
+          <div>
+            <label className="text-sm font-medium">Tiền tài khoản</label>
+            <input
+              type="text"
+              inputMode="numeric"
+              value={balanceCheckForm.bank}
+              onChange={(e) =>
+                setBalanceCheckForm((prev) => ({
+                  ...prev,
+                  bank: formatMoneyInput(e.target.value),
+                }))
+              }
+              placeholder="VD: 3.000.000"
+              className="mt-1 w-full rounded-xl border px-3 py-2"
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <div className="rounded-xl bg-slate-100 p-3">
+            <p className="text-sm text-slate-500">App tính hiện có</p>
+            <p className="font-bold">{formatMoney(appMoney)}</p>
+          </div>
+
+          <div className="rounded-xl bg-slate-100 p-3">
+            <p className="text-sm text-slate-500">Bạn kiểm kê</p>
+            <p className="font-bold">{formatMoney(checkedMoney)}</p>
+          </div>
+
+          <div
+            className={`rounded-xl p-3 ${getBalanceStatusClass(difference)}`}
+          >
+            <p className="text-sm opacity-80">Chênh lệch</p>
+            <p className="font-bold">{formatMoney(difference)}</p>
+          </div>
+
+          <div className="rounded-xl bg-slate-100 p-3">
+            <p className="text-sm text-slate-500">Công thức</p>
+            <p className="text-sm font-bold">Mặt + TK = Hiện có</p>
+          </div>
+        </div>
+
+        <div>
+          <label className="text-sm font-medium">Ghi chú kiểm kê</label>
+          <textarea
+            value={balanceCheckForm.note}
+            onChange={(e) =>
+              setBalanceCheckForm((prev) => ({
+                ...prev,
+                note: e.target.value,
+              }))
+            }
+            placeholder="VD: Có thể chưa nhập tiền ăn sáng, quên ghi khoản chuyển khoản..."
+            className="mt-1 min-h-20 w-full rounded-xl border px-3 py-2"
+          />
+        </div>
+
+        <button
+          type="submit"
+          className="w-fit rounded-xl bg-slate-900 px-5 py-2 font-medium text-white hover:bg-slate-700"
+        >
+          Lưu kiểm kê
+        </button>
+      </form>
+    </section>
+  );
 }
 
   return (
@@ -1933,7 +2250,7 @@ async function handleLogout() {
             />
           </div>
         </div>
-
+              
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
           <StatCard
             title={isSelectedToday ? "Tiền thực tế hôm nay" : "Tiền thực tế ngày này"}
@@ -1980,9 +2297,10 @@ async function handleLogout() {
             progress={getProgress(totalJourneyMoney, goals.bigGoalTarget)}
           />      
         </div>
+        <BalanceCheckCard title="Kiểm kê số dư hôm nay" />
       </section>
 
-      <section className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <section className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
         <button
           type="button"
           onClick={() => navigateTo("goals", "menu")}
@@ -2018,6 +2336,7 @@ async function handleLogout() {
             Xem lại, sửa hoặc xóa các ngày đã ghi.
           </p>
         </button>
+
         <button
           type="button"
           onClick={() => navigateTo("expenses")}
@@ -2029,6 +2348,19 @@ async function handleLogout() {
             Xem lại chi tiêu ăn uống và các khoản khác theo ngày.
           </p>
         </button>
+
+        <button
+          type="button"
+          onClick={() => navigateTo("balanceChecks")}
+          className="rounded-2xl bg-white p-6 text-left shadow-sm hover:bg-slate-50"
+        >
+          <p className="text-3xl">🧾</p>
+          <h3 className="mt-3 text-xl font-bold">Lịch sử kiểm kê</h3>
+          <p className="mt-1 text-sm text-slate-500">
+            Xem lại tiền mặt, tiền tài khoản và hao hụt từng ngày.
+          </p>
+        </button>
+
       </section>
     </>
   )}
@@ -3521,7 +3853,6 @@ async function handleLogout() {
         )}
       </form>
 
-
       <form
         onSubmit={handleSubmit}
         className="rounded-2xl bg-white p-5 shadow-sm"
@@ -3709,6 +4040,8 @@ async function handleLogout() {
           )}
         </div>
       </form>
+      <BalanceCheckCard title="Kiểm kê cuối ngày" />
+
       </section>
     </>
   )}
@@ -3964,6 +4297,136 @@ async function handleLogout() {
 
     </>
   )}
+
+  {page === "balanceChecks" && (
+  <>
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <h2 className="text-2xl font-bold">Lịch sử kiểm kê số dư</h2>
+        <p className="text-sm text-slate-500">
+          Theo dõi tiền mặt, tiền tài khoản và phần hao hụt/dư tiền mỗi ngày.
+        </p>
+      </div>
+
+      <button
+        type="button"
+        onClick={() => navigateTo("home", "menu")}
+        className="rounded-xl border bg-white px-4 py-2 font-medium shadow-sm hover:bg-slate-100"
+      >
+        Về trang chủ
+      </button>
+    </div>
+
+    <section className="grid gap-4">
+      {paginatedBalanceChecks.length === 0 ? (
+        <div className="rounded-2xl bg-white p-5 text-slate-500 shadow-sm">
+          Chưa có bản ghi kiểm kê nào.
+        </div>
+      ) : (
+        paginatedBalanceChecks.map((item) => (
+          <article key={item.id} className="rounded-2xl bg-white p-5 shadow-sm">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h3 className="font-bold">{item.date}</h3>
+                <p className="text-sm text-slate-500">
+                  {getBalanceStatus(item.difference)}:{" "}
+                  {formatMoney(item.difference)}
+                </p>
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => editBalanceCheck(item)}
+                  className="rounded-lg bg-slate-100 px-3 py-1 text-sm font-medium text-slate-700 hover:bg-slate-200"
+                >
+                  Sửa
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => deleteBalanceCheck(item.id)}
+                  className="rounded-lg bg-red-50 px-3 py-1 text-sm font-medium text-red-600 hover:bg-red-100"
+                >
+                  Xóa
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-5">
+              <div className="rounded-xl bg-slate-100 p-3">
+                <p className="text-sm text-slate-500">Tiền mặt</p>
+                <p className="font-bold">{formatMoney(item.cash)}</p>
+              </div>
+
+              <div className="rounded-xl bg-slate-100 p-3">
+                <p className="text-sm text-slate-500">Tài khoản</p>
+                <p className="font-bold">{formatMoney(item.bank)}</p>
+              </div>
+
+              <div className="rounded-xl bg-slate-100 p-3">
+                <p className="text-sm text-slate-500">App tính</p>
+                <p className="font-bold">{formatMoney(item.appMoney)}</p>
+              </div>
+
+              <div className="rounded-xl bg-slate-100 p-3">
+                <p className="text-sm text-slate-500">Thực tế</p>
+                <p className="font-bold">{formatMoney(item.actualMoney)}</p>
+              </div>
+
+              <div
+                className={`rounded-xl p-3 ${getBalanceStatusClass(
+                  item.difference
+                )}`}
+              >
+                <p className="text-sm opacity-80">Chênh lệch</p>
+                <p className="font-bold">{formatMoney(item.difference)}</p>
+              </div>
+            </div>
+
+            {item.note && (
+              <p className="mt-3 rounded-xl bg-slate-100 p-3 text-sm text-slate-700">
+                {item.note}
+              </p>
+            )}
+          </article>
+        ))
+      )}
+    </section>
+
+    {balanceCheckTotalPages > 1 && (
+      <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+        <button
+          type="button"
+          onClick={() =>
+            setBalanceCheckCurrentPage((prev) => Math.max(prev - 1, 1))
+          }
+          disabled={balanceCheckCurrentPage === 1}
+          className="rounded-xl border bg-white px-4 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          Trước
+        </button>
+
+        <span className="rounded-xl bg-slate-100 px-4 py-2 text-sm font-medium">
+          Trang {balanceCheckCurrentPage} / {balanceCheckTotalPages}
+        </span>
+
+        <button
+          type="button"
+          onClick={() =>
+            setBalanceCheckCurrentPage((prev) =>
+              Math.min(prev + 1, balanceCheckTotalPages)
+            )
+          }
+          disabled={balanceCheckCurrentPage === balanceCheckTotalPages}
+          className="rounded-xl border bg-white px-4 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          Sau
+        </button>
+      </div>
+    )}
+  </>
+)}
 
   {page === "expenses" && (
   <>
