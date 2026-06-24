@@ -341,6 +341,7 @@ export default function App() {
   const [cloudLoaded, setCloudLoaded] = useState(false);
   const [syncStatus, setSyncStatus] = useState("Chưa đồng bộ");
   const localDirtyRef = useRef(false);
+  const balanceCheckDraftDirtyRef = useRef(false);
 
   const [historySearch, setHistorySearch] = useState("");
   const [historyFromDate, setHistoryFromDate] = useState("");
@@ -394,6 +395,10 @@ useEffect(() => {
 ]);
 
 useEffect(() => {
+  if (balanceCheckDraftDirtyRef.current && balanceCheckForm.date === selectedDate) {
+    return;
+  }
+
   const existing = balanceChecks.find((item) => item.date === selectedDate);
 
   setBalanceCheckForm({
@@ -402,6 +407,8 @@ useEffect(() => {
     bank: existing ? formatMoneyInput(String(existing.bank)) : "",
     note: existing?.note ?? "",
   });
+
+  balanceCheckDraftDirtyRef.current = false;
 }, [selectedDate, balanceChecks]);
 
 useEffect(() => {
@@ -1220,6 +1227,7 @@ function handleBalanceCheckSubmit(event: React.FormEvent) {
   const now = new Date().toISOString();
 
   markLocalChanged("Đã lưu kiểm kê số dư, đang lưu cloud...");
+  balanceCheckDraftDirtyRef.current = false;
 
   setBalanceChecks((prev) => {
     const existing = prev.find((item) => item.date === balanceCheckForm.date);
@@ -1891,11 +1899,7 @@ async function handleLogout() {
   setSyncStatus("Chưa đồng bộ");
 }
 
-function BalanceCheckCard({
-  title = "Kiểm kê số dư hôm nay",
-}: {
-  title?: string;
-}) {
+function renderBalanceCheckCard(title = "Kiểm kê số dư hôm nay") {
   const cash = parseMoneyInput(balanceCheckForm.cash);
   const bank = parseMoneyInput(balanceCheckForm.bank);
   const checkedMoney = cash + bank;
@@ -1929,13 +1933,17 @@ function BalanceCheckCard({
               type="date"
               value={balanceCheckForm.date}
               max={todayString}
-              onChange={(e) => {
-                setSelectedDate(e.target.value);
-                setBalanceCheckForm((prev) => ({
-                  ...prev,
-                  date: e.target.value,
-                }));
-              }}
+                onChange={(e) => {
+                  const nextDate = e.target.value;
+
+                  balanceCheckDraftDirtyRef.current = false;
+
+                  setSelectedDate(nextDate);
+                  setBalanceCheckForm((prev) => ({
+                    ...prev,
+                    date: nextDate,
+                  }));
+                }}
               className="mt-1 w-full rounded-xl border px-3 py-2"
             />
           </div>
@@ -1946,12 +1954,14 @@ function BalanceCheckCard({
               type="text"
               inputMode="numeric"
               value={balanceCheckForm.cash}
-              onChange={(e) =>
-                setBalanceCheckForm((prev) => ({
-                  ...prev,
-                  cash: formatMoneyInput(e.target.value),
-                }))
-              }
+                onChange={(e) => {
+                  balanceCheckDraftDirtyRef.current = true;
+
+                  setBalanceCheckForm((prev) => ({
+                    ...prev,
+                    cash: formatMoneyInput(e.target.value),
+                  }));
+                }}
               placeholder="VD: 500.000"
               className="mt-1 w-full rounded-xl border px-3 py-2"
             />
@@ -1963,12 +1973,14 @@ function BalanceCheckCard({
               type="text"
               inputMode="numeric"
               value={balanceCheckForm.bank}
-              onChange={(e) =>
-                setBalanceCheckForm((prev) => ({
-                  ...prev,
-                  bank: formatMoneyInput(e.target.value),
-                }))
-              }
+                onChange={(e) => {
+                  balanceCheckDraftDirtyRef.current = true;
+
+                  setBalanceCheckForm((prev) => ({
+                    ...prev,
+                    bank: formatMoneyInput(e.target.value),
+                  }));
+                }}
               placeholder="VD: 3.000.000"
               className="mt-1 w-full rounded-xl border px-3 py-2"
             />
@@ -2003,12 +2015,14 @@ function BalanceCheckCard({
           <label className="text-sm font-medium">Ghi chú kiểm kê</label>
           <textarea
             value={balanceCheckForm.note}
-            onChange={(e) =>
-              setBalanceCheckForm((prev) => ({
-                ...prev,
-                note: e.target.value,
-              }))
-            }
+              onChange={(e) => {
+                balanceCheckDraftDirtyRef.current = true;
+
+                setBalanceCheckForm((prev) => ({
+                  ...prev,
+                  note: e.target.value,
+                }));
+              }}
             placeholder="VD: Có thể chưa nhập tiền ăn sáng, quên ghi khoản chuyển khoản..."
             className="mt-1 min-h-20 w-full rounded-xl border px-3 py-2"
           />
@@ -2297,7 +2311,7 @@ function BalanceCheckCard({
             progress={getProgress(totalJourneyMoney, goals.bigGoalTarget)}
           />      
         </div>
-        <BalanceCheckCard title="Kiểm kê số dư hôm nay" />
+        {renderBalanceCheckCard("Kiểm kê số dư hôm nay")}
       </section>
 
       <section className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
@@ -4040,7 +4054,7 @@ function BalanceCheckCard({
           )}
         </div>
       </form>
-      <BalanceCheckCard title="Kiểm kê cuối ngày" />
+      {renderBalanceCheckCard("Kiểm kê cuối ngày")}
 
       </section>
     </>
