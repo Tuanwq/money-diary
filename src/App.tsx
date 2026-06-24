@@ -256,6 +256,9 @@ export default function App() {
   const [expenses, setExpenses] = useState<ExpenseEntry[]>([]);
   const [selectedDate, setSelectedDate] = useState(getToday());
   const [editingDate, setEditingDate] = useState<string | null>(null);
+  const [editingExpenseDate, setEditingExpenseDate] = useState<string | null>(
+  null
+);
   const [page, setPage] = useState<Page>("home");
   const [goalScreen, setGoalScreen] = useState<GoalScreen>("menu");
   const [chartDays, setChartDays] = useState(7);
@@ -894,29 +897,30 @@ function handleExpenseSubmit(event: React.FormEvent) {
   const dinner = parseMoneyInput(expenseForm.dinner);
   const other = parseMoneyInput(expenseForm.other);
 
-  const now = new Date().toISOString();
-
   if (breakfast < 0 || lunch < 0 || dinner < 0 || other < 0) {
     alert("Chi tiêu không được âm.");
     return;
   }
+
+  const now = new Date().toISOString();
+  const savedDate = expenseForm.date;
 
   setExpenses((prev) => {
     const existingExpense = prev.find(
       (expense) => expense.date === expenseForm.date
     );
 
-  const newExpense: ExpenseEntry = {
-    id: existingExpense?.id ?? crypto.randomUUID(),
-    date: expenseForm.date,
-    breakfast,
-    lunch,
-    dinner,
-    other,
-    note: expenseForm.note,
-    createdAt: existingExpense?.createdAt ?? now,
-    updatedAt: now,
-  };
+    const newExpense: ExpenseEntry = {
+      id: existingExpense?.id ?? crypto.randomUUID(),
+      date: expenseForm.date,
+      breakfast,
+      lunch,
+      dinner,
+      other,
+      note: expenseForm.note,
+      createdAt: existingExpense?.createdAt ?? now,
+      updatedAt: now,
+    };
 
     const withoutSameDate = prev.filter(
       (expense) => expense.date !== expenseForm.date
@@ -925,7 +929,8 @@ function handleExpenseSubmit(event: React.FormEvent) {
     return [...withoutSameDate, newExpense];
   });
 
-  setSelectedDate(expenseForm.date);
+  setSelectedDate(savedDate);
+  setEditingExpenseDate(null);
 
   setExpenseForm({
     date: getToday(),
@@ -936,7 +941,7 @@ function handleExpenseSubmit(event: React.FormEvent) {
     note: "",
   });
 
-  alert("Đã lưu chi tiêu.");
+  alert(editingExpenseDate ? "Đã cập nhật chi tiêu." : "Đã lưu chi tiêu.");
 }
 
   function handleSubmit(event: React.FormEvent) {
@@ -1020,6 +1025,26 @@ function handleExpenseSubmit(event: React.FormEvent) {
 
   setSelectedDate(entry.date);
   setEditingDate(entry.date);
+  navigateTo("entry");
+
+  window.scrollTo({
+    top: 0,
+    behavior: "smooth",
+  });
+}
+
+function editExpense(expense: ExpenseEntry) {
+  setExpenseForm({
+    date: expense.date,
+    breakfast: formatMoneyInput(String(expense.breakfast ?? 0)),
+    lunch: formatMoneyInput(String(expense.lunch ?? 0)),
+    dinner: formatMoneyInput(String(expense.dinner ?? 0)),
+    other: formatMoneyInput(String(expense.other ?? 0)),
+    note: expense.note,
+  });
+
+  setSelectedDate(expense.date);
+  setEditingExpenseDate(expense.date);
   navigateTo("entry");
 
   window.scrollTo({
@@ -2491,7 +2516,9 @@ async function handleLogout() {
         onSubmit={handleExpenseSubmit}
         className="rounded-2xl bg-white p-5 shadow-sm"
       >
-        <h2 className="text-xl font-bold">Chi tiêu hôm nay</h2>
+        <h2 className="text-xl font-bold">
+          {editingExpenseDate ? "Sửa chi tiêu" : "Chi tiêu hôm nay"}
+        </h2>
 
         <p className="mt-1 text-sm text-slate-500">
           Nhập chi tiêu ăn uống và khoản khác trong ngày.
@@ -2604,14 +2631,34 @@ async function handleLogout() {
             className="mt-1 w-full rounded-xl border px-3 py-2"
           />
         </div>
-
         <button
           type="submit"
           className="mt-4 rounded-xl bg-slate-900 px-5 py-2 font-medium text-white hover:bg-slate-700"
         >
-          Lưu chi tiêu
+          {editingExpenseDate ? "Cập nhật chi tiêu" : "Lưu chi tiêu"}
         </button>
+
+        {editingExpenseDate && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingExpenseDate(null);
+                    setExpenseForm({
+                      date: getToday(),
+                      breakfast: "",
+                      lunch: "",
+                      dinner: "",
+                      other: "",
+                      note: "",
+                    });
+                  }}
+                  className="mt-4 rounded-xl border bg-white px-5 py-2 font-medium hover:bg-slate-100"
+                >
+                  Hủy sửa
+                </button>
+        )}
       </form>
+
 
       <form
         onSubmit={handleSubmit}
@@ -3193,13 +3240,23 @@ async function handleLogout() {
                       </p>
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={() => deleteExpense(expense.id)}
-                      className="rounded-lg bg-red-50 px-3 py-1 text-sm font-medium text-red-600 hover:bg-red-100"
-                    >
-                      Xóa
-                    </button>
+                    <div className="flex shrink-0 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => editExpense(expense)}
+                        className="rounded-lg bg-slate-100 px-3 py-1 text-sm font-medium text-slate-700 hover:bg-slate-200"
+                      >
+                        Sửa
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => deleteExpense(expense.id)}
+                        className="rounded-lg bg-red-50 px-3 py-1 text-sm font-medium text-red-600 hover:bg-red-100"
+                      >
+                        Xóa
+                      </button>
+                    </div>
                   </div>
 
                   <div className="mt-4 grid gap-3 text-sm md:grid-cols-4">
