@@ -1,6 +1,6 @@
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "./lib/supabase";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   CartesianGrid,
   Line,
@@ -47,11 +47,14 @@ type Goals = {
   weeklyHours: number;
   monthlyIncome: number;
   monthlyHours: number;
+
   bigGoalName: string;
   bigGoalTarget: number;
   bigGoalSaved: number;
   bigGoalDeadline: string;
   bigGoalStartDate: string;
+
+  subGoals: SubGoal[];
 };
 
 type Page = "home" | "goals" | "entry" | "history" | "expenses";
@@ -75,6 +78,8 @@ type CompletedGoal = {
   completedAt: string;
   startDate?: string;
 
+  goalType?: "main" | "sub";
+
   totalIncome?: number;
   totalExpense?: number;
   actualMoney?: number;
@@ -85,6 +90,9 @@ type CompletedGoal = {
   entriesSnapshot?: DailyEntry[];
   expensesSnapshot?: ExpenseEntry[];
   balanceSnapshots?: BalanceSnapshot[];
+
+  contributionsSnapshot?: GoalContribution[];
+  goalProgressSnapshots?: GoalProgressSnapshot[];
 };
 
 type BalanceSnapshot = {
@@ -93,6 +101,34 @@ type BalanceSnapshot = {
   actualMoney: number;
   income: number;
   expense: number;
+};
+
+type GoalContribution = {
+  id: string;
+  date: string;
+  amount: number;
+  note: string;
+  createdAt: string;
+  updatedAt?: string;
+};
+
+type SubGoal = {
+  id: string;
+  name: string;
+  target: number;
+  saved: number;
+  deadline: string;
+  startDate: string;
+  contributions: GoalContribution[];
+  createdAt: string;
+  updatedAt?: string;
+};
+
+type GoalProgressSnapshot = {
+  date: string;
+  saved: number;
+  contributed: number;
+  progress: number;
 };
 
 const STORAGE_ENTRIES_KEY = "money_diary_entries";
@@ -115,6 +151,8 @@ const defaultGoals: Goals = {
   bigGoalSaved: 10000000,
   bigGoalDeadline: "2026-08-16",
   bigGoalStartDate: getToday(),
+
+  subGoals: [],
 };
 
 const moodLabels: Record<Mood, string> = {
@@ -270,6 +308,7 @@ export default function App() {
   const [authPassword, setAuthPassword] = useState("");
   const [cloudLoaded, setCloudLoaded] = useState(false);
   const [syncStatus, setSyncStatus] = useState("Chưa đồng bộ");
+  const localDirtyRef = useRef(false);
 
   const [historySearch, setHistorySearch] = useState("");
   const [historyFromDate, setHistoryFromDate] = useState("");
@@ -285,6 +324,42 @@ export default function App() {
   const [selectedCompletedGoalId, setSelectedCompletedGoalId] = useState<
   string | null
 >(null);
+
+  const [subGoalForm, setSubGoalForm] = useState({
+  name: "",
+  target: "",
+  saved: "",
+  deadline: getToday(),
+  startDate: getToday(),
+});
+
+const [mainGoalForm, setMainGoalForm] = useState({
+  bigGoalName: goals.bigGoalName,
+  bigGoalTarget: formatMoneyInput(String(goals.bigGoalTarget ?? 0)),
+  bigGoalSaved: formatMoneyInput(String(goals.bigGoalSaved ?? 0)),
+  bigGoalStartDate: goals.bigGoalStartDate ?? getToday(),
+  bigGoalDeadline: goals.bigGoalDeadline ?? getToday(),
+});
+
+const [subGoalContributionForms, setSubGoalContributionForms] = useState<
+  Record<string, { amount: string; note: string }>
+>({});
+
+useEffect(() => {
+  setMainGoalForm({
+    bigGoalName: goals.bigGoalName,
+    bigGoalTarget: formatMoneyInput(String(goals.bigGoalTarget ?? 0)),
+    bigGoalSaved: formatMoneyInput(String(goals.bigGoalSaved ?? 0)),
+    bigGoalStartDate: goals.bigGoalStartDate ?? getToday(),
+    bigGoalDeadline: goals.bigGoalDeadline ?? getToday(),
+  });
+}, [
+  goals.bigGoalName,
+  goals.bigGoalTarget,
+  goals.bigGoalSaved,
+  goals.bigGoalStartDate,
+  goals.bigGoalDeadline,
+]);
 
 useEffect(() => {
   const initialState: AppHistoryState = {
@@ -427,6 +502,7 @@ useEffect(() => {
       return;
     }
 
+    localDirtyRef.current = false;
     setSyncStatus("Đã đồng bộ");
   }, 700);
 
@@ -440,6 +516,10 @@ useEffect(() => {
 
   async function refreshWhenBackToApp() {
     if (!session?.user || refreshing) return;
+
+    // Nếu vừa sửa dữ liệu local mà chưa kịp lưu cloud,
+    // không kéo cloud cũ về ghi đè.
+    if (localDirtyRef.current) return;
 
     refreshing = true;
     setCloudLoaded(false);
@@ -739,6 +819,82 @@ function getExpenseTotal(expense: ExpenseEntry) {
   return expense.breakfast + expense.lunch + expense.dinner + expense.other;
 }
 
+function getSubGoalSaved(goal: SubGoal) {
+  const contributed = goal.contributions.reduce(
+    (sum, item) => sum + item.amount,
+    0
+  );
+
+  return goal.saved + contributed;
+}
+
+function getDailyNeedForGoal(target: number, currentSaved: number, deadline: string) {
+  const remaining = Math.max(target - currentSaved, 0);
+  const days = getDaysLeft(deadline);
+
+  if (days <= 0) return remaining;
+
+  return Math.ceil(remaining / days);
+}
+
+function getGoalTimeProgress(startDate: string, deadline: string) {
+  const start = toDate(startDate);
+  const end = toDate(deadline);
+  const today = toDate(getToday());
+
+  const totalDays = Math.max(
+    Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)),
+    1
+  );
+
+  const elapsedDays = Math.min(
+    Math.max(
+      Math.ceil((today.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)),
+      0
+    ),
+    totalDays
+  );
+
+  return Math.round((elapsedDays / totalDays) * 100);
+}
+
+function isGoalBehind(goal: SubGoal) {
+  const moneyProgress = getProgress(getSubGoalSaved(goal), goal.target);
+  const timeProgress = getGoalTimeProgress(goal.startDate, goal.deadline);
+
+  return moneyProgress + 5 < timeProgress;
+}
+
+function buildSubGoalProgressData(goal: SubGoal): GoalProgressSnapshot[] {
+  const result: GoalProgressSnapshot[] = [];
+
+  const currentDate = toDate(goal.startDate);
+  const lastDate = toDate(getToday());
+
+  let runningSaved = goal.saved;
+
+  while (currentDate <= lastDate) {
+    const dateString = getDateString(currentDate);
+
+    const dayContributed = goal.contributions
+      .filter((item) => item.date === dateString)
+      .reduce((sum, item) => sum + item.amount, 0);
+
+    runningSaved += dayContributed;
+
+    result.push({
+      date: dateString,
+      saved: runningSaved,
+      contributed: dayContributed,
+      progress: getProgress(runningSaved, goal.target),
+    });
+
+    currentDate.setDate(currentDate.getDate() + 1);
+  }
+
+  return result;
+}
+
 function buildBalanceMovementData(
   startDate: string,
   endDate: string,
@@ -831,6 +987,12 @@ const totalSavedForBigGoal = actualMoney;
   const bigGoalProgress = getProgress(totalSavedForBigGoal, goals.bigGoalTarget);
   const remainingBigGoal = Math.max(goals.bigGoalTarget - totalSavedForBigGoal, 0);
   const daysLeft = getDaysLeft(goals.bigGoalDeadline);
+  const bigGoalTimeProgress = getGoalTimeProgress(
+  goals.bigGoalStartDate ?? getToday(),
+  goals.bigGoalDeadline
+);
+
+const isBigGoalBehind = bigGoalProgress + 5 < bigGoalTimeProgress;
   const needPerDay =
     daysLeft > 0 ? Math.ceil(remainingBigGoal / daysLeft) : remainingBigGoal;
 
@@ -904,6 +1066,7 @@ function handleExpenseSubmit(event: React.FormEvent) {
 
   const now = new Date().toISOString();
   const savedDate = expenseForm.date;
+  markLocalChanged("Đã sửa chi tiêu, đang lưu cloud...");
 
   setExpenses((prev) => {
     const existingExpense = prev.find(
@@ -941,7 +1104,12 @@ function handleExpenseSubmit(event: React.FormEvent) {
     note: "",
   });
 
-  alert(editingExpenseDate ? "Đã cập nhật chi tiêu." : "Đã lưu chi tiêu.");
+  setSyncStatus(editingExpenseDate ? "Đã cập nhật chi tiêu" : "Đã lưu chi tiêu");
+}
+
+function markLocalChanged(message = "Có thay đổi, đang chờ đồng bộ...") {
+  markLocalChanged("Đã hoàn thành mục tiêu phụ, đang lưu cloud...");
+  setSyncStatus(message);
 }
 
   function handleSubmit(event: React.FormEvent) {
@@ -971,6 +1139,8 @@ function handleExpenseSubmit(event: React.FormEvent) {
 
     const savedDate = form.date;
     const now = new Date().toISOString();
+
+    markLocalChanged("Đã sửa nhật ký, đang lưu cloud...");
 
     setEntries((prev) => {
       const existingEntry = prev.find((entry) => entry.date === form.date);
@@ -1057,15 +1227,19 @@ function deleteExpense(id: string) {
   const confirmed = confirm("Bạn có chắc muốn xóa chi tiêu này không?");
   if (!confirmed) return;
 
+  markLocalChanged("Đã xóa chi tiêu, đang lưu cloud...");
+
   setExpenses((prev) => prev.filter((expense) => expense.id !== id));
 }
 
-  function deleteEntry(id: string) {
-    const confirmed = confirm("Bạn có chắc muốn xóa nhật ký này không?");
-    if (!confirmed) return;
+function deleteEntry(id: string) {
+  const confirmed = confirm("Bạn có chắc muốn xóa nhật ký này không?");
+  if (!confirmed) return;
 
-    setEntries((prev) => prev.filter((entry) => entry.id !== id));
-  }
+  markLocalChanged("Đã xóa nhật ký, đang lưu cloud...");
+
+  setEntries((prev) => prev.filter((entry) => entry.id !== id));
+}
 
 function completeCurrentGoal() {
   const confirmed = confirm(
@@ -1073,6 +1247,8 @@ function completeCurrentGoal() {
   );
 
   if (!confirmed) return;
+
+  markLocalChanged("Đã hoàn thành mục tiêu chính, đang lưu cloud...");
 
   const startDate = goals.bigGoalStartDate ?? getToday();
   const endDate = getToday();
@@ -1118,6 +1294,7 @@ function completeCurrentGoal() {
 
   const completedGoal: CompletedGoal = {
     id: crypto.randomUUID(),
+    goalType: "main",
     name: goals.bigGoalName,
     target: goals.bigGoalTarget,
     saved: goalActualMoney,
@@ -1156,10 +1333,195 @@ function completeCurrentGoal() {
 
   navigateTo("goals", "completed");
 }
-  function deleteCompletedGoal(id: string) {
-  const confirmed = confirm("Bạn có chắc muốn xóa mục tiêu đã hoàn thành này không?");
+
+function addSubGoal() {
+  const name = subGoalForm.name.trim();
+  const target = parseMoneyInput(subGoalForm.target);
+  const saved = parseMoneyInput(subGoalForm.saved);
+
+  if (!name) {
+    alert("Bạn chưa nhập tên mục tiêu phụ.");
+    return;
+  }
+
+  if (target <= 0) {
+    alert("Số tiền cần đạt phải lớn hơn 0.");
+    return;
+  }
+
+  if (!subGoalForm.startDate || !subGoalForm.deadline) {
+    alert("Bạn cần nhập ngày bắt đầu và hạn mục tiêu.");
+    return;
+  }
+
+  const now = new Date().toISOString();
+
+  const newSubGoal: SubGoal = {
+    id: crypto.randomUUID(),
+    name,
+    target,
+    saved,
+    deadline: subGoalForm.deadline,
+    startDate: subGoalForm.startDate,
+    contributions: [],
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  markLocalChanged("Đã hoàn thành mục tiêu phụ, đang lưu cloud...");
+
+  setGoals((prev) => ({
+    ...prev,
+    subGoals: [...(prev.subGoals ?? []), newSubGoal],
+  }));
+
+  setSubGoalForm({
+    name: "",
+    target: "",
+    saved: "",
+    deadline: getToday(),
+    startDate: getToday(),
+  });
+}
+
+function deleteSubGoal(id: string) {
+  const confirmed = confirm("Bạn có chắc muốn xóa mục tiêu phụ này không?");
+  if (!confirmed) return;
+
+  markLocalChanged("Đã xóa mục tiêu phụ, đang lưu cloud...");
+
+  setGoals((prev) => ({
+    ...prev,
+    subGoals: (prev.subGoals ?? []).filter((goal) => goal.id !== id),
+  }));
+}
+
+function addContributionToSubGoal(goalId: string) {
+  const form = subGoalContributionForms[goalId];
+
+  if (!form) return;
+
+  const amount = parseMoneyInput(form.amount);
+  const note = form.note.trim();
+
+  if (amount <= 0) {
+    alert("Số tiền góp phải lớn hơn 0.");
+    return;
+  }
+
+  const now = new Date().toISOString();
+
+  const contribution: GoalContribution = {
+    id: crypto.randomUUID(),
+    date: getToday(),
+    amount,
+    note,
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  markLocalChanged("Đã hoàn thành mục tiêu phụ, đang lưu cloud...");
+
+  setGoals((prev) => ({
+    ...prev,
+    subGoals: (prev.subGoals ?? []).map((goal) => {
+      if (goal.id !== goalId) return goal;
+
+      return {
+        ...goal,
+        contributions: [...goal.contributions, contribution],
+        updatedAt: now,
+      };
+    }),
+  }));
+
+  setSubGoalContributionForms((prev) => ({
+    ...prev,
+    [goalId]: {
+      amount: "",
+      note: "",
+    },
+  }));
+}
+
+function completeSubGoal(goalId: string) {
+  const goal = (goals.subGoals ?? []).find((item) => item.id === goalId);
+
+  if (!goal) return;
+
+  const confirmed = confirm(`Hoàn thành mục tiêu phụ "${goal.name}"?`);
+  if (!confirmed) return;
+
+  const startDate = goal.startDate;
+  const endDate = getToday();
+
+  const entriesSnapshot = entries.filter(
+    (entry) => entry.date >= startDate && entry.date <= endDate
+  );
+
+  const expensesSnapshot = expenses.filter(
+    (expense) => expense.date >= startDate && expense.date <= endDate
+  );
+
+  const totalHours = entriesSnapshot.reduce(
+    (sum, entry) => sum + entry.workHours,
+    0
+  );
+
+  const totalOrders = entriesSnapshot.reduce(
+    (sum, entry) => sum + (entry.orderCount ?? 0),
+    0
+  );
+
+  const totalContributed = goal.contributions.reduce(
+    (sum, item) => sum + item.amount,
+    0
+  );
+
+  const currentSaved = getSubGoalSaved(goal);
+
+  const completedGoal: CompletedGoal = {
+    id: crypto.randomUUID(),
+    goalType: "sub",
+    name: goal.name,
+    target: goal.target,
+    saved: currentSaved,
+    deadline: goal.deadline,
+    completedAt: getToday(),
+    startDate: goal.startDate,
+
+    totalIncome: totalContributed,
+    actualMoney: currentSaved,
+    totalJourneyMoney: currentSaved,
+    totalHours,
+    totalOrders,
+
+    entriesSnapshot,
+    expensesSnapshot,
+    contributionsSnapshot: goal.contributions,
+    goalProgressSnapshots: buildSubGoalProgressData(goal),
+  };
+
+  markLocalChanged("Đã hoàn thành mục tiêu phụ, đang lưu cloud..."); 
+
+  setCompletedGoals((prev) => [completedGoal, ...prev]);
+
+  setGoals((prev) => ({
+    ...prev,
+    subGoals: (prev.subGoals ?? []).filter((item) => item.id !== goalId),
+  }));
+
+  navigateTo("goals", "completed");
+}
+
+function deleteCompletedGoal(id: string) {
+  const confirmed = confirm(
+    "Bạn có chắc muốn xóa mục tiêu đã hoàn thành này không?"
+  );
 
   if (!confirmed) return;
+
+  markLocalChanged("Đã xóa mục tiêu hoàn thành, đang lưu cloud...");
 
   setCompletedGoals((prev) => prev.filter((goal) => goal.id !== id));
 }
@@ -1252,10 +1614,46 @@ function updateGoal(key: keyof Goals, value: string) {
     "bigGoalStartDate",
   ];
 
+  markLocalChanged("Đã hoàn thành mục tiêu phụ, đang lưu cloud...");
+
   setGoals((prev) => ({
     ...prev,
     [key]: textFields.includes(key) ? value : Number(value),
   }));
+}
+
+function saveMainGoal() {
+  const name = mainGoalForm.bigGoalName.trim();
+  const target = parseMoneyInput(mainGoalForm.bigGoalTarget);
+  const saved = parseMoneyInput(mainGoalForm.bigGoalSaved);
+
+  if (!name) {
+    alert("Bạn chưa nhập tên mục tiêu lớn.");
+    return;
+  }
+
+  if (target < 0 || saved < 0) {
+    alert("Số tiền không được âm.");
+    return;
+  }
+
+  if (!mainGoalForm.bigGoalStartDate || !mainGoalForm.bigGoalDeadline) {
+    alert("Bạn cần nhập ngày bắt đầu và hạn mục tiêu.");
+    return;
+  }
+
+  markLocalChanged("Đã hoàn thành mục tiêu phụ, đang lưu cloud...");
+
+  setGoals((prev) => ({
+    ...prev,
+    bigGoalName: name,
+    bigGoalTarget: target,
+    bigGoalSaved: saved,
+    bigGoalStartDate: mainGoalForm.bigGoalStartDate,
+    bigGoalDeadline: mainGoalForm.bigGoalDeadline,
+  }));
+
+  alert("Đã lưu mục tiêu lớn.");
 }
 
 async function handleSignUp() {
@@ -1416,12 +1814,79 @@ async function handleLogout() {
             <h2 className="text-xl font-bold">
               {isSelectedToday ? "Mục tiêu hôm nay" : "Mục tiêu ngày đang xem"}
             </h2>
+
             <p className="text-sm text-slate-500">
               Ngày:{" "}
               <strong>
                 {isSelectedToday ? "Hôm nay" : formatDateShort(selectedDate)}
               </strong>
             </p>
+
+            <div className="mt-3 flex flex-wrap items-end gap-2">
+              <div
+                title={`Mục tiêu chính: ${goals.bigGoalName}`}
+                className={`rounded-2xl px-4 py-3 ${
+                  isBigGoalBehind ? "bg-red-50" : "bg-slate-900 text-white"
+                }`}
+              >
+                <p
+                  className={`text-xs ${
+                    isBigGoalBehind ? "text-red-600" : "text-slate-200"
+                  }`}
+                >
+                  Mục tiêu chính
+                </p>
+
+                <div className="flex items-end gap-1">
+                  <span
+                    className={`text-3xl font-black ${
+                      isBigGoalBehind ? "text-red-600" : "text-white"
+                    }`}
+                  >
+                    {daysLeft}
+                  </span>
+                  <span
+                    className={`pb-1 text-sm font-medium ${
+                      isBigGoalBehind ? "text-red-600" : "text-slate-200"
+                    }`}
+                  >
+                    ngày
+                  </span>
+                </div>
+              </div>
+
+              {(goals.subGoals ?? []).map((goal) => {
+                const subDaysLeft = getDaysLeft(goal.deadline);
+                const behind = isGoalBehind(goal);
+
+                return (
+                  <div
+                    key={goal.id}
+                    title={`${goal.name} · còn ${subDaysLeft} ngày`}
+                    className={`rounded-xl px-3 py-2 ${
+                      behind ? "bg-red-50" : "bg-white"
+                    } shadow-sm`}
+                  >
+                    <p
+                      className={`text-xs ${
+                        behind ? "text-red-600" : "text-slate-500"
+                      }`}
+                    >
+                      Phụ
+                    </p>
+
+                    <p
+                      className={`text-lg font-black ${
+                        behind ? "text-red-600" : "text-slate-900"
+                      }`}
+                    >
+                      {subDaysLeft}
+                      <span className="ml-1 text-xs font-medium">ngày</span>
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -1963,42 +2428,64 @@ async function handleLogout() {
             <div className="mt-4 grid gap-3">
               <div>
                 <label className="text-sm font-medium">Tên mục tiêu</label>
-                <input
-                  value={goals.bigGoalName}
-                  onChange={(e) => updateGoal("bigGoalName", e.target.value)}
-                  className="mt-1 w-full rounded-xl border px-3 py-2"
-                />
+                  <input
+                    value={mainGoalForm.bigGoalName}
+                    onChange={(e) =>
+                      setMainGoalForm((prev) => ({
+                        ...prev,
+                        bigGoalName: e.target.value,
+                      }))
+                    }
+                    className="mt-1 w-full rounded-xl border px-3 py-2"
+                  />
               </div>
 
               <div>
                 <label className="text-sm font-medium">Số tiền cần đạt</label>
-                <input
-                  type="number"
-                  value={goals.bigGoalTarget}
-                  onChange={(e) => updateGoal("bigGoalTarget", e.target.value)}
-                  className="mt-1 w-full rounded-xl border px-3 py-2"
-                />
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={mainGoalForm.bigGoalTarget}
+                    onChange={(e) =>
+                      setMainGoalForm((prev) => ({
+                        ...prev,
+                        bigGoalTarget: formatMoneyInput(e.target.value),
+                      }))
+                    }
+                    className="mt-1 w-full rounded-xl border px-3 py-2"
+                  />
               </div>
 
               <div>
                 <label className="text-sm font-medium">Số tiền đã có sẵn</label>
-                <input
-                  type="number"
-                  value={goals.bigGoalSaved}
-                  onChange={(e) => updateGoal("bigGoalSaved", e.target.value)}
-                  className="mt-1 w-full rounded-xl border px-3 py-2"
-                />
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={mainGoalForm.bigGoalSaved}
+                    onChange={(e) =>
+                      setMainGoalForm((prev) => ({
+                        ...prev,
+                        bigGoalSaved: formatMoneyInput(e.target.value),
+                      }))
+                    }
+                    className="mt-1 w-full rounded-xl border px-3 py-2"
+                  />
               </div>
 
               <div>
                 <label className="text-sm font-medium">Ngày bắt đầu mục tiêu</label>
-                <input
-                  type="date"
-                  value={goals.bigGoalStartDate ?? getToday()}
-                  max={todayString}
-                  onChange={(e) => updateGoal("bigGoalStartDate", e.target.value)}
-                  className="mt-1 w-full rounded-xl border px-3 py-2"
-                />
+                  <input
+                    type="date"
+                    value={mainGoalForm.bigGoalStartDate}
+                    max={todayString}
+                    onChange={(e) =>
+                      setMainGoalForm((prev) => ({
+                        ...prev,
+                        bigGoalStartDate: e.target.value,
+                      }))
+                    }
+                    className="mt-1 w-full rounded-xl border px-3 py-2"
+                  />
                 <p className="mt-1 text-xs text-slate-500">
                   Biến động tiền sẽ được tính từ ngày này. Khi hoàn thành mục tiêu, hành trình
                   mới sẽ bắt đầu lại từ đầu.
@@ -2009,14 +2496,25 @@ async function handleLogout() {
                 <label className="text-sm font-medium">Hạn mục tiêu</label>
                 <input
                   type="date"
-                  value={goals.bigGoalDeadline}
+                  value={mainGoalForm.bigGoalDeadline}
                   onChange={(e) =>
-                    updateGoal("bigGoalDeadline", e.target.value)
+                    setMainGoalForm((prev) => ({
+                      ...prev,
+                      bigGoalDeadline: e.target.value,
+                    }))
                   }
                   className="mt-1 w-full rounded-xl border px-3 py-2"
                 />
               </div>
             </div>
+
+            <button
+              type="button"
+              onClick={saveMainGoal}
+              className="mt-4 w-full rounded-xl bg-slate-900 px-5 py-2 font-medium text-white hover:bg-slate-700"
+            >
+              Lưu mục tiêu lớn
+            </button>
 
             <div className="mt-5 rounded-xl bg-slate-100 p-4">
               <p className="font-bold">{goals.bigGoalName}</p>
@@ -2038,6 +2536,26 @@ async function handleLogout() {
               <p className="mt-1 text-sm">
                 Cần mỗi ngày: <strong>{formatMoney(needPerDay)}</strong>
               </p>
+
+              <div
+                className={`mt-3 rounded-xl p-3 ${
+                  isBigGoalBehind ? "bg-red-50" : "bg-green-50"
+                }`}
+              >
+                <p className="text-sm text-slate-500">Trạng thái tiến độ</p>
+                <p
+                  className={`font-bold ${
+                    isBigGoalBehind ? "text-red-600" : "text-green-700"
+                  }`}
+                >
+                  {isBigGoalBehind ? "Đang chậm tiến độ" : "Đúng tiến độ"}
+                </p>
+
+                <p className="mt-1 text-xs text-slate-500">
+                  Tiến độ tiền: {bigGoalProgress}% · Tiến độ thời gian:{" "}
+                  {bigGoalTimeProgress}%
+                </p>
+              </div>
 
               <ProgressBar value={bigGoalProgress} />
 
@@ -2112,6 +2630,288 @@ async function handleLogout() {
               />
             </div>
           </div>
+        </section>
+
+        <section className="rounded-2xl bg-white p-5 shadow-sm">
+  <div className="flex flex-wrap items-center justify-between gap-3">
+    <div>
+      <h2 className="text-xl font-bold">Mục tiêu phụ</h2>
+      <p className="text-sm text-slate-500">
+        Chia thủ công tiền vào từng mục tiêu phụ, ví dụ: Lens, quỹ dự phòng,
+        trả nợ.
+      </p>
+    </div>
+  </div>
+
+  <div className="mt-4 grid gap-3 md:grid-cols-2 lg:grid-cols-5">
+    <div>
+      <label className="text-sm font-medium">Tên mục tiêu</label>
+      <input
+        value={subGoalForm.name}
+        onChange={(e) =>
+          setSubGoalForm((prev) => ({
+            ...prev,
+            name: e.target.value,
+          }))
+        }
+        placeholder="VD: Lens Sony"
+        className="mt-1 w-full rounded-xl border px-3 py-2"
+      />
+    </div>
+
+    <div>
+      <label className="text-sm font-medium">Số tiền cần đạt</label>
+      <input
+        type="text"
+        inputMode="numeric"
+        value={subGoalForm.target}
+        onChange={(e) =>
+          setSubGoalForm((prev) => ({
+            ...prev,
+            target: formatMoneyInput(e.target.value),
+          }))
+        }
+        placeholder="VD: 7.000.000"
+        className="mt-1 w-full rounded-xl border px-3 py-2"
+      />
+    </div>
+
+    <div>
+      <label className="text-sm font-medium">Đã có sẵn</label>
+      <input
+        type="text"
+        inputMode="numeric"
+        value={subGoalForm.saved}
+        onChange={(e) =>
+          setSubGoalForm((prev) => ({
+            ...prev,
+            saved: formatMoneyInput(e.target.value),
+          }))
+        }
+        placeholder="VD: 500.000"
+        className="mt-1 w-full rounded-xl border px-3 py-2"
+      />
+    </div>
+
+    <div>
+      <label className="text-sm font-medium">Bắt đầu</label>
+      <input
+        type="date"
+        value={subGoalForm.startDate}
+        max={todayString}
+        onChange={(e) =>
+          setSubGoalForm((prev) => ({
+            ...prev,
+            startDate: e.target.value,
+          }))
+        }
+        className="mt-1 w-full rounded-xl border px-3 py-2"
+      />
+    </div>
+
+    <div>
+      <label className="text-sm font-medium">Deadline</label>
+      <input
+        type="date"
+        value={subGoalForm.deadline}
+        onChange={(e) =>
+          setSubGoalForm((prev) => ({
+            ...prev,
+            deadline: e.target.value,
+          }))
+        }
+        className="mt-1 w-full rounded-xl border px-3 py-2"
+      />
+    </div>
+  </div>
+
+  <button
+    type="button"
+    onClick={addSubGoal}
+    className="mt-4 rounded-xl bg-slate-900 px-5 py-2 font-medium text-white hover:bg-slate-700"
+  >
+    Thêm mục tiêu phụ
+  </button>
+
+  <div className="mt-6 grid gap-4">
+    {(goals.subGoals ?? []).length === 0 ? (
+      <p className="rounded-xl bg-slate-100 p-4 text-sm text-slate-500">
+        Chưa có mục tiêu phụ nào.
+      </p>
+    ) : (
+      (goals.subGoals ?? []).map((goal) => {
+        const currentSaved = getSubGoalSaved(goal);
+        const progress = getProgress(currentSaved, goal.target);
+        const remaining = Math.max(goal.target - currentSaved, 0);
+        const dailyNeed = getDailyNeedForGoal(
+          goal.target,
+          currentSaved,
+          goal.deadline
+        );
+        const behind = isGoalBehind(goal);
+        const progressData = buildSubGoalProgressData(goal);
+
+        const contributionForm = subGoalContributionForms[goal.id] ?? {
+          amount: "",
+          note: "",
+        };
+
+        return (
+          <article key={goal.id} className="rounded-2xl border p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h3 className="text-lg font-bold">{goal.name}</h3>
+                <p className="text-sm text-slate-500">
+                  Từ {goal.startDate} đến {goal.deadline}
+                </p>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => completeSubGoal(goal.id)}
+                  className="rounded-lg bg-green-50 px-3 py-1 text-sm font-medium text-green-700 hover:bg-green-100"
+                >
+                  Hoàn thành
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => deleteSubGoal(goal.id)}
+                  className="rounded-lg bg-red-50 px-3 py-1 text-sm font-medium text-red-600 hover:bg-red-100"
+                >
+                  Xóa
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-5">
+              <div className="rounded-xl bg-slate-100 p-3">
+                <p className="text-sm text-slate-500">Đã có</p>
+                <p className="font-bold">{formatMoney(currentSaved)}</p>
+              </div>
+
+              <div className="rounded-xl bg-slate-100 p-3">
+                <p className="text-sm text-slate-500">Mục tiêu</p>
+                <p className="font-bold">{formatMoney(goal.target)}</p>
+              </div>
+
+              <div className="rounded-xl bg-slate-100 p-3">
+                <p className="text-sm text-slate-500">Còn thiếu</p>
+                <p className="font-bold">{formatMoney(remaining)}</p>
+              </div>
+
+              <div className="rounded-xl bg-slate-100 p-3">
+                <p className="text-sm text-slate-500">Cần mỗi ngày</p>
+                <p className="font-bold">{formatMoney(dailyNeed)}</p>
+              </div>
+
+              <div
+                className={`rounded-xl p-3 ${
+                  behind ? "bg-red-50" : "bg-green-50"
+                }`}
+              >
+                <p className="text-sm text-slate-500">Trạng thái</p>
+                <p
+                  className={`font-bold ${
+                    behind ? "text-red-600" : "text-green-700"
+                  }`}
+                >
+                  {behind ? "Đang chậm tiến độ" : "Đúng tiến độ"}
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-4">
+              <ProgressBar value={progress} />
+              <p className="mt-2 text-sm font-medium">
+                Hoàn thành {progress}%
+              </p>
+            </div>
+
+            <div className="mt-4 grid gap-3 md:grid-cols-3">
+              <div>
+                <label className="text-sm font-medium">Góp thêm</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={contributionForm.amount}
+                  onChange={(e) =>
+                    setSubGoalContributionForms((prev) => ({
+                      ...prev,
+                      [goal.id]: {
+                        ...contributionForm,
+                        amount: formatMoneyInput(e.target.value),
+                      },
+                    }))
+                  }
+                  placeholder="VD: 200.000"
+                  className="mt-1 w-full rounded-xl border px-3 py-2"
+                />
+              </div>
+
+              <div>
+                <label className="text-sm font-medium">Ghi chú</label>
+                <input
+                  value={contributionForm.note}
+                  onChange={(e) =>
+                    setSubGoalContributionForms((prev) => ({
+                      ...prev,
+                      [goal.id]: {
+                        ...contributionForm,
+                        note: e.target.value,
+                      },
+                    }))
+                  }
+                  placeholder="VD: Góp từ tiền hôm nay"
+                  className="mt-1 w-full rounded-xl border px-3 py-2"
+                />
+              </div>
+
+              <div className="flex items-end">
+                <button
+                  type="button"
+                  onClick={() => addContributionToSubGoal(goal.id)}
+                  className="w-full rounded-xl bg-slate-900 px-5 py-2 font-medium text-white hover:bg-slate-700"
+                >
+                  Góp vào mục tiêu
+                </button>
+              </div>
+            </div>
+
+            {progressData.length > 0 && (
+              <div className="mt-5 h-56">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart
+                    data={progressData.map((item) => ({
+                      ...item,
+                      label: item.date.slice(5),
+                    }))}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="label" />
+                    <YAxis />
+                    <Tooltip
+                      formatter={(value, name) => {
+                        if (name === "progress") return `${value}%`;
+                        return formatMoney(Number(value));
+                      }}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="saved"
+                      name="Đã có"
+                      strokeWidth={3}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </article>
+        );
+      })
+    )}
+  </div>
         </section>
       </>
     )}
@@ -2316,6 +3116,68 @@ async function handleLogout() {
             </div>
           )}
         </section>
+
+        {selectedCompletedGoal.goalProgressSnapshots &&
+          selectedCompletedGoal.goalProgressSnapshots.length > 0 && (
+            <section className="rounded-2xl bg-white p-5 shadow-sm">
+              <h3 className="text-xl font-bold">Tiến độ mục tiêu phụ</h3>
+
+              <div className="mt-4 h-72">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart
+                    data={selectedCompletedGoal.goalProgressSnapshots.map((item) => ({
+                      ...item,
+                      label: item.date.slice(5),
+                    }))}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="label" />
+                    <YAxis />
+                    <Tooltip
+                      formatter={(value, name) => {
+                        if (name === "progress") return `${value}%`;
+                        return formatMoney(Number(value));
+                      }}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="saved"
+                      name="Đã có"
+                      strokeWidth={3}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </section>
+          )}
+
+          {selectedCompletedGoal.contributionsSnapshot &&
+  selectedCompletedGoal.contributionsSnapshot.length > 0 && (
+    <section className="rounded-2xl bg-white p-5 shadow-sm">
+      <h3 className="text-xl font-bold">Lịch sử góp tiền</h3>
+
+      <div className="mt-4 grid gap-3">
+        {selectedCompletedGoal.contributionsSnapshot.map((item) => (
+          <article key={item.id} className="rounded-xl border p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h4 className="font-bold">{item.date}</h4>
+                <p className="text-sm text-slate-500">
+                  Góp: {formatMoney(item.amount)}
+                </p>
+              </div>
+            </div>
+
+            {item.note && (
+              <p className="mt-3 rounded-lg bg-slate-100 p-3 text-sm text-slate-700">
+                {item.note}
+              </p>
+            )}
+          </article>
+        ))}
+      </div>
+    </section>
+  )}
 
         <section className="grid grid-cols-2 gap-3 lg:grid-cols-6">
   <div className="rounded-2xl bg-white p-4 shadow-sm">
