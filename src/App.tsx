@@ -2298,7 +2298,7 @@ function renderBalanceCheckCard(title = "Kiểm kê số dư hôm nay") {
             progress={getProgress(monthIncome, goals.monthlyIncome)}
           />
           <StatCard
-            title="Tiền thực tế hiện có"
+            title="Tiền thực tế App tính hiện có:"
             value={formatMoney(actualMoney)}
             target={formatMoney(goals.bigGoalTarget)}
             progress={getProgress(actualMoney, goals.bigGoalTarget)}
