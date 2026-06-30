@@ -333,6 +333,7 @@ export default function App() {
   const [page, setPage] = useState<Page>("home");
   const [goalScreen, setGoalScreen] = useState<GoalScreen>("menu");
   const [chartDays, setChartDays] = useState(7);
+  const [forecastDays, setForecastDays] = useState(14);
   const [balanceChartDays, setBalanceChartDays] = useState<"all" | number>(
   "all"
 );
@@ -785,6 +786,13 @@ function getDateDaysAgo(days: number) {
   return date.toISOString().slice(0, 10);
 }
 
+function addDaysToDateString(dateString: string, days: number) {
+  const date = toDate(dateString);
+  date.setDate(date.getDate() + days);
+
+  return getDateString(date);
+}
+
 function getMonthStart() {
   const date = new Date();
   const year = date.getFullYear();
@@ -1094,6 +1102,115 @@ const totalSavedForBigGoal = actualMoney;
 const isBigGoalBehind = bigGoalProgress + 5 < bigGoalTimeProgress;
   const needPerDay =
     daysLeft > 0 ? Math.ceil(remainingBigGoal / daysLeft) : remainingBigGoal;
+
+const safeForecastDays = Math.min(Math.max(forecastDays, 1), 365);
+
+const goalForecast = (() => {
+  const today = getToday();
+  const forecastStart = toDate(today);
+  forecastStart.setDate(forecastStart.getDate() - safeForecastDays + 1);
+
+  const rawFromDate = getDateString(forecastStart);
+  const fromDate =
+    rawFromDate < currentGoalStartDate ? currentGoalStartDate : rawFromDate;
+  const forecastRows: Array<{
+    date: string;
+    income: number;
+    expense: number;
+    net: number;
+  }> = [];
+  const cursor = toDate(fromDate);
+  const endDate = toDate(today);
+
+  while (cursor <= endDate) {
+    const dateString = getDateString(cursor);
+    const income = entries
+      .filter((entry) => entry.date === dateString)
+      .reduce((sum, entry) => sum + getTotalEntryMoney(entry), 0);
+    const expense = expenses
+      .filter((expense) => expense.date === dateString)
+      .reduce((sum, expense) => sum + getExpenseTotal(expense), 0);
+
+    forecastRows.push({
+      date: dateString,
+      income,
+      expense,
+      net: income - expense,
+    });
+
+    cursor.setDate(cursor.getDate() + 1);
+  }
+
+  const netAmount = forecastRows.reduce((sum, item) => sum + item.net, 0);
+  const daysUsed = forecastRows.length;
+  const averagePerDay = daysUsed > 0 ? Math.round(netAmount / daysUsed) : 0;
+
+  if (goals.bigGoalTarget <= 0) {
+    return {
+      status: "noTarget",
+      fromDate,
+      toDate: today,
+      daysUsed,
+      netAmount,
+      averagePerDay,
+      daysToTarget: null,
+      targetDate: null,
+    };
+  }
+
+  if (remainingBigGoal <= 0) {
+    return {
+      status: "reached",
+      fromDate,
+      toDate: today,
+      daysUsed,
+      netAmount,
+      averagePerDay,
+      daysToTarget: 0,
+      targetDate: today,
+    };
+  }
+
+  if (daysUsed === 0) {
+    return {
+      status: "noData",
+      fromDate,
+      toDate: today,
+      daysUsed,
+      netAmount,
+      averagePerDay,
+      daysToTarget: null,
+      targetDate: null,
+    };
+  }
+
+  if (averagePerDay <= 0) {
+    return {
+      status: "notGrowing",
+      fromDate,
+      toDate: today,
+      daysUsed,
+      netAmount,
+      averagePerDay,
+      daysToTarget: null,
+      targetDate: null,
+    };
+  }
+
+  const daysToTarget = Math.ceil(remainingBigGoal / averagePerDay);
+  const targetDate = addDaysToDateString(today, daysToTarget);
+
+  return {
+    status: "forecast",
+    fromDate,
+    toDate: today,
+    daysUsed,
+    netAmount,
+    averagePerDay,
+    daysToTarget,
+    targetDate,
+  };
+})();
 
   const incomePerHour = monthHours > 0 ? Math.round(monthIncome / monthHours) : 0;
 
@@ -1900,6 +2017,623 @@ async function handleLogout() {
   setSyncStatus("Chưa đồng bộ");
 }
 
+function escapeHtml(value: unknown) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function formatReportDate(dateString?: string) {
+  if (!dateString) return "Không có";
+
+  const date = dateString.includes("T") ? new Date(dateString) : toDate(dateString);
+
+  if (Number.isNaN(date.getTime())) return dateString;
+
+  return new Intl.DateTimeFormat("vi-VN").format(date);
+}
+
+function formatSignedMoney(value: number) {
+  return `${value > 0 ? "+" : ""}${formatMoney(value)}`;
+}
+
+function reportCell(value: unknown, className = "") {
+  const classAttribute = className ? ` class="${className}"` : "";
+
+  return `<td${classAttribute}>${escapeHtml(value)}</td>`;
+}
+
+function emptyReportRow(colSpan: number, message: string) {
+  return `<tr><td class="empty" colspan="${colSpan}">${escapeHtml(message)}</td></tr>`;
+}
+
+function exportToWord() {
+  const exportedAt = new Date();
+  const sortedReportEntries = [...entries].sort((a, b) =>
+    b.date.localeCompare(a.date)
+  );
+  const sortedReportExpenses = [...expenses].sort((a, b) =>
+    b.date.localeCompare(a.date)
+  );
+  const sortedReportBalanceChecks = [...balanceChecks].sort((a, b) =>
+    b.date.localeCompare(a.date)
+  );
+  const sortedCompletedGoals = [...completedGoals].sort((a, b) =>
+    b.completedAt.localeCompare(a.completedAt)
+  );
+  const sortedSubGoals = [...(goals.subGoals ?? [])].sort((a, b) =>
+    a.deadline.localeCompare(b.deadline)
+  );
+  const reportTotalHours = entries.reduce(
+    (sum, entry) => sum + entry.workHours,
+    0
+  );
+  const reportTotalOrders = entries.reduce(
+    (sum, entry) => sum + (entry.orderCount ?? 0),
+    0
+  );
+  const reportAverageIncome = entries.length
+    ? Math.round(totalIncome / entries.length)
+    : 0;
+  const allSubGoalContributions = sortedSubGoals.flatMap((goal) =>
+    [...goal.contributions]
+      .sort((a, b) => b.date.localeCompare(a.date))
+      .map((contribution) => ({
+        goalName: goal.name,
+        ...contribution,
+      }))
+  );
+
+  const summaryRows = [
+    ["Tổng bản ghi nhật ký", entries.length],
+    ["Tổng thu nhập", formatMoney(totalIncome)],
+    ["Tổng chi tiêu", formatMoney(totalExpense)],
+    ["Tiền thực tế hiện có", formatMoney(actualMoney)],
+    ["Tổng giờ làm", `${reportTotalHours} giờ`],
+    ["Tổng số đơn", `${reportTotalOrders} đơn`],
+    ["Thu nhập trung bình / bản ghi", formatMoney(reportAverageIncome)],
+    ["Số mục tiêu phụ đang theo dõi", sortedSubGoals.length],
+    ["Số mục tiêu đã hoàn thành", completedGoals.length],
+    ["Số lần kiểm kê số dư", balanceChecks.length],
+  ]
+    .map(
+      ([label, value]) =>
+        `<tr>${reportCell(label)}${reportCell(value, "text-right strong")}</tr>`
+    )
+    .join("");
+
+  const currentGoalRows = [
+    ["Tên mục tiêu", goals.bigGoalName || "Chưa đặt tên"],
+    ["Ngày bắt đầu", formatReportDate(goals.bigGoalStartDate)],
+    ["Deadline", formatReportDate(goals.bigGoalDeadline)],
+    ["Mục tiêu tiền", formatMoney(goals.bigGoalTarget)],
+    ["Tiền ban đầu", formatMoney(goals.bigGoalSaved)],
+    ["Tiền hiện có app tính", formatMoney(totalSavedForBigGoal)],
+    ["Còn thiếu", formatMoney(remainingBigGoal)],
+    ["Tiến độ tiền", `${bigGoalProgress}%`],
+    ["Tiến độ thời gian", `${bigGoalTimeProgress}%`],
+    ["Cần thêm mỗi ngày", formatMoney(needPerDay)],
+    ["Trạng thái", isBigGoalBehind ? "Đang chậm tiến độ" : "Đúng tiến độ"],
+    ["Dự đoán theo", `${safeForecastDays} ngày gần nhất`],
+    ["Dòng tiền ròng dự đoán", formatMoney(goalForecast.netAmount)],
+    ["Trung bình ròng / ngày", formatMoney(goalForecast.averagePerDay)],
+    [
+      "Ngày dự kiến đạt",
+      goalForecast.targetDate
+        ? formatReportDate(goalForecast.targetDate)
+        : "Chưa đủ cơ sở dự đoán",
+    ],
+  ]
+    .map(
+      ([label, value]) =>
+        `<tr>${reportCell(label)}${reportCell(value, "text-right strong")}</tr>`
+    )
+    .join("");
+
+  const targetRows = [
+    ["Thu nhập / ngày", formatMoney(goals.dailyIncome)],
+    ["Giờ làm / ngày", `${goals.dailyHours} giờ`],
+    ["Thu nhập / tuần", formatMoney(goals.weeklyIncome)],
+    ["Giờ làm / tuần", `${goals.weeklyHours} giờ`],
+    ["Thu nhập / tháng", formatMoney(goals.monthlyIncome)],
+    ["Giờ làm / tháng", `${goals.monthlyHours} giờ`],
+  ]
+    .map(
+      ([label, value]) =>
+        `<tr>${reportCell(label)}${reportCell(value, "text-right strong")}</tr>`
+    )
+    .join("");
+
+  const subGoalRows =
+    sortedSubGoals.length === 0
+      ? emptyReportRow(8, "Chưa có mục tiêu phụ.")
+      : sortedSubGoals
+          .map((goal) => {
+            const currentSaved = getSubGoalSaved(goal);
+            const remaining = Math.max(goal.target - currentSaved, 0);
+
+            return `<tr>
+              ${reportCell(goal.name)}
+              ${reportCell(formatReportDate(goal.startDate))}
+              ${reportCell(formatReportDate(goal.deadline))}
+              ${reportCell(formatMoney(goal.target), "text-right")}
+              ${reportCell(formatMoney(goal.saved), "text-right")}
+              ${reportCell(formatMoney(currentSaved), "text-right strong")}
+              ${reportCell(formatMoney(remaining), "text-right")}
+              ${reportCell(`${getProgress(currentSaved, goal.target)}%`, "text-right")}
+            </tr>`;
+          })
+          .join("");
+
+  const contributionRows =
+    allSubGoalContributions.length === 0
+      ? emptyReportRow(4, "Chưa có lịch sử góp tiền cho mục tiêu phụ.")
+      : allSubGoalContributions
+          .map(
+            (item) => `<tr>
+              ${reportCell(item.goalName)}
+              ${reportCell(formatReportDate(item.date))}
+              ${reportCell(formatMoney(item.amount), "text-right strong")}
+              ${reportCell(item.note || "")}
+            </tr>`
+          )
+          .join("");
+
+  const diaryRows =
+    sortedReportEntries.length === 0
+      ? emptyReportRow(10, "Chưa có dữ liệu nhật ký.")
+      : sortedReportEntries
+          .map((entry) => {
+            const totalEntryMoney = getTotalEntryMoney(entry);
+
+            return `<tr>
+              ${reportCell(formatReportDate(entry.date))}
+              ${reportCell(moodLabels[entry.mood] ?? entry.mood)}
+              ${reportCell(formatMoney(getMainIncome(entry)), "text-right")}
+              ${reportCell(formatMoney(getBonusMoney(entry)), "text-right")}
+              ${reportCell(formatMoney(getReceivedMoney(entry)), "text-right")}
+              ${reportCell(formatMoney(totalEntryMoney), "text-right strong")}
+              ${reportCell(`${entry.workHours} giờ`, "text-right")}
+              ${reportCell(`${entry.orderCount ?? 0} đơn`, "text-right")}
+              ${reportCell(entry.diary || "")}
+              ${reportCell(entry.note || "")}
+            </tr>`;
+          })
+          .join("");
+
+  const expenseRows =
+    sortedReportExpenses.length === 0
+      ? emptyReportRow(7, "Chưa có dữ liệu chi tiêu.")
+      : sortedReportExpenses
+          .map((expense) => {
+            const total = getExpenseTotal(expense);
+
+            return `<tr>
+              ${reportCell(formatReportDate(expense.date))}
+              ${reportCell(formatMoney(expense.breakfast), "text-right")}
+              ${reportCell(formatMoney(expense.lunch), "text-right")}
+              ${reportCell(formatMoney(expense.dinner), "text-right")}
+              ${reportCell(formatMoney(expense.other), "text-right")}
+              ${reportCell(formatMoney(total), "text-right strong")}
+              ${reportCell(expense.note || "")}
+            </tr>`;
+          })
+          .join("");
+
+  const balanceCheckRows =
+    sortedReportBalanceChecks.length === 0
+      ? emptyReportRow(8, "Chưa có lịch sử kiểm kê số dư.")
+      : sortedReportBalanceChecks
+          .map(
+            (item) => `<tr>
+              ${reportCell(formatReportDate(item.date))}
+              ${reportCell(formatMoney(item.cash), "text-right")}
+              ${reportCell(formatMoney(item.bank), "text-right")}
+              ${reportCell(formatMoney(item.appMoney), "text-right")}
+              ${reportCell(formatMoney(item.actualMoney), "text-right strong")}
+              ${reportCell(formatSignedMoney(item.difference), "text-right")}
+              ${reportCell(getBalanceStatus(item.difference))}
+              ${reportCell(item.note || "")}
+            </tr>`
+          )
+          .join("");
+
+  const balanceMovementRows =
+    currentBalanceMovementData.length === 0
+      ? emptyReportRow(5, "Chưa có dữ liệu biến động tiền.")
+      : currentBalanceMovementData
+          .map(
+            (item) => `<tr>
+              ${reportCell(formatReportDate(item.date))}
+              ${reportCell(formatMoney(item.income), "text-right")}
+              ${reportCell(formatMoney(item.expense), "text-right")}
+              ${reportCell(formatMoney(item.totalMoney), "text-right")}
+              ${reportCell(formatMoney(item.actualMoney), "text-right strong")}
+            </tr>`
+          )
+          .join("");
+
+  const completedGoalRows =
+    sortedCompletedGoals.length === 0
+      ? emptyReportRow(10, "Chưa có mục tiêu hoàn thành.")
+      : sortedCompletedGoals
+          .map(
+            (goal) => `<tr>
+              ${reportCell(goal.name)}
+              ${reportCell(goal.goalType === "sub" ? "Mục tiêu phụ" : "Mục tiêu chính")}
+              ${reportCell(formatReportDate(goal.startDate))}
+              ${reportCell(formatReportDate(goal.completedAt))}
+              ${reportCell(formatReportDate(goal.deadline))}
+              ${reportCell(formatMoney(goal.target), "text-right")}
+              ${reportCell(formatMoney(goal.saved), "text-right strong")}
+              ${reportCell(formatMoney(goal.totalIncome ?? 0), "text-right")}
+              ${reportCell(formatMoney(goal.totalExpense ?? 0), "text-right")}
+              ${reportCell(`${goal.totalHours ?? 0} giờ / ${goal.totalOrders ?? 0} đơn`)}
+            </tr>`
+          )
+          .join("");
+
+  const completedGoalDetailSections =
+    sortedCompletedGoals.length === 0
+      ? ""
+      : sortedCompletedGoals
+          .map((goal, index) => {
+            const entriesSnapshotRows =
+              !goal.entriesSnapshot || goal.entriesSnapshot.length === 0
+                ? emptyReportRow(5, "Không có nhật ký lưu trong mục tiêu này.")
+                : [...goal.entriesSnapshot]
+                    .sort((a, b) => b.date.localeCompare(a.date))
+                    .map(
+                      (entry) => `<tr>
+                        ${reportCell(formatReportDate(entry.date))}
+                        ${reportCell(formatMoney(getTotalEntryMoney(entry)), "text-right")}
+                        ${reportCell(`${entry.workHours} giờ`, "text-right")}
+                        ${reportCell(entry.diary || "")}
+                        ${reportCell(entry.note || "")}
+                      </tr>`
+                    )
+                    .join("");
+            const expensesSnapshotRows =
+              !goal.expensesSnapshot || goal.expensesSnapshot.length === 0
+                ? emptyReportRow(4, "Không có chi tiêu lưu trong mục tiêu này.")
+                : [...goal.expensesSnapshot]
+                    .sort((a, b) => b.date.localeCompare(a.date))
+                    .map(
+                      (expense) => `<tr>
+                        ${reportCell(formatReportDate(expense.date))}
+                        ${reportCell(formatMoney(getExpenseTotal(expense)), "text-right strong")}
+                        ${reportCell(formatMoney(expense.other), "text-right")}
+                        ${reportCell(expense.note || "")}
+                      </tr>`
+                    )
+                    .join("");
+            const balanceSnapshotRows =
+              !goal.balanceSnapshots || goal.balanceSnapshots.length === 0
+                ? emptyReportRow(5, "Không có biến động tiền lưu trong mục tiêu này.")
+                : [...goal.balanceSnapshots]
+                    .sort((a, b) => b.date.localeCompare(a.date))
+                    .map(
+                      (item) => `<tr>
+                        ${reportCell(formatReportDate(item.date))}
+                        ${reportCell(formatMoney(item.income), "text-right")}
+                        ${reportCell(formatMoney(item.expense), "text-right")}
+                        ${reportCell(formatMoney(item.totalMoney), "text-right")}
+                        ${reportCell(formatMoney(item.actualMoney), "text-right strong")}
+                      </tr>`
+                    )
+                    .join("");
+            const contributionSnapshotRows =
+              !goal.contributionsSnapshot || goal.contributionsSnapshot.length === 0
+                ? emptyReportRow(3, "Không có lịch sử góp tiền lưu trong mục tiêu này.")
+                : [...goal.contributionsSnapshot]
+                    .sort((a, b) => b.date.localeCompare(a.date))
+                    .map(
+                      (item) => `<tr>
+                        ${reportCell(formatReportDate(item.date))}
+                        ${reportCell(formatMoney(item.amount), "text-right strong")}
+                        ${reportCell(item.note || "")}
+                      </tr>`
+                    )
+                    .join("");
+
+            return `
+              <h3>${index + 1}. ${escapeHtml(goal.name)}</h3>
+              <p class="muted">Hoàn thành ngày ${escapeHtml(formatReportDate(goal.completedAt))}</p>
+
+              <h4>Nhật ký trong mục tiêu</h4>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Ngày</th>
+                    <th>Thu</th>
+                    <th>Giờ</th>
+                    <th>Nhật ký</th>
+                    <th>Ghi chú</th>
+                  </tr>
+                </thead>
+                <tbody>${entriesSnapshotRows}</tbody>
+              </table>
+
+              <h4>Chi tiêu trong mục tiêu</h4>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Ngày</th>
+                    <th>Tổng chi</th>
+                    <th>Khoản khác</th>
+                    <th>Ghi chú</th>
+                  </tr>
+                </thead>
+                <tbody>${expensesSnapshotRows}</tbody>
+              </table>
+
+              <h4>Biến động tiền trong mục tiêu</h4>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Ngày</th>
+                    <th>Thu</th>
+                    <th>Chi</th>
+                    <th>Tổng tiền</th>
+                    <th>Tiền thực tế</th>
+                  </tr>
+                </thead>
+                <tbody>${balanceSnapshotRows}</tbody>
+              </table>
+
+              <h4>Lịch sử góp tiền</h4>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Ngày</th>
+                    <th>Số tiền</th>
+                    <th>Ghi chú</th>
+                  </tr>
+                </thead>
+                <tbody>${contributionSnapshotRows}</tbody>
+              </table>
+            `;
+          })
+          .join("");
+
+  const htmlContent = `<!doctype html>
+    <html>
+      <head>
+        <meta charset="utf-8" />
+        <title>Báo cáo Money Diary</title>
+        <style>
+          body {
+            color: #0f172a;
+            font-family: Arial, sans-serif;
+            font-size: 12px;
+            line-height: 1.45;
+          }
+          h1 {
+            font-size: 24px;
+            margin: 0 0 6px;
+            text-align: center;
+            text-transform: uppercase;
+          }
+          h2 {
+            border-bottom: 2px solid #0f172a;
+            font-size: 18px;
+            margin: 28px 0 10px;
+            padding-bottom: 5px;
+          }
+          h3 {
+            font-size: 15px;
+            margin: 22px 0 6px;
+          }
+          h4 {
+            color: #334155;
+            font-size: 13px;
+            margin: 16px 0 6px;
+          }
+          table {
+            border-collapse: collapse;
+            margin: 8px 0 18px;
+            width: 100%;
+          }
+          th,
+          td {
+            border: 1px solid #cbd5e1;
+            padding: 7px;
+            vertical-align: top;
+          }
+          th {
+            background: #e2e8f0;
+            color: #0f172a;
+            font-weight: 700;
+            text-align: left;
+          }
+          .subtitle,
+          .muted,
+          .footer {
+            color: #64748b;
+          }
+          .subtitle {
+            margin: 0 0 22px;
+            text-align: center;
+          }
+          .text-right {
+            text-align: right;
+            white-space: nowrap;
+          }
+          .strong {
+            font-weight: 700;
+          }
+          .empty {
+            color: #64748b;
+            font-style: italic;
+            text-align: center;
+          }
+          .footer {
+            border-top: 1px solid #cbd5e1;
+            margin-top: 32px;
+            padding-top: 10px;
+            text-align: center;
+          }
+        </style>
+      </head>
+      <body>
+        <h1>Báo cáo tài chính Money Diary</h1>
+        <p class="subtitle">Ngày lập báo cáo: ${escapeHtml(
+          exportedAt.toLocaleString("vi-VN")
+        )}</p>
+
+        <h2>1. Tổng quan</h2>
+        <table>
+          <tbody>${summaryRows}</tbody>
+        </table>
+
+        <h2>2. Mục tiêu chính hiện tại</h2>
+        <table>
+          <tbody>${currentGoalRows}</tbody>
+        </table>
+
+        <h2>3. Chỉ tiêu ngày, tuần, tháng</h2>
+        <table>
+          <tbody>${targetRows}</tbody>
+        </table>
+
+        <h2>4. Mục tiêu phụ đang theo dõi</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Tên mục tiêu</th>
+              <th>Bắt đầu</th>
+              <th>Deadline</th>
+              <th>Mục tiêu</th>
+              <th>Tiền ban đầu</th>
+              <th>Đã có</th>
+              <th>Còn thiếu</th>
+              <th>Tiến độ</th>
+            </tr>
+          </thead>
+          <tbody>${subGoalRows}</tbody>
+        </table>
+
+        <h2>5. Lịch sử góp tiền mục tiêu phụ</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Mục tiêu</th>
+              <th>Ngày</th>
+              <th>Số tiền</th>
+              <th>Ghi chú</th>
+            </tr>
+          </thead>
+          <tbody>${contributionRows}</tbody>
+        </table>
+
+        <h2>6. Lịch sử nhật ký thu nhập</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Ngày</th>
+              <th>Tâm trạng</th>
+              <th>Tiền làm</th>
+              <th>Thưởng</th>
+              <th>Tiền nhận</th>
+              <th>Tổng ngày</th>
+              <th>Giờ</th>
+              <th>Đơn</th>
+              <th>Nhật ký</th>
+              <th>Ghi chú</th>
+            </tr>
+          </thead>
+          <tbody>${diaryRows}</tbody>
+        </table>
+
+        <h2>7. Lịch sử chi tiêu</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Ngày</th>
+              <th>Ăn sáng</th>
+              <th>Ăn trưa</th>
+              <th>Ăn tối</th>
+              <th>Khác</th>
+              <th>Tổng chi</th>
+              <th>Ghi chú</th>
+            </tr>
+          </thead>
+          <tbody>${expenseRows}</tbody>
+        </table>
+
+        <h2>8. Lịch sử kiểm kê số dư</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Ngày</th>
+              <th>Tiền mặt</th>
+              <th>Tài khoản</th>
+              <th>App tính</th>
+              <th>Thực tế</th>
+              <th>Chênh lệch</th>
+              <th>Trạng thái</th>
+              <th>Ghi chú</th>
+            </tr>
+          </thead>
+          <tbody>${balanceCheckRows}</tbody>
+        </table>
+
+        <h2>9. Biến động tiền mục tiêu hiện tại</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Ngày</th>
+              <th>Thu</th>
+              <th>Chi</th>
+              <th>Tổng tiền</th>
+              <th>Tiền thực tế</th>
+            </tr>
+          </thead>
+          <tbody>${balanceMovementRows}</tbody>
+        </table>
+
+        <h2>10. Mục tiêu đã hoàn thành</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Tên mục tiêu</th>
+              <th>Loại</th>
+              <th>Bắt đầu</th>
+              <th>Hoàn thành</th>
+              <th>Deadline</th>
+              <th>Mục tiêu</th>
+              <th>Đã đạt</th>
+              <th>Tổng thu</th>
+              <th>Tổng chi</th>
+              <th>Giờ / đơn</th>
+            </tr>
+          </thead>
+          <tbody>${completedGoalRows}</tbody>
+        </table>
+
+        ${completedGoalDetailSections ? `<h2>11. Chi tiết mục tiêu đã hoàn thành</h2>${completedGoalDetailSections}` : ""}
+
+        <p class="footer">Báo cáo được xuất tự động từ Money Diary.</p>
+      </body>
+    </html>`;
+
+  const blob = new Blob([`\ufeff${htmlContent}`], {
+    type: "application/msword;charset=utf-8",
+  });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+
+  link.href = url;
+  link.download = `Money_Diary_Bao_Cao_${getToday()}.doc`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
 function renderBalanceCheckCard(title = "Kiểm kê số dư hôm nay") {
   const cash = parseMoneyInput(balanceCheckForm.cash);
   const bank = parseMoneyInput(balanceCheckForm.bank);
@@ -2040,173 +2774,6 @@ function renderBalanceCheckCard(title = "Kiểm kê số dư hôm nay") {
   );
 }
 
-const exportToWord = () => {
-  // --- THIẾT KẾ TEMPLATE HTML CHUẨN ĐỊNH DẠNG MICROSOFT WORD ---
-  const htmlContent = `
-    <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
-    <head>
-      <title>Báo Cáo Toàn Diện - Money Diary</title>
-      <style>
-        body { font-family: 'Arial', sans-serif; line-height: 1.6; color: #1e293b; padding: 20px; }
-        h1 { color: #0f172a; text-align: center; font-size: 26px; font-weight: bold; margin-bottom: 5px; text-transform: uppercase; }
-        .subtitle { text-align: center; font-style: italic; color: #64748b; margin-bottom: 30px; font-size: 14px; }
-        h2 { color: #0f766e; font-size: 18px; border-bottom: 2px solid #0f766e; padding-bottom: 5px; margin-top: 30px; font-weight: bold; }
-        .goal-box { background-color: #f8fafc; border-left: 4px solid #0f766e; padding: 12px; margin-bottom: 15px; }
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; margin-bottom: 25px; }
-        th, td { border: 1px solid #cbd5e1; padding: 10px; text-align: left; font-size: 13px; }
-        th { background-color: #f1f5f9; color: #334155; font-weight: bold; }
-        .text-right { text-align: right; }
-        .text-danger { color: #dc2626; font-weight: bold; }
-        .text-success { color: #16a34a; font-weight: bold; }
-        .footer { text-align: center; margin-top: 50px; font-size: 12px; color: #94a3b8; border-top: 1px dashed #cbd5e1; padding-top: 15px; }
-      </style>
-    </head>
-    <body>
-      <h1>BÁO CÁO TÀI CHÍNH TOÀN DIỆN</h1>
-      <p class="subtitle">Trích xuất tự động từ Money Diary - Ngày lập: ${new Date().toLocaleDateString('vi-VN')}</p>
-
-      <h2>1. Mục Tiêu Tài Chính Hàng Đầu</h2>
-      <div class="goal-box">
-        <p>🎯 <b>Mục tiêu lớn:</b> ${goals.bigGoalName || 'Chưa đặt tên'}</p>
-        <p>💰 <b>Số tiền cần đạt:</b> ${Number(goals.bigGoalTarget || 0).toLocaleString('vi-VN')} đ | <b>Đã tích lũy:</b> ${Number(goals.bigGoalSaved || 0).toLocaleString('vi-VN')} đ</p>
-        <p>📅 <b>Hạn chót (Deadline):</b> ${goals.bigGoalDeadline ? new Date(goals.bigGoalDeadline).toLocaleDateString('vi-VN') : '---'}</p>
-      </div>
-
-      <h3>📍 Các mục tiêu nhỏ (Sub Goals):</h3>
-      <table>
-        <thead>
-          <tr>
-            <th>Tên Mục Tiêu Nhỏ</th>
-            <th>Cần Đạt</th>
-            <th>Đã Tiết Kiệm</th>
-            <th>Hạn Chót</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${(!goals.subGoals || goals.subGoals.length === 0) ? '<tr><td colspan="4" style="text-align:center; color:#94a3b8;">Chưa có mục tiêu nhỏ nào.</td></tr>' : 
-            goals.subGoals.map(sub => `
-              <tr>
-                <td><b>${sub.name || ''}</b></td>
-                <td class="text-right">${Number(sub.target || 0).toLocaleString('vi-VN')} đ</td>
-                <td class="text-right">${Number(sub.saved || 0).toLocaleString('vi-VN')} đ</td>
-                <td>${sub.deadline ? new Date(sub.deadline).toLocaleDateString('vi-VN') : '---'}</td>
-              </tr>
-            `).join('')
-          }
-        </tbody>
-      </table>
-
-      <h2>2. Nhật Ký Trải Nghiệm & Ghi Chú Hàng Ngày</h2>
-      <table>
-        <thead>
-          <tr>
-            <th style="width: 15%;">Ngày</th>
-            <th style="width: 15%;">Tâm Trạng</th>
-            <th style="width: 15%;">Thu Nhập Chính</th>
-            <th style="width: 55%;">Nội Dung Nhật Ký</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${entries.length === 0 ? '<tr><td colspan="4" style="text-align:center; color:#94a3b8;">Chưa có dữ liệu nhật ký.</td></tr>' : 
-            [...entries].sort((a,b) => b.date.localeCompare(a.date)).map(item => `
-              <tr>
-                <td>${new Date(item.date).toLocaleDateString('vi-VN')}</td>
-                <td>${item.mood ? (item.mood === 'good' ? '😊 Vui' : item.mood === 'normal' ? '😐 Bình thường' : item.mood === 'tired' ? '😮‍💨 Mệt' : '🤬 Tệ') : '---'}</td>
-                <td class="text-right text-success">${Number(item.income || 0).toLocaleString('vi-VN')} đ</td>
-                <td>
-                  <b>Nhật ký:</b> ${item.diary || '<i>Không ghi chép</i>'}<br/>
-                  ${item.note ? `<span>📌 <b>Ghi chú phụ:</b> ${item.note}</span>` : ''}
-                </td>
-              </tr>
-            `).join('')
-          }
-        </tbody>
-      </table>
-
-      <h2>3. Chi Tiết Lịch Sử Chi Tiêu</h2>
-      <table>
-        <thead>
-          <tr>
-            <th>Ngày</th>
-            <th>Ăn Sáng</th>
-            <th>Ăn Trưa</th>
-            <th>Ăn Tối</th>
-            <th>Chi Phí Khác</th>
-            <th>Tổng Chi</th>
-            <th>Ghi Chú</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${expenses.length === 0 ? '<tr><td colspan="7" style="text-align:center; color:#94a3b8;">Chưa có dữ liệu chi tiêu.</td></tr>' : 
-            [...expenses].sort((a,b) => b.date.localeCompare(a.date)).map(item => {
-              const total = (item.breakfast || 0) + (item.lunch || 0) + (item.dinner || 0) + (item.other || 0);
-              return `
-                <tr>
-                  <td>${new Date(item.date).toLocaleDateString('vi-VN')}</td>
-                  <td class="text-right">${Number(item.breakfast || 0).toLocaleString('vi-VN')} đ</td>
-                  <td class="text-right">${Number(item.lunch || 0).toLocaleString('vi-VN')} đ</td>
-                  <td class="text-right">${Number(item.dinner || 0).toLocaleString('vi-VN')} đ</td>
-                  <td class="text-right">${Number(item.other || 0).toLocaleString('vi-VN')} đ</td>
-                  <td class="text-right text-danger">${Number(total).toLocaleString('vi-VN')} đ</td>
-                  <td>${item.note || ''}</td>
-                </tr>
-              `;
-            }).join('')
-          }
-        </tbody>
-      </table>
-
-      <h2>4. Lịch Sử Kiểm Kê & Đối Soát Số Dư</h2>
-      <table>
-        <thead>
-          <tr>
-            <th>Ngày Kiểm Kê</th>
-            <th>Tiền Mặt (Ví)</th>
-            <th>Tài Khoản (Bank)</th>
-            <th>Số Dư Thực Tế</th>
-            <th>Hệ Thống Tính</th>
-            <th>Chênh Lệch</th>
-            <th>Ghi Chú</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${balanceChecks.length === 0 ? '<tr><td colspan="7" style="text-align:center; color:#94a3b8;">Chưa có lịch sử kiểm kê tài sản.</td></tr>' : 
-            [...balanceChecks].sort((a,b) => b.date.localeCompare(a.date)).map(item => `
-              <tr>
-                <td>${new Date(item.date).toLocaleDateString('vi-VN')}</td>
-                <td class="text-right">${Number(item.cash || 0).toLocaleString('vi-VN')} đ</td>
-                <td class="text-right">${Number(item.bank || 0).toLocaleString('vi-VN')} đ</td>
-                <td class="text-right"><b>${Number(item.actualMoney || 0).toLocaleString('vi-VN')} đ</b></td>
-                <td class="text-right">${Number(item.appMoney || 0).toLocaleString('vi-VN')} đ</td>
-                <td class="text-right ${(item.difference || 0) < 0 ? 'text-danger' : 'text-success'}">
-                  ${(item.difference || 0) > 0 ? '+' : ''}${Number(item.difference || 0).toLocaleString('vi-VN')} đ
-                </td>
-                <td>${item.note || ''}</td>
-              </tr>
-            `).join('')
-          }
-        </tbody>
-      </table>
-
-      <div class="footer">
-        <p>Báo cáo tài chính cá nhân được tạo lập chuyên nghiệp bởi ứng dụng <b>Money Diary</b>.</p>
-        <p>Cảm ơn bạn đã đồng hành cùng tính năng Xuất Word cao cấp!</p>
-      </div>
-    </body>
-    </html>
-  `;
-
-  // --- XỬ LÝ KHỞI TẠO TẢI FILE CHUẨN (.DOC) ---
-  const blob = new Blob(['\ufeff' + htmlContent], { type: 'application/msword;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = `Money_Diary_Bao_Cao_${new Date().toISOString().slice(0,10)}.doc`;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(url);
-};
 
 
   return (
@@ -2297,15 +2864,14 @@ const exportToWord = () => {
     <span className="rounded-full bg-slate-100 px-3 py-1 text-sm font-medium">
       {syncStatus}
     </span>
-    {session?.user && (
-  <button
-    type="button"
-    onClick={exportToWord}
-    className="rounded-xl bg-slate-950 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-slate-800 active:scale-95"
-  >
-    Xuất báo cáo Word
-  </button>
-)}
+
+    <button
+      type="button"
+      onClick={exportToWord}
+      className="rounded-xl bg-slate-950 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-slate-800 active:scale-95"
+    >
+      Xuất báo cáo Word
+    </button>
 
     <button
       type="button"
@@ -3714,6 +4280,155 @@ const exportToWord = () => {
                 Hoàn thành {bigGoalProgress}%
               </p>
             </div>
+          </div>
+        </section>
+
+        <section className="rounded-2xl bg-white p-5 shadow-sm">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-xl font-bold">Dự đoán ngày đạt mục tiêu</h2>
+              <p className="text-sm text-slate-500">
+                Dựa trên dòng tiền ròng: thu nhập thực nhận trừ chi tiêu trong
+                các ngày gần nhất.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              {[7, 14, 30, 60].map((days) => (
+                <button
+                  key={days}
+                  type="button"
+                  onClick={() => setForecastDays(days)}
+                  className={`rounded-full px-3 py-1 text-sm font-medium ${
+                    safeForecastDays === days
+                      ? "bg-slate-900 text-white"
+                      : "bg-slate-100 hover:bg-slate-200"
+                  }`}
+                >
+                  {days} ngày
+                </button>
+              ))}
+
+              <input
+                type="text"
+                inputMode="numeric"
+                value={String(forecastDays)}
+                onChange={(e) => {
+                  const onlyDigits = e.target.value.replace(/[^\d]/g, "");
+                  const value = Number(onlyDigits);
+
+                  if (!value) {
+                    setForecastDays(1);
+                    return;
+                  }
+
+                  setForecastDays(Math.min(Math.max(value, 1), 365));
+                }}
+                className="w-24 rounded-xl border px-3 py-1 text-sm"
+                placeholder="Số ngày"
+              />
+            </div>
+          </div>
+
+          <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <div className="rounded-xl bg-slate-100 p-3">
+              <p className="text-sm text-slate-500">Khoảng dữ liệu</p>
+              <p className="font-bold">
+                {goalForecast.fromDate} đến {goalForecast.toDate}
+              </p>
+              <p className="mt-1 text-xs text-slate-500">
+                {goalForecast.daysUsed} ngày được tính
+              </p>
+            </div>
+
+            <div className="rounded-xl bg-slate-100 p-3">
+              <p className="text-sm text-slate-500">Dòng tiền ròng</p>
+              <p className="font-bold">{formatMoney(goalForecast.netAmount)}</p>
+            </div>
+
+            <div className="rounded-xl bg-slate-100 p-3">
+              <p className="text-sm text-slate-500">Trung bình / ngày</p>
+              <p className="font-bold">
+                {formatMoney(goalForecast.averagePerDay)}
+              </p>
+            </div>
+
+            <div className="rounded-xl bg-slate-100 p-3">
+              <p className="text-sm text-slate-500">Còn thiếu</p>
+              <p className="font-bold">{formatMoney(remainingBigGoal)}</p>
+            </div>
+          </div>
+
+          <div
+            className={`mt-4 rounded-xl p-4 ${
+              goalForecast.status === "forecast"
+                ? goalForecast.targetDate &&
+                  goals.bigGoalDeadline &&
+                  goalForecast.targetDate > goals.bigGoalDeadline
+                  ? "bg-red-50 text-red-700"
+                  : "bg-green-50 text-green-700"
+                : goalForecast.status === "reached"
+                  ? "bg-green-50 text-green-700"
+                  : "bg-yellow-50 text-yellow-700"
+            }`}
+          >
+            {goalForecast.status === "noTarget" && (
+              <>
+                <p className="font-bold">Chưa thể dự đoán</p>
+                <p className="mt-1 text-sm">
+                  Bạn cần nhập số tiền mục tiêu lớn trước.
+                </p>
+              </>
+            )}
+
+            {goalForecast.status === "reached" && (
+              <>
+                <p className="font-bold">Mục tiêu đã đạt</p>
+                <p className="mt-1 text-sm">
+                  Số tiền hiện tại đã bằng hoặc vượt mục tiêu.
+                </p>
+              </>
+            )}
+
+            {goalForecast.status === "noData" && (
+              <>
+                <p className="font-bold">Chưa đủ dữ liệu</p>
+                <p className="mt-1 text-sm">
+                  Khoảng ngày đang chọn chưa có dữ liệu trong hành trình mục
+                  tiêu hiện tại.
+                </p>
+              </>
+            )}
+
+            {goalForecast.status === "notGrowing" && (
+              <>
+                <p className="font-bold">Chưa thể dự đoán ngày đạt</p>
+                <p className="mt-1 text-sm">
+                  Trung bình dòng tiền ròng đang không tăng. Hãy chọn khoảng
+                  ngày khác hoặc nhập thêm dữ liệu thu chi.
+                </p>
+              </>
+            )}
+
+            {goalForecast.status === "forecast" && (
+              <>
+                <p className="font-bold">
+                  Dự kiến đạt mục tiêu vào ngày {goalForecast.targetDate}
+                </p>
+                <p className="mt-1 text-sm">
+                  Cần khoảng {goalForecast.daysToTarget} ngày nữa nếu giữ tốc
+                  độ trung bình {formatMoney(goalForecast.averagePerDay)} mỗi
+                  ngày.
+                </p>
+                {goalForecast.targetDate &&
+                  goals.bigGoalDeadline &&
+                  goalForecast.targetDate > goals.bigGoalDeadline && (
+                    <p className="mt-1 text-sm font-medium">
+                      Dự đoán này chậm hơn deadline {goals.bigGoalDeadline}.
+                    </p>
+                  )}
+              </>
+            )}
           </div>
         </section>
 
