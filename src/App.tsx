@@ -2040,6 +2040,175 @@ function renderBalanceCheckCard(title = "Kiểm kê số dư hôm nay") {
   );
 }
 
+const exportToWord = () => {
+  // --- THIẾT KẾ TEMPLATE HTML CHUẨN ĐỊNH DẠNG MICROSOFT WORD ---
+  const htmlContent = `
+    <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+    <head>
+      <title>Báo Cáo Toàn Diện - Money Diary</title>
+      <style>
+        body { font-family: 'Arial', sans-serif; line-height: 1.6; color: #1e293b; padding: 20px; }
+        h1 { color: #0f172a; text-align: center; font-size: 26px; font-weight: bold; margin-bottom: 5px; text-transform: uppercase; }
+        .subtitle { text-align: center; font-style: italic; color: #64748b; margin-bottom: 30px; font-size: 14px; }
+        h2 { color: #0f766e; font-size: 18px; border-bottom: 2px solid #0f766e; padding-bottom: 5px; margin-top: 30px; font-weight: bold; }
+        .goal-box { background-color: #f8fafc; border-left: 4px solid #0f766e; padding: 12px; margin-bottom: 15px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; margin-bottom: 25px; }
+        th, td { border: 1px solid #cbd5e1; padding: 10px; text-align: left; font-size: 13px; }
+        th { background-color: #f1f5f9; color: #334155; font-weight: bold; }
+        .text-right { text-align: right; }
+        .text-danger { color: #dc2626; font-weight: bold; }
+        .text-success { color: #16a34a; font-weight: bold; }
+        .footer { text-align: center; margin-top: 50px; font-size: 12px; color: #94a3b8; border-top: 1px dashed #cbd5e1; padding-top: 15px; }
+      </style>
+    </head>
+    <body>
+      <h1>BÁO CÁO TÀI CHÍNH TOÀN DIỆN</h1>
+      <p class="subtitle">Trích xuất tự động từ Money Diary - Ngày lập: ${new Date().toLocaleDateString('vi-VN')}</p>
+
+      <h2>1. Mục Tiêu Tài Chính Hàng Đầu</h2>
+      <div class="goal-box">
+        <p>🎯 <b>Mục tiêu lớn:</b> ${goals.bigGoalName || 'Chưa đặt tên'}</p>
+        <p>💰 <b>Số tiền cần đạt:</b> ${Number(goals.bigGoalTarget || 0).toLocaleString('vi-VN')} đ | <b>Đã tích lũy:</b> ${Number(goals.bigGoalSaved || 0).toLocaleString('vi-VN')} đ</p>
+        <p>📅 <b>Hạn chót (Deadline):</b> ${goals.bigGoalDeadline ? new Date(goals.bigGoalDeadline).toLocaleDateString('vi-VN') : '---'}</p>
+      </div>
+
+      <h3>📍 Các mục tiêu nhỏ (Sub Goals):</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Tên Mục Tiêu Nhỏ</th>
+            <th>Cần Đạt</th>
+            <th>Đã Tiết Kiệm</th>
+            <th>Hạn Chót</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${(!goals.subGoals || goals.subGoals.length === 0) ? '<tr><td colspan="4" style="text-align:center; color:#94a3b8;">Chưa có mục tiêu nhỏ nào.</td></tr>' : 
+            goals.subGoals.map(sub => `
+              <tr>
+                <td><b>${sub.name || ''}</b></td>
+                <td class="text-right">${Number(sub.target || 0).toLocaleString('vi-VN')} đ</td>
+                <td class="text-right">${Number(sub.saved || 0).toLocaleString('vi-VN')} đ</td>
+                <td>${sub.deadline ? new Date(sub.deadline).toLocaleDateString('vi-VN') : '---'}</td>
+              </tr>
+            `).join('')
+          }
+        </tbody>
+      </table>
+
+      <h2>2. Nhật Ký Trải Nghiệm & Ghi Chú Hàng Ngày</h2>
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 15%;">Ngày</th>
+            <th style="width: 15%;">Tâm Trạng</th>
+            <th style="width: 15%;">Thu Nhập Chính</th>
+            <th style="width: 55%;">Nội Dung Nhật Ký</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${entries.length === 0 ? '<tr><td colspan="4" style="text-align:center; color:#94a3b8;">Chưa có dữ liệu nhật ký.</td></tr>' : 
+            [...entries].sort((a,b) => b.date.localeCompare(a.date)).map(item => `
+              <tr>
+                <td>${new Date(item.date).toLocaleDateString('vi-VN')}</td>
+                <td>${item.mood ? (item.mood === 'good' ? '😊 Vui' : item.mood === 'normal' ? '😐 Bình thường' : item.mood === 'tired' ? '😮‍💨 Mệt' : '🤬 Tệ') : '---'}</td>
+                <td class="text-right text-success">${Number(item.income || 0).toLocaleString('vi-VN')} đ</td>
+                <td>
+                  <b>Nhật ký:</b> ${item.diary || '<i>Không ghi chép</i>'}<br/>
+                  ${item.note ? `<span>📌 <b>Ghi chú phụ:</b> ${item.note}</span>` : ''}
+                </td>
+              </tr>
+            `).join('')
+          }
+        </tbody>
+      </table>
+
+      <h2>3. Chi Tiết Lịch Sử Chi Tiêu</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Ngày</th>
+            <th>Ăn Sáng</th>
+            <th>Ăn Trưa</th>
+            <th>Ăn Tối</th>
+            <th>Chi Phí Khác</th>
+            <th>Tổng Chi</th>
+            <th>Ghi Chú</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${expenses.length === 0 ? '<tr><td colspan="7" style="text-align:center; color:#94a3b8;">Chưa có dữ liệu chi tiêu.</td></tr>' : 
+            [...expenses].sort((a,b) => b.date.localeCompare(a.date)).map(item => {
+              const total = (item.breakfast || 0) + (item.lunch || 0) + (item.dinner || 0) + (item.other || 0);
+              return `
+                <tr>
+                  <td>${new Date(item.date).toLocaleDateString('vi-VN')}</td>
+                  <td class="text-right">${Number(item.breakfast || 0).toLocaleString('vi-VN')} đ</td>
+                  <td class="text-right">${Number(item.lunch || 0).toLocaleString('vi-VN')} đ</td>
+                  <td class="text-right">${Number(item.dinner || 0).toLocaleString('vi-VN')} đ</td>
+                  <td class="text-right">${Number(item.other || 0).toLocaleString('vi-VN')} đ</td>
+                  <td class="text-right text-danger">${Number(total).toLocaleString('vi-VN')} đ</td>
+                  <td>${item.note || ''}</td>
+                </tr>
+              `;
+            }).join('')
+          }
+        </tbody>
+      </table>
+
+      <h2>4. Lịch Sử Kiểm Kê & Đối Soát Số Dư</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Ngày Kiểm Kê</th>
+            <th>Tiền Mặt (Ví)</th>
+            <th>Tài Khoản (Bank)</th>
+            <th>Số Dư Thực Tế</th>
+            <th>Hệ Thống Tính</th>
+            <th>Chênh Lệch</th>
+            <th>Ghi Chú</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${balanceChecks.length === 0 ? '<tr><td colspan="7" style="text-align:center; color:#94a3b8;">Chưa có lịch sử kiểm kê tài sản.</td></tr>' : 
+            [...balanceChecks].sort((a,b) => b.date.localeCompare(a.date)).map(item => `
+              <tr>
+                <td>${new Date(item.date).toLocaleDateString('vi-VN')}</td>
+                <td class="text-right">${Number(item.cash || 0).toLocaleString('vi-VN')} đ</td>
+                <td class="text-right">${Number(item.bank || 0).toLocaleString('vi-VN')} đ</td>
+                <td class="text-right"><b>${Number(item.actualMoney || 0).toLocaleString('vi-VN')} đ</b></td>
+                <td class="text-right">${Number(item.appMoney || 0).toLocaleString('vi-VN')} đ</td>
+                <td class="text-right ${(item.difference || 0) < 0 ? 'text-danger' : 'text-success'}">
+                  ${(item.difference || 0) > 0 ? '+' : ''}${Number(item.difference || 0).toLocaleString('vi-VN')} đ
+                </td>
+                <td>${item.note || ''}</td>
+              </tr>
+            `).join('')
+          }
+        </tbody>
+      </table>
+
+      <div class="footer">
+        <p>Báo cáo tài chính cá nhân được tạo lập chuyên nghiệp bởi ứng dụng <b>Money Diary</b>.</p>
+        <p>Cảm ơn bạn đã đồng hành cùng tính năng Xuất Word cao cấp!</p>
+      </div>
+    </body>
+    </html>
+  `;
+
+  // --- XỬ LÝ KHỞI TẠO TẢI FILE CHUẨN (.DOC) ---
+  const blob = new Blob(['\ufeff' + htmlContent], { type: 'application/msword;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `Money_Diary_Bao_Cao_${new Date().toISOString().slice(0,10)}.doc`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+};
+
+
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900">
       <header className="border-b bg-white">
@@ -2128,6 +2297,15 @@ function renderBalanceCheckCard(title = "Kiểm kê số dư hôm nay") {
     <span className="rounded-full bg-slate-100 px-3 py-1 text-sm font-medium">
       {syncStatus}
     </span>
+    {session?.user && (
+  <button
+    type="button"
+    onClick={exportToWord}
+    className="rounded-xl bg-slate-950 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-slate-800 active:scale-95"
+  >
+    Xuất báo cáo Word
+  </button>
+)}
 
     <button
       type="button"
@@ -2978,7 +3156,7 @@ function renderBalanceCheckCard(title = "Kiểm kê số dư hôm nay") {
 
   </div>
 
-        </section>
+        </section> 
   </>
 )}
 
