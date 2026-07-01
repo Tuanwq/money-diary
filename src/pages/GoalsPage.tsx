@@ -28,6 +28,7 @@ import {
 import { formatMoney, formatMoneyInput } from "../utils/money";
 import type { GoalForecast } from "../utils/forecast";
 import type { DailyEntryForm } from "./EntryPage";
+import { GoalMilestonesPage } from "./GoalMilestonesPage";
 
 type SubGoalForm = {
   name: string;
@@ -961,8 +962,16 @@ export function GoalsPage({
       </>
 )}
 
+{goalScreen === "milestones" && (
+  <GoalMilestonesPage
+    goals={goals}
+    totalSavedForBigGoal={totalSavedForBigGoal}
+    onBack={() => navigateTo("goals", "menu")}
+  />
+)}
+
 {goalScreen === "menu" && (
-  <section className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+  <section className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
     <button
       type="button"
       onClick={() => navigateTo("goals", "current")}
@@ -1008,6 +1017,18 @@ export function GoalsPage({
       <h3 className="mt-3 text-xl font-bold">Mục tiêu đã hoàn thành</h3>
       <p className="mt-1 text-sm text-slate-500">
         Xem lại các mục tiêu cũ và lịch sử biến động tiền.
+      </p>
+    </button>
+
+    <button
+      type="button"
+      onClick={() => navigateTo("goals", "milestones")}
+      className="rounded-2xl bg-white p-6 text-left shadow-sm hover:bg-slate-50"
+    >
+      <p className="text-3xl">🏁</p>
+      <h3 className="mt-3 text-xl font-bold">Mốc kiểm tra</h3>
+      <p className="mt-1 text-sm text-slate-500">
+        Xem các mốc 25%, 50%, 75%, 100% và số tiền cần mỗi ngày để đạt mốc kế tiếp.
       </p>
     </button>
   </section>

@@ -70,6 +70,7 @@ export type GoalScreen =
   | "menu"
   | "current"
   | "subGoals"
+  | "milestones"
   | "balance"
   | "completed"
   | "completedDetail";
