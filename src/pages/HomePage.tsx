@@ -80,7 +80,7 @@ export function HomePage({
   dataWarnings,
   goToTodayEntryForm,
   goToTodayBalanceCheck,
-  openCloseDay,
+  // openCloseDay,
   onDataWarningAction,
   selectedActualIncome,
   selectedMainIncome,
@@ -94,7 +94,7 @@ export function HomePage({
   totalJourneyMoney,
   balanceCheckSectionRef,
   renderBalanceCheckCard,
-  navigateTo,
+  // navigateTo,
 }: HomePageProps) {
   return (
     <>
@@ -349,23 +349,23 @@ export function HomePage({
   );
 }
 
-type HomeActionProps = {
-  icon: string;
-  title: string;
-  description: string;
-  onClick: () => void;
-};
+// type HomeActionProps = {
+//   icon: string;
+//   title: string;
+//   description: string;
+//   onClick: () => void;
+// };
 
-function HomeAction({ icon, title, description, onClick }: HomeActionProps) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="rounded-2xl bg-white p-6 text-left shadow-sm hover:bg-slate-50"
-    >
-      <p className="text-3xl">{icon}</p>
-      <h3 className="mt-3 text-xl font-bold">{title}</h3>
-      <p className="mt-1 text-sm text-slate-500">{description}</p>
-    </button>
-  );
-}
+// function HomeAction({ icon, title, description, onClick }: HomeActionProps) {
+//   return (
+//     <button
+//       type="button"
+//       onClick={onClick}
+//       className="rounded-2xl bg-white p-6 text-left shadow-sm hover:bg-slate-50"
+//     >
+//       <p className="text-3xl">{icon}</p>
+//       <h3 className="mt-3 text-xl font-bold">{title}</h3>
+//       <p className="mt-1 text-sm text-slate-500">{description}</p>
+//     </button>
+//   );
+// }
