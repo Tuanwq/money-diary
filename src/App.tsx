@@ -14,6 +14,7 @@ import { HistoryPage } from "./pages/HistoryPage";
 import { HomePage } from "./pages/HomePage";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ITEMS_PER_PAGE } from "./constants";
+import { BottomNav } from "./components/BottomNav";
 import type {
   BalanceCheckEntry,
   BalanceSnapshot,
@@ -1579,7 +1580,8 @@ function renderBalanceCheckCard(title = "Kiểm kê số dư hôm nay") {
       )}
 
       {session && (
-        <main className="mx-auto grid max-w-6xl gap-6 px-4 py-6">
+        <>
+        <main className="mx-auto grid max-w-6xl gap-6 px-4 py-6 pb-28">
           <AccountBar
             email={session.user.email}
             syncStatus={syncStatus}
@@ -1763,6 +1765,12 @@ function renderBalanceCheckCard(title = "Kiểm kê số dư hôm nay") {
       navigateTo={navigateTo}
     />
   )}</main>
+
+    <BottomNav
+      navigateTo={navigateTo}
+      openCloseDay={() => openCloseDay()}
+    />
+  </>
 )}
     </div>
   );

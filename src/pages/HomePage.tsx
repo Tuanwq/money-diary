@@ -302,7 +302,7 @@ export function HomePage({
         </div>
       </section>
 
-      <section className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+      {/* <section className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         <HomeAction
           icon="🎯"
           title="Các mục tiêu và biến động số dư"
@@ -344,7 +344,7 @@ export function HomePage({
           description="Xem lại tiền mặt, tiền tài khoản và hao hụt từng ngày."
           onClick={() => navigateTo("balanceChecks")}
         />
-      </section>
+      </section> */}
     </>
   );
 }
