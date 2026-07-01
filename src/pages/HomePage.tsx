@@ -242,12 +242,7 @@ export function HomePage({
           onBalanceCheckClick={goToTodayBalanceCheck}
         />
 
-        <DataWarningsPanel
-          warnings={dataWarnings}
-          onAction={onDataWarningAction}
-        />
-
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
+                <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
           <StatCard
             title={
               isSelectedToday ? "Tiền thực tế hôm nay" : "Tiền thực tế ngày này"
@@ -296,6 +291,11 @@ export function HomePage({
             progress={getProgress(totalJourneyMoney, goals.bigGoalTarget)}
           />
         </div>
+
+        <DataWarningsPanel
+          warnings={dataWarnings}
+          onAction={onDataWarningAction}
+        />
 
         <div ref={balanceCheckSectionRef}>
           {renderBalanceCheckCard("Kiểm kê số dư hôm nay")}
