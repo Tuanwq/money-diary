@@ -108,8 +108,8 @@ export const HANOI_JOIN_EXTRA_ORDER_REWARD: Record<
     [14, null, 5000],
   ],
   HUB_3: [
-    [5, 8, 2000],
-    [9, null, 4000],
+    [5, 8, 1000],
+    [9, null, 3000],
   ],
   HUB_1: [],
 };
