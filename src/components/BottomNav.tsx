@@ -18,10 +18,15 @@ export function BottomNav({ navigateTo, openCloseDay }: BottomNavProps) {
       onClick: openCloseDay,
     },
     {
-      icon: "📝",
-      label: "Nhật kí",
-      onClick: () => navigateTo("entry"),
+    icon: "🚚",
+    label: "Hub",
+    onClick: () => navigateTo("hub"),
     },
+    // {
+    //   icon: "📝",
+    //   label: "Nhật kí",
+    //   onClick: () => navigateTo("entry"),
+    // },
     {
       icon: "📚",
       label: "Lịch sử",

@@ -94,7 +94,7 @@ export function HomePage({
   totalJourneyMoney,
   balanceCheckSectionRef,
   renderBalanceCheckCard,
-  // navigateTo,
+  navigateTo,
 }: HomePageProps) {
   return (
     <>
@@ -237,7 +237,7 @@ export function HomePage({
           todayExpense={todayExpense}
           todayBalanceCheck={todayBalanceCheck}
           todayExpenseTotal={todayExpenseTotal}
-          onEntryClick={goToTodayEntryForm}
+          onEntryClick={() => navigateTo("hub")}
           onExpenseClick={goToTodayEntryForm}
           onBalanceCheckClick={goToTodayBalanceCheck}
         />

@@ -64,7 +64,8 @@ export type Page =
   | "closeDay"
   | "history"
   | "expenses"
-  | "balanceChecks";
+  | "balanceChecks"
+  | "hub";
 
 export type GoalScreen =
   | "menu"

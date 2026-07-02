@@ -15,6 +15,7 @@ import { HomePage } from "./pages/HomePage";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ITEMS_PER_PAGE } from "./constants";
 import { BottomNav } from "./components/BottomNav";
+import { HubPage, type HubDiaryPayload } from "./pages/HubPage";
 import type {
   BalanceCheckEntry,
   BalanceSnapshot,
@@ -991,6 +992,7 @@ function handleBalanceCheckSubmit(event: React.FormEvent) {
   });
 
   setSyncStatus("Đã lưu kiểm kê số dư");
+  alert("Đã thêm kiểm kê thành công.");
 }
 
 function deleteBalanceCheck(id: string) {
@@ -1706,6 +1708,46 @@ function renderBalanceCheckCard(title = "Kiểm kê số dư hôm nay") {
       todayString={todayString}
       renderBalanceCheckCard={renderBalanceCheckCard}
       navigateTo={navigateTo}
+    />
+  )}
+
+  {page === "hub" && (
+    <HubPage
+      onBackHome={() => navigateTo("home", "menu")}
+      onSaveToDiary={(
+        date,
+        amount,
+        diaryPayload: HubDiaryPayload
+      ) => {
+        const now = new Date().toISOString();
+        const appendText = (current?: string, next?: string) => {
+          return [current, next].filter(Boolean).join("\n");
+        };
+
+        setEntries((prev) => {
+          const existing = prev.find((entry) => entry.date === date);
+
+          const newEntry: DailyEntry = {
+            id: existing?.id ?? crypto.randomUUID(),
+            date,
+            diary: appendText(existing?.diary, diaryPayload.diary),
+            income: (existing?.income ?? 0) + amount,
+            receivedMoney:
+              (existing?.receivedMoney ?? 0) + diaryPayload.receivedMoney,
+            bonusMoney: (existing?.bonusMoney ?? 0) + diaryPayload.bonusMoney,
+            orderCount: (existing?.orderCount ?? 0) + diaryPayload.orderCount,
+            workHours: (existing?.workHours ?? 0) + diaryPayload.workHours,
+            mood: diaryPayload.mood,
+            note: appendText(existing?.note, diaryPayload.note),
+            createdAt: existing?.createdAt ?? now,
+            updatedAt: now,
+          };
+
+          return [...prev.filter((entry) => entry.date !== date), newEntry];
+        });
+
+        markLocalChanged("Đã lưu ca hub vào nhật ký, đang lưu cloud...");
+      }}
     />
   )}
 

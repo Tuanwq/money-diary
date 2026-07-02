@@ -105,14 +105,14 @@ export function TodayDashboard({
 
       <div className="mt-4 grid gap-3 md:grid-cols-3">
         <ChecklistCard
-          title="Nhật ký"
+          title="Ca hub"
           done={Boolean(todayEntry)}
           description={
             todayEntry
-              ? `${todayEntry.workHours} giờ · ${todayEntry.orderCount ?? 0} đơn`
-              : "Chưa ghi thu nhập và giờ làm."
+              ? `Đã có thu nhập ${formatMoney(todayEntry.income)} trong nhật ký.`
+              : "Thêm ca hub và nhật kí để tự tạo dữ liệu hôm nay."
           }
-          actionLabel={todayEntry ? "Sửa nhật ký" : "Nhập nhật ký"}
+          actionLabel="Thêm ca hub và nhật kí"
           onClick={onEntryClick}
         />
 
@@ -166,13 +166,13 @@ function ChecklistCard({
       }`}
     >
       <div className="flex items-start justify-between gap-3">
-        <div>
+        <div className="min-w-0">
           <h3 className="font-bold">{title}</h3>
           <p className="mt-1 text-sm text-slate-500">{description}</p>
         </div>
 
         <span
-          className={`rounded-full px-2 py-1 text-xs font-bold ${
+          className={`shrink-0 whitespace-nowrap rounded-full px-3 py-1 text-xs font-bold leading-5 ${
             done
               ? "bg-green-100 text-green-700"
               : "bg-yellow-100 text-yellow-800"
@@ -185,7 +185,7 @@ function ChecklistCard({
       <button
         type="button"
         onClick={onClick}
-        className="mt-3 rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-700"
+        className="mt-3 inline-flex min-h-10 max-w-full items-center justify-center rounded-lg bg-slate-900 px-3 py-2 text-center text-sm font-medium leading-tight text-white hover:bg-slate-700"
       >
         {actionLabel}
       </button>

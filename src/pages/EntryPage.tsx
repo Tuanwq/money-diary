@@ -52,7 +52,6 @@ export function EntryPage({
   setEditingDate,
   setEditingExpenseDate,
   todayString,
-  renderBalanceCheckCard,
   navigateTo,
 }: EntryPageProps) {
   return (
@@ -92,7 +91,6 @@ export function EntryPage({
           setEditingDate={setEditingDate}
         />
 
-        {renderBalanceCheckCard("Kiểm kê cuối ngày")}
       </section>
     </>
   );
