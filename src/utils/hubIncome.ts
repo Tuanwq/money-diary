@@ -108,6 +108,9 @@ export function calculateHubIncome(entry: HubEntry, settings: HubSettings) {
     sundayReward +
     weekdayRegionReward +
     entry.extraIncome;
+  const excludedFromWorkIncome =
+    extraJoinOrderReward + sundayReward + weekdayRegionReward;
+  const workIncome = total - excludedFromWorkIncome;
 
   return {
     basePrice,
@@ -121,6 +124,8 @@ export function calculateHubIncome(entry: HubEntry, settings: HubSettings) {
     extraJoinOrderReward,
     sundayReward,
     weekdayRegionReward,
+    excludedFromWorkIncome,
+    workIncome,
     joinIncomeIfSingleOrders,
     joinDifference,
     extraIncome: entry.extraIncome,

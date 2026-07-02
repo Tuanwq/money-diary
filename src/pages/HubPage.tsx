@@ -626,7 +626,7 @@ export function HubPage({ onBackHome, onSaveToDiary }: HubPageProps) {
     } else {
       setEntries((prev) => [newEntry, ...prev]);
 
-      onSaveToDiary?.(newEntry.date, income.total, {
+      onSaveToDiary?.(newEntry.date, income.workIncome, {
         receivedMoney,
         bonusMoney,
         mood: form.mood,
@@ -1139,6 +1139,10 @@ export function HubPage({ onBackHome, onSaveToDiary }: HubPageProps) {
                   label="Thưởng khu vực"
                   value={previewIncome.weekdayRegionReward}
                 />
+                <IncomeStat
+                  label="Tiền làm được ghi nhật ký"
+                  value={previewIncome.workIncome}
+                />
                 <IncomeStat label="Thu nhập khác" value={previewIncome.extraIncome} />
                 <IncomeStat
                   label="Tăng/giảm do đơn ghép"
@@ -1548,6 +1552,10 @@ export function HubPage({ onBackHome, onSaveToDiary }: HubPageProps) {
                         <p>
                           Thưởng khu vực:{" "}
                           {formatMoney(income.weekdayRegionReward)}
+                        </p>
+                        <p>
+                          Tiền làm được ghi nhật ký:{" "}
+                          {formatMoney(income.workIncome)}
                         </p>
                         <p>Thu nhập khác: {formatMoney(income.extraIncome)}</p>
                         <p>
