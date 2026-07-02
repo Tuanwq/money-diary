@@ -66,6 +66,13 @@ export type HubDiaryPayload = {
   workHours: number;
 };
 
+export type HubDiaryContribution = {
+  date: string;
+  income: number;
+  orderCount: number;
+  workHours: number;
+};
+
 const QUICK_JOIN_TYPES = [2, 3, 4, 5];
 const WEEKDAY_LABELS = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"];
 const HUB_TIME_FILTERS: Array<{ label: string; value: HubTimeFilter }> = [
@@ -305,7 +312,7 @@ function getShiftHours(shiftName: string) {
   const end = Number(endHour) * 60 + Number(endMinute);
   const duration = end >= start ? end - start : end + 24 * 60 - start;
 
-  return Math.round((duration / 60) * 100) / 100;
+  return Math.round((duration / 60) * 10) / 10;
 }
 
 function toHubJoins(rows: HubJoinForm[]): HubJoinOrder[] {
@@ -326,8 +333,45 @@ function toHubJoins(rows: HubJoinForm[]): HubJoinOrder[] {
     .filter((join) => join.type > 0 && getJoinQuantity(join) > 0);
 }
 
+function getHubDiaryContribution(
+  entry: HubEntry,
+  settings: HubSettings
+): HubDiaryContribution {
+  const income = calculateHubIncome(entry, settings);
+
+  return {
+    date: entry.date,
+    income: entry.diaryIncomeAmount ?? income.total,
+    orderCount: entry.diaryOrderCount ?? entry.order,
+    workHours: entry.diaryWorkHours ?? getShiftHours(entry.shiftName),
+  };
+}
+
+function createHubDiaryContribution(
+  entry: HubEntry,
+  settings: HubSettings
+): HubDiaryContribution {
+  const income = calculateHubIncome(entry, settings);
+
+  return {
+    date: entry.date,
+    income: income.workIncome,
+    orderCount: entry.order,
+    workHours: getShiftHours(entry.shiftName),
+  };
+}
+
 type HubPageProps = {
   onBackHome?: () => void;
+  onAdjustDiaryContribution?: (
+    previousContribution: HubDiaryContribution | null,
+    nextContribution: HubDiaryContribution | null
+  ) => void;
+  onMigrateLegacyDiaryIncome?: (
+    date: string,
+    previousIncome: number,
+    nextIncome: number
+  ) => void;
   onSaveToDiary?: (
     date: string,
     amount: number,
@@ -335,7 +379,12 @@ type HubPageProps = {
   ) => void;
 };
 
-export function HubPage({ onBackHome, onSaveToDiary }: HubPageProps) {
+export function HubPage({
+  onAdjustDiaryContribution,
+  onBackHome,
+  onMigrateLegacyDiaryIncome,
+  onSaveToDiary,
+}: HubPageProps) {
   const [tab, setTab] = useState<HubTab>("add");
   const [entries, setEntries] = useState<HubEntry[]>(() =>
     loadJson<HubEntry[]>(STORAGE_HUB_ENTRIES_KEY, [])
@@ -377,6 +426,57 @@ export function HubPage({ onBackHome, onSaveToDiary }: HubPageProps) {
       JSON.stringify(calculatorForm)
     );
   }, [calculatorForm]);
+
+  useEffect(() => {
+    const legacyEntries = entries.filter((entry) => {
+      return entry.diaryIncomeAmount === undefined;
+    });
+
+    if (legacyEntries.length === 0) return;
+
+    const migrationByDate = new Map<
+      string,
+      { previousIncome: number; nextIncome: number }
+    >();
+
+    for (const entry of legacyEntries) {
+      const income = calculateHubIncome(entry, settings);
+      const current = migrationByDate.get(entry.date) ?? {
+        previousIncome: 0,
+        nextIncome: 0,
+      };
+
+      migrationByDate.set(entry.date, {
+        previousIncome: current.previousIncome + income.total,
+        nextIncome: current.nextIncome + income.workIncome,
+      });
+    }
+
+    for (const [date, migration] of migrationByDate) {
+      onMigrateLegacyDiaryIncome?.(
+        date,
+        migration.previousIncome,
+        migration.nextIncome
+      );
+    }
+
+    queueMicrotask(() => {
+      setEntries((prev) =>
+        prev.map((entry) => {
+          if (entry.diaryIncomeAmount !== undefined) return entry;
+
+          const contribution = createHubDiaryContribution(entry, settings);
+
+          return {
+            ...entry,
+            diaryIncomeAmount: contribution.income,
+            diaryOrderCount: contribution.orderCount,
+            diaryWorkHours: contribution.workHours,
+          };
+        })
+      );
+    });
+  }, [entries, onMigrateLegacyDiaryIncome, settings]);
 
   const sortedEntries = useMemo(() => {
     return [...entries].sort((a, b) => b.date.localeCompare(a.date));
@@ -617,23 +717,34 @@ export function HubPage({ onBackHome, onSaveToDiary }: HubPageProps) {
       createdAt: existingEntry?.createdAt ?? now,
       updatedAt: now,
     };
-    const income = calculateHubIncome(newEntry, settings);
+    const nextContribution = createHubDiaryContribution(newEntry, settings);
+    const savedEntry: HubEntry = {
+      ...newEntry,
+      diaryIncomeAmount: nextContribution.income,
+      diaryOrderCount: nextContribution.orderCount,
+      diaryWorkHours: nextContribution.workHours,
+    };
 
     if (editingHubEntryId) {
-      setEntries((prev) =>
-        prev.map((entry) => (entry.id === editingHubEntryId ? newEntry : entry))
-      );
-    } else {
-      setEntries((prev) => [newEntry, ...prev]);
+      const previousContribution = existingEntry
+        ? getHubDiaryContribution(existingEntry, settings)
+        : null;
 
-      onSaveToDiary?.(newEntry.date, income.workIncome, {
+      setEntries((prev) =>
+        prev.map((entry) => (entry.id === editingHubEntryId ? savedEntry : entry))
+      );
+      onAdjustDiaryContribution?.(previousContribution, nextContribution);
+    } else {
+      setEntries((prev) => [savedEntry, ...prev]);
+
+      onSaveToDiary?.(savedEntry.date, nextContribution.income, {
         receivedMoney,
         bonusMoney,
         mood: form.mood,
         diary: form.diary.trim(),
         note: form.note.trim(),
-        orderCount: order,
-        workHours: getShiftHours(form.shiftName),
+        orderCount: nextContribution.orderCount,
+        workHours: nextContribution.workHours,
       });
     }
 
@@ -649,11 +760,18 @@ export function HubPage({ onBackHome, onSaveToDiary }: HubPageProps) {
   }
 
   function deleteHubEntry(id: string) {
+    const entryToDelete = entries.find((entry) => entry.id === id);
     const confirmed = confirm("Xóa ca hub này?");
     if (!confirmed) return;
 
-    // TODO: Khi cần chính xác tuyệt đối, trừ lại thu nhập hub khỏi DailyEntry tương ứng.
     setEntries((prev) => prev.filter((entry) => entry.id !== id));
+
+    if (entryToDelete) {
+      onAdjustDiaryContribution?.(
+        getHubDiaryContribution(entryToDelete, settings),
+        null
+      );
+    }
 
     if (editingHubEntryId === id) {
       setEditingHubEntryId(null);

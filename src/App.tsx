@@ -14,8 +14,18 @@ import { HistoryPage } from "./pages/HistoryPage";
 import { HomePage } from "./pages/HomePage";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ITEMS_PER_PAGE } from "./constants";
+import {
+  DEFAULT_HUB_SETTINGS,
+  STORAGE_HUB_ENTRIES_KEY,
+  STORAGE_HUB_SETTINGS_KEY,
+} from "./constants/hanoiHub";
 import { BottomNav } from "./components/BottomNav";
-import { HubPage, type HubDiaryPayload } from "./pages/HubPage";
+import {
+  HubPage,
+  type HubDiaryContribution,
+  type HubDiaryPayload,
+} from "./pages/HubPage";
+import type { HubEntry, HubSettings } from "./types/hub";
 import type {
   BalanceCheckEntry,
   BalanceSnapshot,
@@ -62,6 +72,7 @@ import {
   type DataWarning,
 } from "./utils/dataWarnings";
 import { buildGoalForecast } from "./utils/forecast";
+import { calculateHubIncome } from "./utils/hubIncome";
 
 function createCloseDayForm(date = getToday()): CloseDayForm {
   return {
@@ -78,6 +89,160 @@ function createCloseDayForm(date = getToday()): CloseDayForm {
     note: "",
     mood: "normal",
   };
+}
+
+function roundWorkHours(value: number) {
+  if (!Number.isFinite(value)) return 0;
+
+  return Math.round(value * 10) / 10;
+}
+
+function loadLocalJson<T>(key: string, fallback: T): T {
+  const saved = localStorage.getItem(key);
+
+  if (!saved) return fallback;
+
+  try {
+    return JSON.parse(saved) as T;
+  } catch {
+    return fallback;
+  }
+}
+
+function buildHubDiaryMigrationTotals() {
+  const hubEntries = loadLocalJson<HubEntry[]>(STORAGE_HUB_ENTRIES_KEY, []);
+
+  if (!Array.isArray(hubEntries) || hubEntries.length === 0) {
+    return new Map<
+      string,
+      { grossIncome: number; legacyGrossIncome: number; workIncome: number }
+    >();
+  }
+
+  const settings: HubSettings = {
+    ...DEFAULT_HUB_SETTINGS,
+    ...loadLocalJson<Partial<HubSettings>>(STORAGE_HUB_SETTINGS_KEY, {}),
+  };
+  const totalsByDate = new Map<
+    string,
+    { grossIncome: number; legacyGrossIncome: number; workIncome: number }
+  >();
+
+  for (const entry of hubEntries) {
+    const income = calculateHubIncome(entry, settings);
+    const current = totalsByDate.get(entry.date) ?? {
+      grossIncome: 0,
+      legacyGrossIncome: 0,
+      workIncome: 0,
+    };
+    const legacyExtraJoinReward =
+      entry.hubType === "HUB_3" &&
+      entry.isWellDone &&
+      settings.includeExtraOrderReward
+        ? getLegacyHub3JoinReward(income.totalJoinChildOrders)
+        : income.extraJoinOrderReward;
+    const legacyGrossIncome =
+      income.workIncome +
+      legacyExtraJoinReward +
+      income.sundayReward +
+      income.weekdayRegionReward;
+
+    totalsByDate.set(entry.date, {
+      grossIncome: current.grossIncome + income.total,
+      legacyGrossIncome: current.legacyGrossIncome + legacyGrossIncome,
+      workIncome: current.workIncome + income.workIncome,
+    });
+  }
+
+  return totalsByDate;
+}
+
+function getLegacyHub3JoinReward(totalJoinChildOrders: number) {
+  if (totalJoinChildOrders < 5) return 0;
+
+  const firstTierOrders = Math.max(
+    Math.min(totalJoinChildOrders, 8) - 5 + 1,
+    0
+  );
+  const secondTierOrders = Math.max(totalJoinChildOrders - 8, 0);
+
+  return firstTierOrders * 1000 + secondTierOrders * 3000;
+}
+
+function applyHubDiaryContribution(
+  entries: DailyEntry[],
+  contribution: HubDiaryContribution,
+  direction: 1 | -1,
+  now: string
+) {
+  const existing = entries.find((entry) => entry.date === contribution.date);
+
+  if (!existing && direction === -1) return entries;
+
+  if (!existing) {
+    const newEntry: DailyEntry = {
+      id: crypto.randomUUID(),
+      date: contribution.date,
+      diary: "",
+      income: contribution.income,
+      receivedMoney: 0,
+      bonusMoney: 0,
+      orderCount: contribution.orderCount,
+      workHours: roundWorkHours(contribution.workHours),
+      mood: "normal",
+      note: "",
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    return [...entries, newEntry];
+  }
+
+  const updatedEntry: DailyEntry = {
+    ...existing,
+    income: Math.max(0, existing.income + contribution.income * direction),
+    orderCount: Math.max(
+      0,
+      (existing.orderCount ?? 0) + contribution.orderCount * direction
+    ),
+    workHours: roundWorkHours(
+      Math.max(0, (existing.workHours ?? 0) + contribution.workHours * direction)
+    ),
+    updatedAt: now,
+  };
+
+  return entries.map((entry) =>
+    entry.date === contribution.date ? updatedEntry : entry
+  );
+}
+
+function applyHubDiaryContributionChange(
+  entries: DailyEntry[],
+  previousContribution: HubDiaryContribution | null,
+  nextContribution: HubDiaryContribution | null,
+  now: string
+) {
+  let nextEntries = entries;
+
+  if (previousContribution) {
+    nextEntries = applyHubDiaryContribution(
+      nextEntries,
+      previousContribution,
+      -1,
+      now
+    );
+  }
+
+  if (nextContribution) {
+    nextEntries = applyHubDiaryContribution(
+      nextEntries,
+      nextContribution,
+      1,
+      now
+    );
+  }
+
+  return nextEntries;
 }
 
 export default function App() {
@@ -136,6 +301,7 @@ export default function App() {
     completedGoals,
     setCompletedGoals,
   });
+  const hubDiaryMigrationDoneRef = useRef(false);
   const balanceCheckDraftDirtyRef = useRef(false);
   const balanceCheckSectionRef = useRef<HTMLDivElement | null>(null);
 
@@ -173,6 +339,51 @@ const [mainGoalForm, setMainGoalForm] = useState({
 const [subGoalContributionForms, setSubGoalContributionForms] = useState<
   Record<string, { amount: string; note: string }>
 >({});
+
+useEffect(() => {
+  if (hubDiaryMigrationDoneRef.current) return;
+
+  const hubTotalsByDate = buildHubDiaryMigrationTotals();
+  const shouldMigrate = entries.some((entry) => {
+    const totals = hubTotalsByDate.get(entry.date);
+
+    return Boolean(
+      totals &&
+        totals.grossIncome !== totals.workIncome &&
+        (entry.income === totals.grossIncome ||
+          entry.income === totals.legacyGrossIncome)
+    );
+  });
+
+  if (!shouldMigrate) return;
+
+  const now = new Date().toISOString();
+  hubDiaryMigrationDoneRef.current = true;
+
+  queueMicrotask(() => {
+    setEntries((prev) =>
+      prev.map((entry) => {
+        const totals = hubTotalsByDate.get(entry.date);
+
+        if (
+          !totals ||
+          totals.grossIncome === totals.workIncome ||
+          (entry.income !== totals.grossIncome &&
+            entry.income !== totals.legacyGrossIncome)
+        ) {
+          return entry;
+        }
+
+        return {
+          ...entry,
+          income: totals.workIncome,
+          updatedAt: now,
+        };
+      })
+    );
+    markLocalChanged("Đã sửa tiền hub cũ trong nhật ký, đang lưu cloud...");
+  });
+}, [entries, markLocalChanged, setEntries]);
 
 useEffect(() => {
   // Keep the editable goal form in sync when goals are loaded from storage/cloud.
@@ -902,7 +1113,7 @@ function handleCloseDaySubmit(event: React.FormEvent) {
       receivedMoney,
       bonusMoney,
       orderCount: existingEntry?.orderCount ?? 0,
-      workHours: existingEntry?.workHours ?? 0,
+      workHours: roundWorkHours(existingEntry?.workHours ?? 0),
       mood: closeDayForm.mood,
       note: note || existingEntry?.note || "",
       createdAt: existingEntry?.createdAt ?? now,
@@ -1029,7 +1240,7 @@ function editBalanceCheck(item: BalanceCheckEntry) {
     const receivedMoney = parseMoneyInput(form.receivedMoney);
     const bonusMoney = parseMoneyInput(form.bonusMoney);
     const orderCount = Number(form.orderCount);
-    const workHours = Number(form.workHours);
+    const workHours = roundWorkHours(Number(form.workHours));
 
     if (!form.date) {
       alert("Bạn chưa chọn ngày.");
@@ -1098,7 +1309,7 @@ function editBalanceCheck(item: BalanceCheckEntry) {
     receivedMoney: formatMoneyInput(String(entry.receivedMoney ?? 0)),
     bonusMoney: formatMoneyInput(String(entry.bonusMoney ?? 0)),
     orderCount: String(entry.orderCount ?? 0),
-    workHours: String(entry.workHours ?? 0),
+    workHours: String(roundWorkHours(entry.workHours ?? 0)),
     mood: entry.mood,
     note: entry.note,
   });
@@ -1713,7 +1924,42 @@ function renderBalanceCheckCard(title = "Kiểm kê số dư hôm nay") {
 
   {page === "hub" && (
     <HubPage
+      onAdjustDiaryContribution={(previousContribution, nextContribution) => {
+        const now = new Date().toISOString();
+
+        setEntries((prev) =>
+          applyHubDiaryContributionChange(
+            prev,
+            previousContribution,
+            nextContribution,
+            now
+          )
+        );
+
+        markLocalChanged("Đã đồng bộ tiền hub vào nhật ký, đang lưu cloud...");
+      }}
       onBackHome={() => navigateTo("home", "menu")}
+      onMigrateLegacyDiaryIncome={(date, previousIncome, nextIncome) => {
+        if (previousIncome === nextIncome) return;
+
+        const now = new Date().toISOString();
+
+        setEntries((prev) =>
+          prev.map((entry) => {
+            if (entry.date !== date || entry.income !== previousIncome) {
+              return entry;
+            }
+
+            return {
+              ...entry,
+              income: nextIncome,
+              updatedAt: now,
+            };
+          })
+        );
+
+        markLocalChanged("Đã sửa tiền hub cũ trong nhật ký, đang lưu cloud...");
+      }}
       onSaveToDiary={(
         date,
         amount,
@@ -1736,7 +1982,9 @@ function renderBalanceCheckCard(title = "Kiểm kê số dư hôm nay") {
               (existing?.receivedMoney ?? 0) + diaryPayload.receivedMoney,
             bonusMoney: (existing?.bonusMoney ?? 0) + diaryPayload.bonusMoney,
             orderCount: (existing?.orderCount ?? 0) + diaryPayload.orderCount,
-            workHours: (existing?.workHours ?? 0) + diaryPayload.workHours,
+            workHours: roundWorkHours(
+              (existing?.workHours ?? 0) + diaryPayload.workHours
+            ),
             mood: diaryPayload.mood,
             note: appendText(existing?.note, diaryPayload.note),
             createdAt: existing?.createdAt ?? now,

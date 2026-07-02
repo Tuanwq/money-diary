@@ -19,6 +19,9 @@ export type HubEntry = {
   isHubShort: boolean;
   extraIncome: number;
   note: string;
+  diaryIncomeAmount?: number;
+  diaryOrderCount?: number;
+  diaryWorkHours?: number;
   createdAt: string;
   updatedAt?: string;
 };
