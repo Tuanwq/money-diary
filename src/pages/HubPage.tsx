@@ -125,6 +125,29 @@ function createForm(): HubForm {
   };
 }
 
+function createFormFromEntry(entry: HubEntry): HubForm {
+  return {
+    date: entry.date,
+    hubType: entry.hubType,
+    shiftName: entry.shiftName || HUB_SHIFT_OPTIONS_BY_TYPE[entry.hubType][0],
+    order: formatMoneyInput(String(entry.order)),
+    joins: entry.joins.map((join) => ({
+      id: join.id ?? crypto.randomUUID(),
+      type: String(join.type),
+      quantity: formatMoneyInput(String(getJoinQuantity(join))),
+      price: formatMoneyInput(String(join.price)),
+    })),
+    isWellDone: entry.isWellDone,
+    isHubShort: entry.isHubShort,
+    extraIncome: formatMoneyInput(String(entry.extraIncome)),
+    receivedMoney: "",
+    bonusMoney: "",
+    mood: "normal",
+    diary: "",
+    note: entry.note,
+  };
+}
+
 function createCalculatorForm(): HubCalculatorForm {
   return {
     date: getToday(),
@@ -282,7 +305,7 @@ function getShiftHours(shiftName: string) {
   const end = Number(endHour) * 60 + Number(endMinute);
   const duration = end >= start ? end - start : end + 24 * 60 - start;
 
-  return duration / 60;
+  return Math.round((duration / 60) * 100) / 100;
 }
 
 function toHubJoins(rows: HubJoinForm[]): HubJoinOrder[] {
@@ -328,6 +351,9 @@ export function HubPage({ onBackHome, onSaveToDiary }: HubPageProps) {
   }));
   const [listHubTypeFilter, setListHubTypeFilter] =
     useState<HubTypeFilter>("ALL");
+  const [editingHubEntryId, setEditingHubEntryId] = useState<string | null>(
+    null
+  );
   const [listTimeFilter, setListTimeFilter] =
     useState<HubTimeFilter>("today");
   const [listCustomFromDate, setListCustomFromDate] = useState(getToday());
@@ -573,9 +599,12 @@ export function HubPage({ onBackHome, onSaveToDiary }: HubPageProps) {
       return;
     }
 
+    const existingEntry = editingHubEntryId
+      ? entries.find((entry) => entry.id === editingHubEntryId)
+      : undefined;
     const now = new Date().toISOString();
     const newEntry: HubEntry = {
-      id: crypto.randomUUID(),
+      id: existingEntry?.id ?? crypto.randomUUID(),
       date: form.date,
       hubType: form.hubType,
       shiftName: form.shiftName,
@@ -585,16 +614,19 @@ export function HubPage({ onBackHome, onSaveToDiary }: HubPageProps) {
       isHubShort: form.isHubShort,
       extraIncome,
       note: form.note.trim(),
-      createdAt: now,
+      createdAt: existingEntry?.createdAt ?? now,
+      updatedAt: now,
     };
     const income = calculateHubIncome(newEntry, settings);
 
-    setEntries((prev) => [newEntry, ...prev]);
+    if (editingHubEntryId) {
+      setEntries((prev) =>
+        prev.map((entry) => (entry.id === editingHubEntryId ? newEntry : entry))
+      );
+    } else {
+      setEntries((prev) => [newEntry, ...prev]);
 
-    onSaveToDiary?.(
-      newEntry.date,
-      income.total,
-      {
+      onSaveToDiary?.(newEntry.date, income.total, {
         receivedMoney,
         bonusMoney,
         mood: form.mood,
@@ -602,13 +634,18 @@ export function HubPage({ onBackHome, onSaveToDiary }: HubPageProps) {
         note: form.note.trim(),
         orderCount: order,
         workHours: getShiftHours(form.shiftName),
-      }
-    );
+      });
+    }
 
     setForm(createForm());
+    setEditingHubEntryId(null);
     setShowIncomeDetails(false);
     setTab("list");
-    alert("Đã thêm ca hub và nhật kí thành công.");
+    alert(
+      editingHubEntryId
+        ? "Đã cập nhật ca hub thành công."
+        : "Đã thêm ca hub và nhật kí thành công."
+    );
   }
 
   function deleteHubEntry(id: string) {
@@ -617,6 +654,24 @@ export function HubPage({ onBackHome, onSaveToDiary }: HubPageProps) {
 
     // TODO: Khi cần chính xác tuyệt đối, trừ lại thu nhập hub khỏi DailyEntry tương ứng.
     setEntries((prev) => prev.filter((entry) => entry.id !== id));
+
+    if (editingHubEntryId === id) {
+      setEditingHubEntryId(null);
+      setForm(createForm());
+    }
+  }
+
+  function editHubEntry(entry: HubEntry) {
+    setForm(createFormFromEntry(entry));
+    setEditingHubEntryId(entry.id);
+    setShowIncomeDetails(true);
+    setTab("add");
+  }
+
+  function cancelEditHubEntry() {
+    setForm(createForm());
+    setEditingHubEntryId(null);
+    setShowIncomeDetails(false);
   }
 
   function selectListTimeFilter(nextFilter: HubTimeFilter) {
@@ -695,7 +750,21 @@ export function HubPage({ onBackHome, onSaveToDiary }: HubPageProps) {
       {tab === "add" && (
         <section className="grid gap-5">
           <div className="rounded-2xl bg-white p-5 shadow-sm">
-            <h3 className="text-xl font-bold">Thêm ca hub và nhật kí</h3>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h3 className="text-xl font-bold">
+                {editingHubEntryId ? "Cập nhật ca hub" : "Thêm ca hub và nhật kí"}
+              </h3>
+
+              {editingHubEntryId && (
+                <button
+                  type="button"
+                  onClick={cancelEditHubEntry}
+                  className="rounded-xl border bg-white px-4 py-2 text-sm font-bold hover:bg-slate-100"
+                >
+                  Hủy cập nhật
+                </button>
+              )}
+            </div>
 
             <FormBlock title="Hiệu suất ca HUB">
               <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
@@ -931,77 +1000,85 @@ export function HubPage({ onBackHome, onSaveToDiary }: HubPageProps) {
           </div>
 
           <section className="rounded-2xl bg-white p-5 shadow-sm">
-            <h3 className="text-xl font-bold">Nhật ký hôm nay</h3>
+            <h3 className="text-xl font-bold">
+              {editingHubEntryId ? "Ghi chú ca hub" : "Nhật ký hôm nay"}
+            </h3>
+
+            {!editingHubEntryId && (
+              <>
                 <p className="text-sm text-slate-500">
                   Nhật ký hôm nay sẽ được lưu vào mục nhật ký chung của bạn. Bạn có thể ghi lại những gì đã xảy ra trong ca làm, cảm xúc, hoặc bất kỳ ghi chú nào bạn muốn.
-                </p>          
-              <div className="grid gap-3 md:grid-cols-2">
-                <div>
-                  <label className="text-sm font-medium">Tiền nhận được</label>
-                  <input
-                    inputMode="numeric"
-                    value={form.receivedMoney}
+                </p>
+
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div>
+                    <label className="text-sm font-medium">Tiền nhận được</label>
+                    <input
+                      inputMode="numeric"
+                      value={form.receivedMoney}
+                      onChange={(event) =>
+                        setForm((prev) => ({
+                          ...prev,
+                          receivedMoney: formatMoneyInput(event.target.value),
+                        }))
+                      }
+                      placeholder="VD: 500.000"
+                      className="mt-1 w-full rounded-xl border px-3 py-2"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-sm font-medium">Tiền thưởng</label>
+                    <input
+                      inputMode="numeric"
+                      value={form.bonusMoney}
+                      onChange={(event) =>
+                        setForm((prev) => ({
+                          ...prev,
+                          bonusMoney: formatMoneyInput(event.target.value),
+                        }))
+                      }
+                      placeholder="VD: 100.000"
+                      className="mt-1 w-full rounded-xl border px-3 py-2"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-sm font-medium">Tâm trạng</label>
+                    <select
+                      value={form.mood}
+                      onChange={(event) =>
+                        setForm((prev) => ({
+                          ...prev,
+                          mood: event.target.value as Mood,
+                        }))
+                      }
+                      className="mt-1 w-full rounded-xl border px-3 py-2"
+                    >
+                      <option value="good">Vui</option>
+                      <option value="normal">Bình thường</option>
+                      <option value="tired">Mệt</option>
+                      <option value="bad">Tệ</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="mt-3">
+                  <label className="text-sm font-medium">
+                    Hôm nay mình đã làm gì?
+                  </label>
+                  <textarea
+                    rows={4}
+                    value={form.diary}
                     onChange={(event) =>
-                      setForm((prev) => ({
-                        ...prev,
-                        receivedMoney: formatMoneyInput(event.target.value),
-                      }))
+                      setForm((prev) => ({ ...prev, diary: event.target.value }))
                     }
-                    placeholder="VD: 500.000"
                     className="mt-1 w-full rounded-xl border px-3 py-2"
+                    placeholder="VD: Chạy ca tối, nhiều đơn ghép, đường đông..."
                   />
                 </div>
-
-                <div>
-                  <label className="text-sm font-medium">Tiền thưởng</label>
-                  <input
-                    inputMode="numeric"
-                    value={form.bonusMoney}
-                    onChange={(event) =>
-                      setForm((prev) => ({
-                        ...prev,
-                        bonusMoney: formatMoneyInput(event.target.value),
-                      }))
-                    }
-                    placeholder="VD: 100.000"
-                    className="mt-1 w-full rounded-xl border px-3 py-2"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-sm font-medium">Tâm trạng</label>
-                  <select
-                    value={form.mood}
-                    onChange={(event) =>
-                      setForm((prev) => ({
-                        ...prev,
-                        mood: event.target.value as Mood,
-                      }))
-                    }
-                    className="mt-1 w-full rounded-xl border px-3 py-2"
-                  >
-                    <option value="good">Vui</option>
-                    <option value="normal">Bình thường</option>
-                    <option value="tired">Mệt</option>
-                    <option value="bad">Tệ</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="mt-3">
-                <label className="text-sm font-medium">
-                  Hôm nay mình đã làm gì?
-                </label>
-                <textarea
-                  rows={4}
-                  value={form.diary}
-                  onChange={(event) =>
-                    setForm((prev) => ({ ...prev, diary: event.target.value }))
-                  }
-                  className="mt-1 w-full rounded-xl border px-3 py-2"
-                  placeholder="VD: Chạy ca tối, nhiều đơn ghép, đường đông..."
-                />
-              </div>
+              </>
+            )}
 
               <div className="mt-3">
                 <label className="text-sm font-medium">Ghi chú thêm</label>
@@ -1015,7 +1092,6 @@ export function HubPage({ onBackHome, onSaveToDiary }: HubPageProps) {
                   placeholder="VD: mưa, app lỗi, cần tối ưu khung giờ..."
                 />
               </div>
-                
           </section>
 
           <section className="rounded-2xl bg-white p-5 shadow-sm">
@@ -1077,7 +1153,7 @@ export function HubPage({ onBackHome, onSaveToDiary }: HubPageProps) {
               onClick={saveHubEntry}
               className="mt-4 w-full rounded-xl bg-slate-900 px-5 py-3 font-bold text-white hover:bg-slate-700"
             >
-              Lưu ca hub và nhật kí
+              {editingHubEntryId ? "Cập nhật ca hub" : "Lưu ca hub và nhật kí"}
             </button>
           </section>
         </section>
@@ -1505,13 +1581,22 @@ export function HubPage({ onBackHome, onSaveToDiary }: HubPageProps) {
                         </p>
                       )}
 
-                      <button
-                        type="button"
-                        onClick={() => deleteHubEntry(entry.id)}
-                        className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-red-600 hover:bg-red-100"
-                      >
-                        Xóa
-                      </button>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => editHubEntry(entry)}
+                          className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-bold text-white hover:bg-slate-700"
+                        >
+                          Cập nhật ca
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => deleteHubEntry(entry.id)}
+                          className="rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-red-600 hover:bg-red-100"
+                        >
+                          Xóa
+                        </button>
+                      </div>
                     </article>
                   );
                 })
