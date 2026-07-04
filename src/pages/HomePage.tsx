@@ -1,4 +1,5 @@
 import type { RefObject, ReactNode } from "react";
+import { AiFinanceInsight } from "../components/AiFinanceInsight";
 import { DataWarningsPanel } from "../components/DataWarningsPanel";
 import { StatCard } from "../components/StatCard";
 import { TodayDashboard } from "../components/TodayDashboard";
@@ -16,6 +17,9 @@ import { getProgress, isGoalBehind } from "../utils/goals";
 import type { DataWarning } from "../utils/dataWarnings";
 
 type HomePageProps = {
+  entries: DailyEntry[];
+  expenses: ExpenseEntry[];
+  balanceChecks: BalanceCheckEntry[];
   isSelectedToday: boolean;
   selectedDate: string;
   goals: Goals;
@@ -57,6 +61,9 @@ type HomePageProps = {
 };
 
 export function HomePage({
+  entries,
+  expenses,
+  balanceChecks,
   isSelectedToday,
   selectedDate,
   goals,
@@ -180,6 +187,14 @@ export function HomePage({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            <AiFinanceInsight
+              entries={entries}
+              expenses={expenses}
+              balanceChecks={balanceChecks}
+              goals={goals}
+              today={todayString}
+            />
+
             <button
               type="button"
               onClick={goToPreviousDay}

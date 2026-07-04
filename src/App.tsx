@@ -1804,6 +1804,9 @@ function renderBalanceCheckCard(title = "Kiểm kê số dư hôm nay") {
 
           {page === "home" && (
             <HomePage
+              entries={entries}
+              expenses={expenses}
+              balanceChecks={balanceChecks}
               isSelectedToday={isSelectedToday}
               selectedDate={selectedDate}
               goals={goals}
