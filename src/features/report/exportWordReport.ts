@@ -17,17 +17,25 @@ import {
 } from "../../utils/entries";
 import { getProgress, getSubGoalSaved } from "../../utils/goals";
 import { formatMoney } from "../../utils/money";
+import type { GoalForecast } from "../../utils/forecast";
 
-export type GoalForecastReport = {
-  status: string;
-  fromDate: string;
-  toDate: string;
-  daysUsed: number;
-  netAmount: number;
-  averagePerDay: number;
-  daysToTarget: number | null;
-  targetDate: string | null;
-};
+export type GoalForecastReport = Pick<
+  GoalForecast,
+  | "status"
+  | "fromDate"
+  | "toDate"
+  | "daysUsed"
+  | "netAmount"
+  | "averagePerDay"
+  | "realisticAveragePerDay"
+  | "daysToTarget"
+  | "targetDate"
+  | "deadlineDelayDays"
+  | "deadlineDaysLeft"
+  | "requiredAveragePerDay"
+  | "dailyGapToDeadline"
+  | "paceForecasts"
+>;
 
 export type ExportWordReportOptions = {
   entries: DailyEntry[];
@@ -61,6 +69,14 @@ function escapeHtml(value: unknown) {
 
 function formatSignedMoney(value: number) {
   return `${value > 0 ? "+" : ""}${formatMoney(value)}`;
+}
+
+function formatOtherExpense(expense: ExpenseEntry) {
+  const label = expense.otherLabel?.trim();
+
+  return label
+    ? `${formatMoney(expense.other)} (${label})`
+    : formatMoney(expense.other);
 }
 
 function reportCell(value: unknown, className = "") {
@@ -167,6 +183,44 @@ export function exportWordReport({
     ["Dòng tiền ròng dự đoán", formatMoney(goalForecast.netAmount)],
     ["Trung bình ròng / ngày", formatMoney(goalForecast.averagePerDay)],
     [
+      "Tốc độ cần để kịp deadline",
+      goalForecast.requiredAveragePerDay === null
+        ? "Chưa có deadline"
+        : formatMoney(goalForecast.requiredAveragePerDay),
+    ],
+    [
+      "Tốc độ thực tế đã cân bằng",
+      formatMoney(goalForecast.realisticAveragePerDay),
+    ],
+    [
+      "Tốc độ 7 ngày so với deadline",
+      goalForecast.dailyGapToDeadline === null
+        ? "Chưa có deadline"
+        : goalForecast.dailyGapToDeadline >= 0
+          ? `Dư ${formatMoney(goalForecast.dailyGapToDeadline)}/ngày`
+          : `Thiếu ${formatMoney(Math.abs(goalForecast.dailyGapToDeadline))}/ngày`,
+    ],
+    [
+      "Dự đoán theo tốc độ 7 ngày",
+      goalForecast.paceForecasts[0]?.targetDate
+        ? `${formatReportDate(goalForecast.paceForecasts[0].targetDate)}${
+            goalForecast.paceForecasts[0].deadlineDelayDays
+              ? `, trễ ${goalForecast.paceForecasts[0].deadlineDelayDays} ngày`
+              : ""
+          }`
+        : "Chưa đủ cơ sở dự đoán",
+    ],
+    [
+      "Dự đoán theo tốc độ 30 ngày",
+      goalForecast.paceForecasts[1]?.targetDate
+        ? `${formatReportDate(goalForecast.paceForecasts[1].targetDate)}${
+            goalForecast.paceForecasts[1].deadlineDelayDays
+              ? `, trễ ${goalForecast.paceForecasts[1].deadlineDelayDays} ngày`
+              : ""
+          }`
+        : "Chưa đủ cơ sở dự đoán",
+    ],
+    [
       "Ngày dự kiến đạt",
       goalForecast.targetDate
         ? formatReportDate(goalForecast.targetDate)
@@ -252,7 +306,7 @@ export function exportWordReport({
               ${reportCell(formatMoney(expense.breakfast), "text-right")}
               ${reportCell(formatMoney(expense.lunch), "text-right")}
               ${reportCell(formatMoney(expense.dinner), "text-right")}
-              ${reportCell(formatMoney(expense.other), "text-right")}
+              ${reportCell(formatOtherExpense(expense), "text-right")}
               ${reportCell(formatMoney(total), "text-right strong")}
               ${reportCell(expense.note || "")}
             </tr>`;
@@ -338,7 +392,7 @@ export function exportWordReport({
                 (expense) => `<tr>
                   ${reportCell(formatReportDate(expense.date))}
                   ${reportCell(formatMoney(getExpenseTotal(expense)), "text-right strong")}
-                  ${reportCell(formatMoney(expense.other), "text-right")}
+                  ${reportCell(formatOtherExpense(expense), "text-right")}
                   ${reportCell(expense.note || "")}
                 </tr>`
               )
@@ -441,7 +495,7 @@ export function exportWordReport({
         <h2>6. Lịch sử nhật ký thu nhập</h2>
         <table><thead><tr><th>Ngày</th><th>Tâm trạng</th><th>Tiền làm</th><th>Thưởng</th><th>Tiền nhận</th><th>Tổng ngày</th><th>Giờ</th><th>Đơn</th><th>Nhật ký</th><th>Ghi chú</th></tr></thead><tbody>${diaryRows}</tbody></table>
         <h2>7. Lịch sử chi tiêu</h2>
-        <table><thead><tr><th>Ngày</th><th>Ăn sáng</th><th>Ăn trưa</th><th>Ăn tối</th><th>Khác</th><th>Tổng chi</th><th>Ghi chú</th></tr></thead><tbody>${expenseRows}</tbody></table>
+        <table><thead><tr><th>Ngày</th><th>Ăn sáng</th><th>Ăn trưa</th><th>Ăn tối</th><th>Khác / nhãn</th><th>Tổng chi</th><th>Ghi chú</th></tr></thead><tbody>${expenseRows}</tbody></table>
         <h2>8. Lịch sử kiểm kê số dư</h2>
         <table><thead><tr><th>Ngày</th><th>Tiền mặt</th><th>Tài khoản</th><th>App tính</th><th>Thực tế</th><th>Chênh lệch</th><th>Trạng thái</th><th>Ghi chú</th></tr></thead><tbody>${balanceCheckRows}</tbody></table>
         <h2>9. Biến động tiền mục tiêu hiện tại</h2>

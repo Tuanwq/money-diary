@@ -22,6 +22,7 @@ export type ExpenseEntry = {
   lunch: number;
   dinner: number;
   other: number;
+  otherLabel?: string;
   note: string;
   createdAt: string;
   updatedAt?: string;

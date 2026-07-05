@@ -6,8 +6,19 @@ export const STORAGE_GOALS_KEY = "money_diary_goals";
 export const STORAGE_COMPLETED_GOALS_KEY = "money_diary_completed_goals";
 export const STORAGE_EXPENSES_KEY = "money_diary_expenses";
 export const STORAGE_BALANCE_CHECKS_KEY = "money_diary_balance_checks";
+export const STORAGE_OTHER_EXPENSE_LABELS_KEY =
+  "money_diary_other_expense_labels";
 
 export const ITEMS_PER_PAGE = 7;
+
+export const DEFAULT_OTHER_EXPENSE_LABELS = [
+  "Xăng",
+  "Tiền điện",
+  "Tiền nước",
+  "Sửa xe",
+  "Điện thoại",
+  "Phát sinh",
+];
 
 export const defaultGoals: Goals = {
   dailyIncome: 200000,

@@ -36,3 +36,17 @@ export type HubSettings = {
   includeExtraOrderReward: boolean;
   includeSundayReward: boolean;
 };
+
+export type HubChangeAction = "create" | "update" | "delete" | "restore";
+
+export type HubChangeLog = {
+  id: string;
+  action: HubChangeAction;
+  entryId: string;
+  date: string;
+  title: string;
+  description: string;
+  previousEntry?: HubEntry;
+  nextEntry?: HubEntry;
+  createdAt: string;
+};

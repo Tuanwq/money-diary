@@ -1,4 +1,5 @@
 import type { Dispatch, FormEvent, ReactNode, SetStateAction } from "react";
+import { OtherExpenseLabelManager } from "../components/OtherExpenseLabelManager";
 import type { GoalScreen, Mood, Page } from "../types";
 import { getToday } from "../utils/date";
 import { formatMoney, formatMoneyInput, parseMoneyInput } from "../utils/money";
@@ -21,6 +22,7 @@ export type ExpenseEntryForm = {
   lunch: string;
   dinner: string;
   other: string;
+  otherLabel: string;
   note: string;
 };
 
@@ -52,7 +54,6 @@ export function EntryPage({
   setEditingDate,
   setEditingExpenseDate,
   todayString,
-  navigateTo,
 }: EntryPageProps) {
   return (
     <>
@@ -64,13 +65,6 @@ export function EntryPage({
           <p className="text-sm text-slate-500">Ghi lại một ngày của bạn.</p>
         </div>
 
-        <button
-          type="button"
-          onClick={() => navigateTo("home", "menu")}
-          className="rounded-xl border bg-white px-4 py-2 font-medium shadow-sm hover:bg-slate-100"
-        >
-          Về trang chủ
-        </button>
       </div>
 
       <section className="grid gap-6 lg:grid-cols-2">
@@ -176,6 +170,12 @@ function ExpenseForm({
             setExpenseForm((prev) => ({ ...prev, other: value }))
           }
         />
+        <OtherExpenseLabelManager
+          value={expenseForm.otherLabel}
+          onChange={(value) =>
+            setExpenseForm((prev) => ({ ...prev, otherLabel: value }))
+          }
+        />
 
         <div className="rounded-xl bg-slate-100 p-3 text-sm">
           <p className="text-slate-500">Tổng chi tiêu đang nhập</p>
@@ -214,6 +214,7 @@ function ExpenseForm({
               lunch: "",
               dinner: "",
               other: "",
+              otherLabel: "",
               note: "",
             });
           }}

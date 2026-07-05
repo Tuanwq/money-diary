@@ -16,6 +16,25 @@ export type GoalForecastScenario = {
   daysToTarget: number | null;
   targetDate: string | null;
   deadlineDelayDays: number | null;
+  deadlineStatus: GoalForecastDeadlineStatus;
+};
+
+export type GoalForecastDeadlineStatus =
+  | "reached"
+  | "onTrack"
+  | "late"
+  | "notGrowing"
+  | "noDeadline";
+
+export type GoalForecastPace = NetWindow & {
+  id: "last7" | "last30";
+  label: string;
+  days: number;
+  daysToTarget: number | null;
+  targetDate: string | null;
+  deadlineDelayDays: number | null;
+  deadlineStatus: GoalForecastDeadlineStatus;
+  averageGapToDeadline: number | null;
 };
 
 export type GoalForecast = {
@@ -25,14 +44,19 @@ export type GoalForecast = {
   daysUsed: number;
   netAmount: number;
   averagePerDay: number;
+  realisticAveragePerDay: number;
   daysToTarget: number | null;
   targetDate: string | null;
   deadlineDelayDays: number | null;
+  deadlineDaysLeft: number | null;
+  requiredAveragePerDay: number | null;
+  dailyGapToDeadline: number | null;
   shortAveragePerDay: number;
   longAveragePerDay: number;
   trendStatus: "speedingUp" | "slowingDown" | "stable" | "unknown";
   trendDifference: number;
   trendPercent: number | null;
+  paceForecasts: GoalForecastPace[];
   scenarios: GoalForecastScenario[];
 };
 
@@ -61,6 +85,46 @@ function getDeadlineDelayDays(targetDate: string | null, deadline: string) {
   const diffTime = toDate(targetDate).getTime() - toDate(deadline).getTime();
 
   return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+}
+
+function getDeadlineDaysLeft(today: string, deadline: string) {
+  if (!deadline) return null;
+
+  const diffTime = toDate(deadline).getTime() - toDate(today).getTime();
+
+  return Math.max(Math.ceil(diffTime / (1000 * 60 * 60 * 24)), 0);
+}
+
+function getRequiredAveragePerDay({
+  remaining,
+  deadlineDaysLeft,
+}: {
+  remaining: number;
+  deadlineDaysLeft: number | null;
+}) {
+  if (remaining <= 0) return 0;
+  if (deadlineDaysLeft === null) return null;
+  if (deadlineDaysLeft <= 0) return remaining;
+
+  return Math.ceil(remaining / deadlineDaysLeft);
+}
+
+function getDeadlineStatus({
+  remaining,
+  averagePerDay,
+  targetDate,
+  deadline,
+}: {
+  remaining: number;
+  averagePerDay: number;
+  targetDate: string | null;
+  deadline: string;
+}): GoalForecastDeadlineStatus {
+  if (remaining <= 0) return "reached";
+  if (!deadline) return "noDeadline";
+  if (averagePerDay <= 0 || !targetDate) return "notGrowing";
+
+  return targetDate <= deadline ? "onTrack" : "late";
 }
 
 function buildNetWindow({
@@ -133,6 +197,7 @@ function buildScenario({
       daysToTarget: 0,
       targetDate: today,
       deadlineDelayDays: null,
+      deadlineStatus: "reached",
     };
   }
 
@@ -144,6 +209,7 @@ function buildScenario({
       daysToTarget: null,
       targetDate: null,
       deadlineDelayDays: null,
+      deadlineStatus: deadline ? "notGrowing" : "noDeadline",
     };
   }
 
@@ -157,7 +223,115 @@ function buildScenario({
     daysToTarget,
     targetDate,
     deadlineDelayDays: getDeadlineDelayDays(targetDate, deadline),
+    deadlineStatus: getDeadlineStatus({
+      remaining,
+      averagePerDay,
+      targetDate,
+      deadline,
+    }),
   };
+}
+
+function buildPaceForecast({
+  id,
+  label,
+  days,
+  window,
+  today,
+  remaining,
+  deadline,
+  requiredAveragePerDay,
+}: {
+  id: GoalForecastPace["id"];
+  label: string;
+  days: number;
+  window: NetWindow;
+  today: string;
+  remaining: number;
+  deadline: string;
+  requiredAveragePerDay: number | null;
+}): GoalForecastPace {
+  const scenario = buildScenario({
+    id: "realistic",
+    label,
+    averagePerDay: window.averagePerDay,
+    today,
+    remaining,
+    deadline,
+  });
+
+  return {
+    ...window,
+    id,
+    label,
+    days,
+    daysToTarget: scenario.daysToTarget,
+    targetDate: scenario.targetDate,
+    deadlineDelayDays: scenario.deadlineDelayDays,
+    deadlineStatus: scenario.deadlineStatus,
+    averageGapToDeadline:
+      requiredAveragePerDay === null
+        ? null
+        : window.averagePerDay - requiredAveragePerDay,
+  };
+}
+
+function getWeightedAverage(
+  selectedWindow: NetWindow,
+  shortWindow: NetWindow,
+  longWindow: NetWindow
+) {
+  const weightedWindows = [
+    { average: shortWindow.averagePerDay, weight: shortWindow.daysUsed ? 0.5 : 0 },
+    { average: longWindow.averagePerDay, weight: longWindow.daysUsed ? 0.3 : 0 },
+    {
+      average: selectedWindow.averagePerDay,
+      weight: selectedWindow.daysUsed ? 0.2 : 0,
+    },
+  ];
+  const totalWeight = weightedWindows.reduce((sum, item) => {
+    return sum + item.weight;
+  }, 0);
+
+  if (totalWeight <= 0) return 0;
+
+  const weightedTotal = weightedWindows.reduce((sum, item) => {
+    return sum + item.average * item.weight;
+  }, 0);
+
+  return Math.round(weightedTotal / totalWeight);
+}
+
+function getScenarioAverage({
+  type,
+  selectedWindow,
+  shortWindow,
+  longWindow,
+}: {
+  type: GoalForecastScenario["id"];
+  selectedWindow: NetWindow;
+  shortWindow: NetWindow;
+  longWindow: NetWindow;
+}) {
+  const averages = [
+    selectedWindow.averagePerDay,
+    shortWindow.averagePerDay,
+    longWindow.averagePerDay,
+  ];
+  const positiveAverages = averages.filter((average) => average > 0);
+
+  if (type === "realistic") {
+    return getWeightedAverage(selectedWindow, shortWindow, longWindow);
+  }
+
+  if (type === "conservative") {
+    if (positiveAverages.length === 0) return Math.min(...averages);
+    return Math.floor(Math.min(...positiveAverages) * 0.85);
+  }
+
+  if (positiveAverages.length === 0) return Math.max(...averages);
+
+  return Math.ceil(Math.max(...positiveAverages) * 1.15);
 }
 
 export function buildGoalForecast({
@@ -205,10 +379,51 @@ export function buildGoalForecast({
         : trendPercent < -5
           ? "slowingDown"
           : "stable";
-  const conservativeAverage = Math.floor(selectedWindow.averagePerDay * 0.75);
-  const optimisticAverage = Math.ceil(
-    Math.max(selectedWindow.averagePerDay, shortWindow.averagePerDay) * 1.15
-  );
+  const deadlineDaysLeft = getDeadlineDaysLeft(today, deadline);
+  const requiredAveragePerDay = getRequiredAveragePerDay({
+    remaining,
+    deadlineDaysLeft,
+  });
+  const conservativeAverage = getScenarioAverage({
+    type: "conservative",
+    selectedWindow,
+    shortWindow,
+    longWindow,
+  });
+  const realisticAverage = getScenarioAverage({
+    type: "realistic",
+    selectedWindow,
+    shortWindow,
+    longWindow,
+  });
+  const optimisticAverage = getScenarioAverage({
+    type: "optimistic",
+    selectedWindow,
+    shortWindow,
+    longWindow,
+  });
+  const paceForecasts = [
+    buildPaceForecast({
+      id: "last7",
+      label: "Theo tốc độ 7 ngày gần nhất",
+      days: 7,
+      window: shortWindow,
+      today,
+      remaining,
+      deadline,
+      requiredAveragePerDay,
+    }),
+    buildPaceForecast({
+      id: "last30",
+      label: "Theo tốc độ 30 ngày gần nhất",
+      days: 30,
+      window: longWindow,
+      today,
+      remaining,
+      deadline,
+      requiredAveragePerDay,
+    }),
+  ];
   const scenarios = [
     buildScenario({
       id: "conservative",
@@ -221,14 +436,14 @@ export function buildGoalForecast({
     buildScenario({
       id: "realistic",
       label: "Thực tế",
-      averagePerDay: selectedWindow.averagePerDay,
+      averagePerDay: realisticAverage,
       today,
       remaining,
       deadline,
     }),
     buildScenario({
       id: "optimistic",
-      label: "Lạc quan",
+      label: "Tốt",
       averagePerDay: optimisticAverage,
       today,
       remaining,
@@ -243,7 +458,7 @@ export function buildGoalForecast({
         ? "reached"
         : selectedWindow.daysUsed === 0
           ? "noData"
-          : selectedWindow.averagePerDay <= 0
+          : realisticAverage <= 0
             ? "notGrowing"
             : "forecast";
 
@@ -254,14 +469,22 @@ export function buildGoalForecast({
     daysUsed: selectedWindow.daysUsed,
     netAmount: selectedWindow.netAmount,
     averagePerDay: selectedWindow.averagePerDay,
+    realisticAveragePerDay: realisticAverage,
     daysToTarget: realisticScenario?.daysToTarget ?? null,
     targetDate: realisticScenario?.targetDate ?? null,
     deadlineDelayDays: realisticScenario?.deadlineDelayDays ?? null,
+    deadlineDaysLeft,
+    requiredAveragePerDay,
+    dailyGapToDeadline:
+      requiredAveragePerDay === null
+        ? null
+        : shortWindow.averagePerDay - requiredAveragePerDay,
     shortAveragePerDay: shortWindow.averagePerDay,
     longAveragePerDay: longWindow.averagePerDay,
     trendStatus,
     trendDifference,
     trendPercent,
+    paceForecasts,
     scenarios,
   };
 }

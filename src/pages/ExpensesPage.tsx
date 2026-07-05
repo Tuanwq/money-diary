@@ -43,7 +43,6 @@ export function ExpensesPage({
   expenseCurrentPage,
   setExpenseCurrentPage,
   expenseTotalPages,
-  navigateTo,
 }: ExpensesPageProps) {
   return (
     <>
@@ -55,13 +54,6 @@ export function ExpensesPage({
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={() => navigateTo("home", "menu")}
-          className="rounded-xl border bg-white px-4 py-2 font-medium shadow-sm hover:bg-slate-100"
-        >
-          Về trang chủ
-        </button>
       </div>
 
       <section className="rounded-2xl bg-white p-4 shadow-sm">
@@ -257,7 +249,10 @@ function ExpenseCard({
         <ExpenseValue label="Ăn sáng" value={formatMoney(expense.breakfast)} />
         <ExpenseValue label="Ăn trưa" value={formatMoney(expense.lunch)} />
         <ExpenseValue label="Ăn tối" value={formatMoney(expense.dinner)} />
-        <ExpenseValue label="Khác" value={formatMoney(expense.other)} />
+        <ExpenseValue
+          label={expense.otherLabel ? `Khác: ${expense.otherLabel}` : "Khác"}
+          value={formatMoney(expense.other)}
+        />
       </div>
 
       {expense.note && (

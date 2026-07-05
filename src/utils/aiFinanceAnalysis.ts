@@ -6,11 +6,14 @@ import type {
 } from "../types";
 import { addDaysToDateString, formatDateShort, toDate } from "./date";
 import {
+  buildOtherExpenseBreakdown,
   getBonusMoney,
   getExpenseTotal,
   getMainIncome,
   getReceivedMoney,
   getTotalEntryMoney,
+  UNLABELED_OTHER_EXPENSE_LABEL,
+  type OtherExpenseBreakdownItem,
 } from "./entries";
 import { formatMoney } from "./money";
 
@@ -29,6 +32,7 @@ export type AiFinanceAnalysis = {
   toDate: string;
   summary: string;
   metrics: AiFinanceMetric[];
+  otherExpenseBreakdown: OtherExpenseBreakdownItem[];
   highlights: string[];
   risks: string[];
   actions: string[];
@@ -315,6 +319,11 @@ export function buildAiFinanceAnalysis({
     selectedRange.fromDate,
     selectedRange.toDate
   );
+  const otherExpenseBreakdown = buildOtherExpenseBreakdown(expenses, {
+    fromDate: selectedRange.fromDate,
+    toDate: selectedRange.toDate,
+  });
+  const topOtherExpense = otherExpenseBreakdown[0];
   const trendLabel = getTrendLabel(totals.net, previousTotals.net);
   const highlights: string[] = [];
   const risks: string[] = [];
@@ -337,6 +346,14 @@ export function buildAiFinanceAnalysis({
   if (reachedDailyGoalDays > 0) {
     highlights.push(
       `${reachedDailyGoalDays}/${dayCount} ngày đạt hoặc vượt mục tiêu ngày.`
+    );
+  }
+
+  if (topOtherExpense) {
+    highlights.push(
+      `Khoản khác lớn nhất là ${topOtherExpense.label}: ${formatMoney(
+        topOtherExpense.total
+      )} qua ${topOtherExpense.count} lần ghi.`
     );
   }
 
@@ -382,6 +399,18 @@ export function buildAiFinanceAnalysis({
     );
   }
 
+  if (
+    topOtherExpense &&
+    totals.expense > 0 &&
+    topOtherExpense.total / totals.expense >= 0.3
+  ) {
+    risks.push(
+      `${topOtherExpense.label} đang chiếm ${Math.round(
+        (topOtherExpense.total / totals.expense) * 100
+      )}% tổng chi tiêu trong kỳ.`
+    );
+  }
+
   if (worstDay && worstDay.net < 0) {
     risks.push(
       `Ngày yếu nhất là ${formatDateShort(worstDay.date)} với ròng ${formatMoney(
@@ -416,6 +445,14 @@ export function buildAiFinanceAnalysis({
 
   if (missingExpenseDays > 0) {
     actions.push("Bổ sung chi tiêu còn thiếu trước khi dùng số liệu để chốt kế hoạch.");
+  }
+
+  if (
+    otherExpenseBreakdown.some(
+      (item) => item.label === UNLABELED_OTHER_EXPENSE_LABEL
+    )
+  ) {
+    actions.push("Gắn nhãn cho các khoản khác chưa phân loại để AI đọc chi tiêu chính xác hơn.");
   }
 
   if (actions.length === 0) {
@@ -464,6 +501,11 @@ export function buildAiFinanceAnalysis({
         detail: `Tỷ lệ chi: ${expenseRatio}%`,
       },
       {
+        label: "Khác lớn nhất",
+        value: topOtherExpense ? formatMoney(topOtherExpense.total) : "Chưa có",
+        detail: topOtherExpense ? topOtherExpense.label : "Chưa có khoản khác",
+      },
+      {
         label: "Tiền/giờ",
         value: incomePerHour > 0 ? formatMoney(incomePerHour) : "Chưa có",
         detail: `${totals.workHours.toFixed(1)} giờ · ${totals.orderCount} đơn`,
@@ -479,6 +521,7 @@ export function buildAiFinanceAnalysis({
         detail: "Mức ròng/ngày để bám mục tiêu lớn",
       },
     ],
+    otherExpenseBreakdown: otherExpenseBreakdown.slice(0, 8),
     highlights: highlights.slice(0, 4),
     risks: risks.slice(0, 4),
     actions: actions.slice(0, 4),

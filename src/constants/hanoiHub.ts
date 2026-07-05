@@ -3,6 +3,7 @@ import type { HubSettings, HubType } from "../types/hub";
 export const STORAGE_HUB_ENTRIES_KEY = "money-diary-hub-entries";
 export const STORAGE_HUB_SETTINGS_KEY = "money-diary-hub-settings";
 export const STORAGE_HUB_CALCULATOR_KEY = "money-diary-hub-calculator";
+export const STORAGE_HUB_CHANGE_LOGS_KEY = "money-diary-hub-change-logs";
 
 export const HUB_TYPE_LABEL: Record<HubType, string> = {
   HUB_10: "Hub 10",

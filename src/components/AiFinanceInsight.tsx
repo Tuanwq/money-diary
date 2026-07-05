@@ -6,7 +6,18 @@ import type {
   Goals,
 } from "../types";
 import { FunctionsHttpError } from "@supabase/supabase-js";
+import {
+  DEFAULT_HUB_SETTINGS,
+  STORAGE_HUB_ENTRIES_KEY,
+  STORAGE_HUB_SETTINGS_KEY,
+} from "../constants/hanoiHub";
 import { supabase } from "../lib/supabase";
+import type { HubEntry, HubSettings } from "../types/hub";
+import {
+  answerAiFinanceQuestion,
+  buildAiAutomationInsights,
+  type AiAutomationInsights,
+} from "../utils/aiAutomation";
 import {
   AI_FINANCE_RANGE_OPTIONS,
   buildAiFinanceAnalysis,
@@ -21,6 +32,28 @@ type AiFinanceInsightProps = {
   goals: Goals;
   today: string;
 };
+
+type AiInsightView = "analysis" | "report" | "plan" | "anomalies" | "qa";
+type ReportMode = "week" | "month";
+
+const AI_INSIGHT_VIEWS: Array<{ label: string; value: AiInsightView }> = [
+  { label: "Phân tích", value: "analysis" },
+  { label: "Báo cáo", value: "report" },
+  { label: "Kế hoạch mai", value: "plan" },
+  { label: "Bất thường", value: "anomalies" },
+  { label: "Hỏi đáp", value: "qa" },
+];
+
+function loadLocalJson<T>(key: string, fallback: T): T {
+  try {
+    const rawValue = localStorage.getItem(key);
+    if (!rawValue) return fallback;
+
+    return JSON.parse(rawValue) as T;
+  } catch {
+    return fallback;
+  }
+}
 
 async function getFunctionErrorMessage(error: unknown) {
   if (error instanceof FunctionsHttpError) {
@@ -64,10 +97,29 @@ export function AiFinanceInsight({
   today,
 }: AiFinanceInsightProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [view, setView] = useState<AiInsightView>("analysis");
   const [range, setRange] = useState<AiFinanceRange>("last7");
+  const [reportMode, setReportMode] = useState<ReportMode>("week");
+  const [question, setQuestion] = useState("");
   const [realAiText, setRealAiText] = useState("");
   const [realAiError, setRealAiError] = useState("");
   const [isRealAiLoading, setIsRealAiLoading] = useState(false);
+  const hubData = useMemo(() => {
+    if (!isOpen) {
+      return {
+        entries: [] as HubEntry[],
+        settings: DEFAULT_HUB_SETTINGS,
+      };
+    }
+
+    return {
+      entries: loadLocalJson<HubEntry[]>(STORAGE_HUB_ENTRIES_KEY, []),
+      settings: {
+        ...DEFAULT_HUB_SETTINGS,
+        ...loadLocalJson<Partial<HubSettings>>(STORAGE_HUB_SETTINGS_KEY, {}),
+      },
+    };
+  }, [isOpen]);
   const analysis = useMemo(
     () =>
       buildAiFinanceAnalysis({
@@ -80,6 +132,54 @@ export function AiFinanceInsight({
       }),
     [balanceChecks, entries, expenses, goals, range, today]
   );
+  const automation = useMemo(
+    () =>
+      buildAiAutomationInsights({
+        entries,
+        expenses,
+        balanceChecks,
+        goals,
+        today,
+        hubEntries: hubData.entries,
+        hubSettings: hubData.settings,
+      }),
+    [
+      balanceChecks,
+      entries,
+      expenses,
+      goals,
+      hubData.entries,
+      hubData.settings,
+      today,
+    ]
+  );
+  const localQuestionAnswer = useMemo(() => {
+    const trimmedQuestion = question.trim();
+
+    if (!trimmedQuestion) return "";
+
+    return answerAiFinanceQuestion({
+      question: trimmedQuestion,
+      entries,
+      expenses,
+      balanceChecks,
+      goals,
+      today,
+      hubEntries: hubData.entries,
+      hubSettings: hubData.settings,
+    });
+  }, [
+    balanceChecks,
+    entries,
+    expenses,
+    goals,
+    hubData.entries,
+    hubData.settings,
+    question,
+    today,
+  ]);
+  const selectedReport =
+    reportMode === "week" ? automation.weeklyReport : automation.monthlyReport;
 
   async function runRealAiAnalysis() {
     setIsRealAiLoading(true);
@@ -92,7 +192,10 @@ export function AiFinanceInsight({
     }>("analyze-finance", {
       body: {
         range,
+        mode: view,
+        question: question.trim(),
         analysis,
+        automation,
       },
     });
 
@@ -117,6 +220,12 @@ export function AiFinanceInsight({
     setRealAiError("");
   }
 
+  function selectView(nextView: AiInsightView) {
+    setView(nextView);
+    setRealAiText("");
+    setRealAiError("");
+  }
+
   return (
     <>
       <button
@@ -133,10 +242,10 @@ export function AiFinanceInsight({
             <header className="flex flex-wrap items-start justify-between gap-3 border-b px-4 py-4 sm:px-5">
               <div className="min-w-0">
                 <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
-                  {analysis.rangeLabel}
+                  {view === "analysis" ? analysis.rangeLabel : "AI và tự động hóa"}
                 </p>
                 <h2 className="mt-1 text-xl font-black text-slate-900">
-                  {analysis.title}
+                  {view === "analysis" ? analysis.title : "Trung tâm AI tài chính"}
                 </h2>
                 <p className="mt-1 text-sm text-slate-500">
                   {formatDateShort(analysis.fromDate)} -{" "}
@@ -155,6 +264,23 @@ export function AiFinanceInsight({
 
             <div className="overflow-y-auto px-4 py-4 sm:px-5">
               <div className="flex flex-wrap gap-2">
+                {AI_INSIGHT_VIEWS.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => selectView(option.value)}
+                    className={`rounded-xl px-3 py-2 text-sm font-bold ${
+                      view === option.value
+                        ? "bg-slate-900 text-white"
+                        : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="mt-3 flex flex-wrap gap-2">
                 {AI_FINANCE_RANGE_OPTIONS.map((option) => (
                   <button
                     key={option.value}
@@ -180,36 +306,76 @@ export function AiFinanceInsight({
                 </button>
               </div>
 
-              <section className="mt-4 rounded-xl bg-slate-100 p-4">
-                <p className="text-sm font-medium leading-6 text-slate-700">
-                  {analysis.summary}
-                </p>
-              </section>
+              {view === "analysis" && (
+                <>
+                  <section className="mt-4 rounded-xl bg-slate-100 p-4">
+                    <p className="text-sm font-medium leading-6 text-slate-700">
+                      {analysis.summary}
+                    </p>
+                  </section>
 
-              <section className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {analysis.metrics.map((metric) => (
-                  <article
-                    key={metric.label}
-                    className="rounded-xl border bg-white p-3"
-                  >
-                    <p className="text-xs font-medium text-slate-500">
-                      {metric.label}
-                    </p>
-                    <p className="mt-1 break-words text-lg font-black text-slate-900">
-                      {metric.value}
-                    </p>
-                    <p className="mt-1 text-xs leading-5 text-slate-500">
-                      {metric.detail}
-                    </p>
-                  </article>
-                ))}
-              </section>
+                  <section className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    {analysis.metrics.map((metric) => (
+                      <article
+                        key={metric.label}
+                        className="rounded-xl border bg-white p-3"
+                      >
+                        <p className="text-xs font-medium text-slate-500">
+                          {metric.label}
+                        </p>
+                        <p className="mt-1 break-words text-lg font-black text-slate-900">
+                          {metric.value}
+                        </p>
+                        <p className="mt-1 text-xs leading-5 text-slate-500">
+                          {metric.detail}
+                        </p>
+                      </article>
+                    ))}
+                  </section>
 
-              <section className="mt-4 grid gap-3 lg:grid-cols-3">
-                <InsightList title="Điểm tốt" items={analysis.highlights} />
-                <InsightList title="Cần chú ý" items={analysis.risks} />
-                <InsightList title="Nên làm tiếp" items={analysis.actions} />
-              </section>
+                  <section className="mt-4 grid gap-3 lg:grid-cols-3">
+                    <InsightList title="Điểm tốt" items={analysis.highlights} />
+                    <InsightList title="Cần chú ý" items={analysis.risks} />
+                    <InsightList title="Nên làm tiếp" items={analysis.actions} />
+                  </section>
+                </>
+              )}
+
+              {view === "report" && (
+                <AiReportView
+                  automation={automation}
+                  reportMode={reportMode}
+                  selectedReport={selectedReport}
+                  setReportMode={setReportMode}
+                />
+              )}
+
+              {view === "plan" && (
+                <section className="mt-4">
+                  <InsightList
+                    title="Kế hoạch ngày mai"
+                    items={automation.tomorrowPlan}
+                  />
+                </section>
+              )}
+
+              {view === "anomalies" && (
+                <section className="mt-4">
+                  <InsightList
+                    title="Bất thường cần kiểm tra"
+                    items={automation.anomalies}
+                  />
+                </section>
+              )}
+
+              {view === "qa" && (
+                <AiQuestionAnswerView
+                  answer={localQuestionAnswer}
+                  question={question}
+                  setQuestion={setQuestion}
+                  suggestedQuestions={automation.suggestedQuestions}
+                />
+              )}
 
               {(realAiError || realAiText || isRealAiLoading) && (
                 <section className="mt-4 rounded-xl border bg-white p-4">
@@ -246,6 +412,109 @@ export function AiFinanceInsight({
         </div>
       )}
     </>
+  );
+}
+
+function AiReportView({
+  automation,
+  reportMode,
+  selectedReport,
+  setReportMode,
+}: {
+  automation: AiAutomationInsights;
+  reportMode: ReportMode;
+  selectedReport: string;
+  setReportMode: (mode: ReportMode) => void;
+}) {
+  return (
+    <section className="mt-4 rounded-xl border bg-white p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h3 className="font-bold text-slate-900">Báo cáo tự động</h3>
+          <p className="text-sm text-slate-500">
+            Tạo nhanh báo cáo dạng văn bản để bạn ghi chép hoặc gửi lại.
+          </p>
+        </div>
+
+        <div className="flex rounded-xl bg-slate-100 p-1">
+          <button
+            type="button"
+            onClick={() => setReportMode("week")}
+            className={`rounded-lg px-3 py-1.5 text-sm font-bold ${
+              reportMode === "week" ? "bg-white shadow-sm" : "text-slate-600"
+            }`}
+          >
+            Tuần
+          </button>
+          <button
+            type="button"
+            onClick={() => setReportMode("month")}
+            className={`rounded-lg px-3 py-1.5 text-sm font-bold ${
+              reportMode === "month" ? "bg-white shadow-sm" : "text-slate-600"
+            }`}
+          >
+            Tháng
+          </button>
+        </div>
+      </div>
+
+      <div className="mt-4 whitespace-pre-line rounded-xl bg-slate-50 p-4 text-sm leading-6 text-slate-800">
+        {selectedReport}
+      </div>
+
+      <div className="mt-4 grid gap-3 lg:grid-cols-2">
+        <InsightList title="Kế hoạch ngày mai" items={automation.tomorrowPlan} />
+        <InsightList title="Bất thường" items={automation.anomalies} />
+      </div>
+    </section>
+  );
+}
+
+function AiQuestionAnswerView({
+  answer,
+  question,
+  setQuestion,
+  suggestedQuestions,
+}: {
+  answer: string;
+  question: string;
+  setQuestion: (value: string) => void;
+  suggestedQuestions: string[];
+}) {
+  return (
+    <section className="mt-4 rounded-xl border bg-white p-4">
+      <h3 className="font-bold text-slate-900">Hỏi đáp dữ liệu</h3>
+      <p className="mt-1 text-sm text-slate-500">
+        Hỏi nhanh về Hub, chi tiêu, tiền/giờ hoặc tiến độ mục tiêu.
+      </p>
+
+      <div className="mt-3 flex flex-wrap gap-2">
+        {suggestedQuestions.map((item) => (
+          <button
+            key={item}
+            type="button"
+            onClick={() => setQuestion(item)}
+            className="rounded-full bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-200"
+          >
+            {item}
+          </button>
+        ))}
+      </div>
+
+      <textarea
+        rows={3}
+        value={question}
+        onChange={(event) => setQuestion(event.target.value)}
+        placeholder="VD: Tuần này Hub nào kiếm tốt nhất?"
+        className="mt-3 w-full rounded-xl border px-3 py-2 text-sm"
+      />
+
+      {answer && (
+        <div className="mt-3 whitespace-pre-line rounded-xl bg-slate-50 p-4 text-sm leading-6 text-slate-800">
+          {answer}
+        </div>
+      )}
+    </section>
   );
 }
 

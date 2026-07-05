@@ -6,17 +6,37 @@ import {
   HUB_SHIFT_OPTIONS_BY_TYPE,
   HUB_TYPE_LABEL,
   HUB_TYPES,
+  STORAGE_HUB_CHANGE_LOGS_KEY,
   STORAGE_HUB_CALCULATOR_KEY,
   STORAGE_HUB_ENTRIES_KEY,
   STORAGE_HUB_SETTINGS_KEY,
 } from "../constants/hanoiHub";
+import { supabase } from "../lib/supabase";
 import { getDateString, getToday, toDate } from "../utils/date";
+import {
+  buildHubAnalyticsRows,
+  buildHubReport,
+  filterHubRowsByDate,
+  getMonthRangeFromDate,
+  getWeekRangeFromDate,
+  groupHubPerformance,
+  summarizeHubRows,
+  type HubAnalyticsSummary,
+  type HubPerformanceItem,
+  type HubReport,
+} from "../utils/hubAnalytics";
 import { calculateHubIncome } from "../utils/hubIncome";
 import { formatMoney, formatMoneyInput, parseMoneyInput } from "../utils/money";
-import type { Mood } from "../types";
-import type { HubEntry, HubJoinOrder, HubSettings, HubType } from "../types/hub";
+import type { ExpenseEntry, Mood } from "../types";
+import type {
+  HubChangeLog,
+  HubEntry,
+  HubJoinOrder,
+  HubSettings,
+  HubType,
+} from "../types/hub";
 
-type HubTab = "add" | "calculator" | "list" | "settings";
+type HubTab = "add" | "calculator" | "dashboard" | "list" | "settings";
 type HubTypeFilter = "ALL" | HubType;
 type HubTimeFilter =
   | "last3"
@@ -361,8 +381,90 @@ function createHubDiaryContribution(
   };
 }
 
+function getHubSyncTime(item: { createdAt?: string; updatedAt?: string }) {
+  return new Date(
+    item.updatedAt ?? item.createdAt ?? "1970-01-01T00:00:00.000Z"
+  ).getTime();
+}
+
+function mergeHubEntries(cloudItems: HubEntry[], localItems: HubEntry[]) {
+  const map = new Map<string, HubEntry>();
+
+  [...localItems, ...cloudItems].forEach((item) => {
+    const current = map.get(item.id);
+
+    if (!current || getHubSyncTime(item) >= getHubSyncTime(current)) {
+      map.set(item.id, item);
+    }
+  });
+
+  return Array.from(map.values()).sort((a, b) => b.date.localeCompare(a.date));
+}
+
+function mergeHubChangeLogs(
+  cloudItems: HubChangeLog[],
+  localItems: HubChangeLog[]
+) {
+  const map = new Map<string, HubChangeLog>();
+
+  [...localItems, ...cloudItems].forEach((item) => {
+    const current = map.get(item.id);
+
+    if (!current || getHubSyncTime(item) >= getHubSyncTime(current)) {
+      map.set(item.id, item);
+    }
+  });
+
+  return Array.from(map.values()).sort((a, b) =>
+    b.createdAt.localeCompare(a.createdAt)
+  );
+}
+
+function isMissingHubCloudColumn(error: { message?: string } | null) {
+  return Boolean(
+    error?.message?.includes("hub_entries") ||
+      error?.message?.includes("hub_settings") ||
+      error?.message?.includes("hub_change_logs")
+  );
+}
+
+function createHubChangeLog({
+  action,
+  previousEntry,
+  nextEntry,
+}: {
+  action: HubChangeLog["action"];
+  previousEntry?: HubEntry;
+  nextEntry?: HubEntry;
+}): HubChangeLog {
+  const entry = nextEntry ?? previousEntry;
+  const now = new Date().toISOString();
+  const actionLabel: Record<HubChangeLog["action"], string> = {
+    create: "Thêm ca",
+    update: "Cập nhật ca",
+    delete: "Xóa ca",
+    restore: "Khôi phục ca",
+  };
+
+  return {
+    id: crypto.randomUUID(),
+    action,
+    entryId: entry?.id ?? crypto.randomUUID(),
+    date: entry?.date ?? getToday(),
+    title: `${actionLabel[action]} ${entry ? HUB_TYPE_LABEL[entry.hubType] : "Hub"}`,
+    description: entry
+      ? `${entry.date} · ${HUB_TYPE_LABEL[entry.hubType]} · ${
+          entry.shiftName || "Chưa có ca"
+        }`
+      : "Thay đổi dữ liệu Hub",
+    previousEntry,
+    nextEntry,
+    createdAt: now,
+  };
+}
+
 type HubPageProps = {
-  onBackHome?: () => void;
+  expenses?: ExpenseEntry[];
   onAdjustDiaryContribution?: (
     previousContribution: HubDiaryContribution | null,
     nextContribution: HubDiaryContribution | null
@@ -380,8 +482,8 @@ type HubPageProps = {
 };
 
 export function HubPage({
+  expenses = [],
   onAdjustDiaryContribution,
-  onBackHome,
   onMigrateLegacyDiaryIncome,
   onSaveToDiary,
 }: HubPageProps) {
@@ -393,6 +495,13 @@ export function HubPage({
     ...DEFAULT_HUB_SETTINGS,
     ...loadJson<Partial<HubSettings>>(STORAGE_HUB_SETTINGS_KEY, {}),
   }));
+  const [changeLogs, setChangeLogs] = useState<HubChangeLog[]>(() =>
+    loadJson<HubChangeLog[]>(STORAGE_HUB_CHANGE_LOGS_KEY, [])
+  );
+  const [hubCloudStatus, setHubCloudStatus] = useState(
+    "Hub đang lưu trên thiết bị"
+  );
+  const [hubCloudReady, setHubCloudReady] = useState(false);
   const [form, setForm] = useState<HubForm>(() => createForm());
   const [calculatorForm, setCalculatorForm] = useState<HubCalculatorForm>(() => ({
     ...createCalculatorForm(),
@@ -422,10 +531,116 @@ export function HubPage({
 
   useEffect(() => {
     localStorage.setItem(
+      STORAGE_HUB_CHANGE_LOGS_KEY,
+      JSON.stringify(changeLogs.slice(0, 200))
+    );
+  }, [changeLogs]);
+
+  useEffect(() => {
+    localStorage.setItem(
       STORAGE_HUB_CALCULATOR_KEY,
       JSON.stringify(calculatorForm)
     );
   }, [calculatorForm]);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadHubCloudData() {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const userId = sessionData.session?.user.id;
+
+      if (!active || !userId) {
+        if (active) setHubCloudStatus("Hub đang lưu trên thiết bị");
+        return;
+      }
+
+      setHubCloudStatus("Đang tải dữ liệu Hub cloud...");
+
+      const { data, error } = await supabase
+        .from("money_diary_state")
+        .select("hub_entries, hub_settings, hub_change_logs")
+        .eq("user_id", userId)
+        .maybeSingle();
+
+      if (!active) return;
+
+      if (error) {
+        console.error(error);
+        setHubCloudReady(false);
+        setHubCloudStatus(
+          isMissingHubCloudColumn(error)
+            ? "Cloud chưa có cột Hub. Hãy chạy migration để đồng bộ Hub."
+            : "Lỗi tải Hub cloud"
+        );
+        return;
+      }
+
+      const cloudEntries = data?.hub_entries
+        ? ((data.hub_entries || []) as unknown as HubEntry[])
+        : [];
+      const cloudSettings = data?.hub_settings
+        ? ({
+            ...DEFAULT_HUB_SETTINGS,
+            ...((data.hub_settings || {}) as unknown as Partial<HubSettings>),
+          } as HubSettings)
+        : null;
+      const cloudChangeLogs = data?.hub_change_logs
+        ? ((data.hub_change_logs || []) as unknown as HubChangeLog[])
+        : [];
+      const mergedEntries = mergeHubEntries(cloudEntries, entries);
+      const mergedChangeLogs = mergeHubChangeLogs(cloudChangeLogs, changeLogs);
+
+      setEntries(mergedEntries);
+      if (cloudSettings) setSettings(cloudSettings);
+      setChangeLogs(mergedChangeLogs);
+      setHubCloudReady(true);
+      setHubCloudStatus("Hub đã đồng bộ cloud");
+    }
+
+    void loadHubCloudData();
+
+    return () => {
+      active = false;
+    };
+    // Chỉ kéo cloud khi mở HubPage; các thay đổi sau đó được lưu bởi effect riêng.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!hubCloudReady) return;
+
+    const timeout = window.setTimeout(async () => {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const userId = sessionData.session?.user.id;
+
+      if (!userId) return;
+
+      setHubCloudStatus("Đang lưu Hub cloud...");
+
+      const { error } = await supabase.from("money_diary_state").upsert({
+        user_id: userId,
+        hub_entries: entries,
+        hub_settings: settings,
+        hub_change_logs: changeLogs.slice(0, 200),
+        updated_at: new Date().toISOString(),
+      });
+
+      if (error) {
+        console.error(error);
+        setHubCloudStatus(
+          isMissingHubCloudColumn(error)
+            ? "Cloud chưa có cột Hub. Hãy chạy migration để đồng bộ Hub."
+            : "Lỗi lưu Hub cloud"
+        );
+        return;
+      }
+
+      setHubCloudStatus("Hub đã đồng bộ cloud");
+    }, 800);
+
+    return () => window.clearTimeout(timeout);
+  }, [changeLogs, entries, hubCloudReady, settings]);
 
   useEffect(() => {
     const legacyEntries = entries.filter((entry) => {
@@ -550,14 +765,6 @@ export function HubPage({
     }, 0);
   }, [entries, settings]);
 
-  const todayHubIncome = useMemo(() => {
-    return entries
-      .filter((entry) => entry.date === getToday())
-      .reduce((sum, entry) => {
-        return sum + calculateHubIncome(entry, settings).total;
-      }, 0);
-  }, [entries, settings]);
-
   const calculatorRows = useMemo(() => {
     return entries
       .filter((entry) => entry.date === calculatorForm.date)
@@ -634,6 +841,95 @@ export function HubPage({
   const previewIncome = useMemo(() => {
     return calculateHubIncome(previewEntry, settings);
   }, [previewEntry, settings]);
+  const hubRows = useMemo(
+    () => buildHubAnalyticsRows(entries, settings),
+    [entries, settings]
+  );
+  const todayRange = useMemo(() => {
+    const today = getToday();
+    return { fromDate: today, toDate: today };
+  }, []);
+  const thisWeekRange = useMemo(() => getWeekRangeFromDate(getToday()), []);
+  const previousWeekRange = useMemo(
+    () => getWeekRangeFromDate(getToday(), -1),
+    []
+  );
+  const thisMonthRange = useMemo(() => getMonthRangeFromDate(getToday()), []);
+  const previousMonthRange = useMemo(
+    () => getMonthRangeFromDate(getToday(), -1),
+    []
+  );
+  const todayHubSummary = useMemo(
+    () =>
+      summarizeHubRows(
+        filterHubRowsByDate(hubRows, todayRange.fromDate, todayRange.toDate)
+      ),
+    [hubRows, todayRange]
+  );
+  const weekHubSummary = useMemo(
+    () =>
+      summarizeHubRows(
+        filterHubRowsByDate(
+          hubRows,
+          thisWeekRange.fromDate,
+          thisWeekRange.toDate
+        )
+      ),
+    [hubRows, thisWeekRange]
+  );
+  const monthHubSummary = useMemo(
+    () =>
+      summarizeHubRows(
+        filterHubRowsByDate(
+          hubRows,
+          thisMonthRange.fromDate,
+          thisMonthRange.toDate
+        )
+      ),
+    [hubRows, thisMonthRange]
+  );
+  const hubPerformance = useMemo(
+    () => groupHubPerformance(hubRows, "hub", "workIncome"),
+    [hubRows]
+  );
+  const shiftPerformance = useMemo(
+    () => groupHubPerformance(hubRows, "shift"),
+    [hubRows]
+  );
+  const lowPerformanceShifts = useMemo(() => {
+    const average = summarizeHubRows(hubRows).incomePerHour;
+    if (average <= 0) return [];
+
+    return shiftPerformance
+      .filter((item) => item.shifts >= 2 && item.incomePerHour < average * 0.75)
+      .slice(0, 5);
+  }, [hubRows, shiftPerformance]);
+  const weeklyHubReport = useMemo(
+    () =>
+      buildHubReport({
+        title: "Tổng kết tuần này",
+        rows: hubRows,
+        expenses,
+        fromDate: thisWeekRange.fromDate,
+        toDate: thisWeekRange.toDate,
+        previousFromDate: previousWeekRange.fromDate,
+        previousToDate: previousWeekRange.toDate,
+      }),
+    [expenses, hubRows, previousWeekRange, thisWeekRange]
+  );
+  const monthlyHubReport = useMemo(
+    () =>
+      buildHubReport({
+        title: "Tổng kết tháng này",
+        rows: hubRows,
+        expenses,
+        fromDate: thisMonthRange.fromDate,
+        toDate: thisMonthRange.toDate,
+        previousFromDate: previousMonthRange.fromDate,
+        previousToDate: previousMonthRange.toDate,
+      }),
+    [expenses, hubRows, previousMonthRange, thisMonthRange]
+  );
   const currentShiftOptions = HUB_SHIFT_OPTIONS_BY_TYPE[form.hubType];
   const totalOrderCount = parseMoneyInput(form.order);
   const joinedOrderCount = getJoinChildOrderCount(toHubJoins(form.joins));
@@ -733,9 +1029,24 @@ export function HubPage({
       setEntries((prev) =>
         prev.map((entry) => (entry.id === editingHubEntryId ? savedEntry : entry))
       );
+      setChangeLogs((prev) => [
+        createHubChangeLog({
+          action: "update",
+          previousEntry: existingEntry,
+          nextEntry: savedEntry,
+        }),
+        ...prev,
+      ]);
       onAdjustDiaryContribution?.(previousContribution, nextContribution);
     } else {
       setEntries((prev) => [savedEntry, ...prev]);
+      setChangeLogs((prev) => [
+        createHubChangeLog({
+          action: "create",
+          nextEntry: savedEntry,
+        }),
+        ...prev,
+      ]);
 
       onSaveToDiary?.(savedEntry.date, nextContribution.income, {
         receivedMoney,
@@ -767,6 +1078,13 @@ export function HubPage({
     setEntries((prev) => prev.filter((entry) => entry.id !== id));
 
     if (entryToDelete) {
+      setChangeLogs((prev) => [
+        createHubChangeLog({
+          action: "delete",
+          previousEntry: entryToDelete,
+        }),
+        ...prev,
+      ]);
       onAdjustDiaryContribution?.(
         getHubDiaryContribution(entryToDelete, settings),
         null
@@ -790,6 +1108,77 @@ export function HubPage({
     setForm(createForm());
     setEditingHubEntryId(null);
     setShowIncomeDetails(false);
+  }
+
+  function restoreDeletedHubEntry(entry: HubEntry) {
+    const exists = entries.some((item) => item.id === entry.id);
+    if (exists) {
+      alert("Ca hub này đang tồn tại, không cần khôi phục.");
+      return;
+    }
+
+    const restoredEntry = {
+      ...entry,
+      updatedAt: new Date().toISOString(),
+    };
+
+    setEntries((prev) => [restoredEntry, ...prev]);
+    setChangeLogs((prev) => [
+      createHubChangeLog({
+        action: "restore",
+        nextEntry: restoredEntry,
+      }),
+      ...prev,
+    ]);
+    onAdjustDiaryContribution?.(
+      null,
+      getHubDiaryContribution(restoredEntry, settings)
+    );
+    alert("Đã khôi phục ca hub.");
+  }
+
+  function undoHubChange(log: HubChangeLog) {
+    if (log.action === "create" && log.nextEntry) {
+      setEntries((prev) => prev.filter((entry) => entry.id !== log.entryId));
+      onAdjustDiaryContribution?.(
+        getHubDiaryContribution(log.nextEntry, settings),
+        null
+      );
+      alert("Đã hoàn tác ca vừa thêm.");
+      return;
+    }
+
+    if (log.action === "delete" && log.previousEntry) {
+      restoreDeletedHubEntry(log.previousEntry);
+      return;
+    }
+
+    if (log.action === "update" && log.previousEntry && log.nextEntry) {
+      const revertedEntry = {
+        ...log.previousEntry,
+        updatedAt: new Date().toISOString(),
+      };
+
+      setEntries((prev) =>
+        prev.map((entry) => (entry.id === log.entryId ? revertedEntry : entry))
+      );
+      setChangeLogs((prev) => [
+        createHubChangeLog({
+          action: "restore",
+          previousEntry: log.nextEntry,
+          nextEntry: revertedEntry,
+        }),
+        ...prev,
+      ]);
+      onAdjustDiaryContribution?.(
+        getHubDiaryContribution(log.nextEntry, settings),
+        getHubDiaryContribution(revertedEntry, settings)
+      );
+      alert("Đã hoàn tác lần cập nhật ca hub.");
+      return;
+    }
+
+    alert("Thay đổi này không thể hoàn tác tự động.");
   }
 
   function selectListTimeFilter(nextFilter: HubTimeFilter) {
@@ -825,18 +1214,9 @@ export function HubPage({
           </p>
         </div>
 
-        {onBackHome && (
-          <button
-            type="button"
-            onClick={onBackHome}
-            className="rounded-xl border bg-white px-4 py-2 text-sm font-bold shadow-sm hover:bg-slate-100"
-          >
-            Về trang chủ
-          </button>
-        )}
       </div>
 
-      <section className="grid grid-cols-2 gap-2 rounded-2xl bg-white p-2 shadow-sm md:grid-cols-4">
+      <section className="grid grid-cols-2 gap-2 rounded-2xl bg-white p-2 shadow-sm md:grid-cols-5">
         <TabButton active={tab === "add"} onClick={() => setTab("add")}>
           Thêm ca hub và nhật kí
         </TabButton>
@@ -845,6 +1225,12 @@ export function HubPage({
           onClick={() => setTab("calculator")}
         >
           Máy tính
+        </TabButton>
+        <TabButton
+          active={tab === "dashboard"}
+          onClick={() => setTab("dashboard")}
+        >
+          Dashboard
         </TabButton>
         <TabButton active={tab === "list"} onClick={() => setTab("list")}>
           Hub của tôi
@@ -857,11 +1243,18 @@ export function HubPage({
         </TabButton>
       </section>
 
-      <section className="grid gap-3 md:grid-cols-2">
-        <SummaryCard label="Tiền hub hôm nay" value={formatMoney(todayHubIncome)} />
+      <section className="grid gap-3 md:grid-cols-3">
         <SummaryCard
-          label="Tổng tiền hub đã lưu"
+          label="Tiền làm được hôm nay"
+          value={formatMoney(todayHubSummary.workIncome)}
+        />
+        <SummaryCard
+          label="Tổng gross hub đã lưu"
           value={formatMoney(totalHubIncome)}
+        />
+        <SummaryCard
+          label="Trạng thái Hub cloud"
+          value={hubCloudStatus}
         />
       </section>
 
@@ -1305,7 +1698,8 @@ export function HubPage({
               <div>
                 <label className="text-sm font-medium">Tiền âm ví app</label>
                 <input
-                  inputMode="decimal"
+                  type="text"
+                  inputMode="text"
                   value={calculatorForm.negativeWallet}
                   onChange={(event) =>
                     setCalculatorForm((prev) => ({
@@ -1323,7 +1717,8 @@ export function HubPage({
               <div>
                 <label className="text-sm font-medium">Mốc cần về</label>
                 <input
-                  inputMode="decimal"
+                  type="text"
+                  inputMode="text"
                   value={calculatorForm.target}
                   onChange={(event) =>
                     setCalculatorForm((prev) => ({
@@ -1415,6 +1810,145 @@ export function HubPage({
                       <p className="text-lg font-black">
                         {formatMoney(income.total)}
                       </p>
+                    </div>
+                  </article>
+                ))
+              )}
+            </div>
+          </section>
+        </section>
+      )}
+
+      {tab === "dashboard" && (
+        <section className="grid gap-5">
+          <section className="rounded-2xl bg-white p-5 shadow-sm">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h3 className="text-xl font-bold">Dashboard Hub</h3>
+                <p className="text-sm text-slate-500">
+                  Theo dõi tiền làm được thật, đơn, đơn ghép, giờ làm và tiền/giờ.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setTab("list")}
+                className="rounded-xl border bg-white px-4 py-2 text-sm font-bold shadow-sm hover:bg-slate-100"
+              >
+                Xem bảng lịch sử
+              </button>
+            </div>
+
+            <div className="mt-4 grid gap-3 lg:grid-cols-3">
+              <HubPeriodSummary title="Hôm nay" summary={todayHubSummary} />
+              <HubPeriodSummary title="Tuần này" summary={weekHubSummary} />
+              <HubPeriodSummary title="Tháng này" summary={monthHubSummary} />
+            </div>
+          </section>
+
+          <section className="grid gap-5 lg:grid-cols-2">
+            <PerformancePanel
+              title="Hub kiếm tốt nhất"
+              description="Sắp theo tổng tiền làm được thật."
+              items={hubPerformance.slice(0, 5)}
+              primaryMetric="workIncome"
+            />
+            <PerformancePanel
+              title="Ca hiệu quả nhất"
+              description="So sánh từng Hub và khung giờ."
+              items={shiftPerformance.slice(0, 8)}
+            />
+          </section>
+
+          <section className="rounded-2xl bg-white p-5 shadow-sm">
+            <h3 className="text-xl font-bold">Cảnh báo hiệu suất thấp</h3>
+            <p className="mt-1 text-sm text-slate-500">
+              Ca có ít nhất 2 lần làm và tiền/giờ thấp hơn 75% trung bình chung.
+            </p>
+
+            <div className="mt-4 grid gap-2">
+              {lowPerformanceShifts.length === 0 ? (
+                <p className="rounded-xl bg-green-50 p-4 text-sm font-medium text-green-700">
+                  Chưa phát hiện ca nào thấp bất thường.
+                </p>
+              ) : (
+                lowPerformanceShifts.map((item) => (
+                  <div
+                    key={item.key}
+                    className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-red-50 p-3"
+                  >
+                    <div>
+                      <p className="font-bold text-red-700">{item.label}</p>
+                      <p className="text-sm text-red-600">
+                        {item.shifts} ca · {item.orders} đơn · {item.hours} giờ
+                      </p>
+                    </div>
+                    <p className="text-lg font-black text-red-700">
+                      {formatMoney(item.incomePerHour)}/giờ
+                    </p>
+                  </div>
+                ))
+              )}
+            </div>
+          </section>
+
+          <section className="grid gap-5 lg:grid-cols-2">
+            <HubReportPanel report={weeklyHubReport} />
+            <HubReportPanel report={monthlyHubReport} />
+          </section>
+
+          <section className="rounded-2xl bg-white p-5 shadow-sm">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h3 className="text-xl font-bold">Lịch sử thay đổi Hub</h3>
+                <p className="text-sm text-slate-500">
+                  Biết ca nào vừa thêm, sửa, xóa và có thể hoàn tác nhanh.
+                </p>
+              </div>
+              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold">
+                {changeLogs.length} thay đổi
+              </span>
+            </div>
+
+            <div className="mt-4 grid gap-2">
+              {changeLogs.length === 0 ? (
+                <p className="rounded-xl bg-slate-100 p-4 text-sm text-slate-500">
+                  Chưa có lịch sử thay đổi Hub.
+                </p>
+              ) : (
+                changeLogs.slice(0, 20).map((log) => (
+                  <article
+                    key={log.id}
+                    className="flex flex-wrap items-center justify-between gap-3 rounded-xl border p-3"
+                  >
+                    <div>
+                      <p className="font-bold">{log.title}</p>
+                      <p className="mt-1 text-sm text-slate-500">
+                        {new Intl.DateTimeFormat("vi-VN", {
+                          dateStyle: "short",
+                          timeStyle: "short",
+                        }).format(new Date(log.createdAt))}{" "}
+                        · {log.description}
+                      </p>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => undoHubChange(log)}
+                        className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-bold text-white hover:bg-slate-700"
+                      >
+                        Hoàn tác
+                      </button>
+                      {log.action === "delete" && log.previousEntry && (
+                        <button
+                          type="button"
+                          onClick={() => restoreDeletedHubEntry(log.previousEntry!)}
+                          className="rounded-lg bg-green-50 px-3 py-2 text-sm font-bold text-green-700 hover:bg-green-100"
+                        >
+                          Khôi phục
+                        </button>
+                      )}
                     </div>
                   </article>
                 ))
@@ -1615,6 +2149,75 @@ export function HubPage({
               label="Tổng đơn đang xem"
               value={`${filteredHubSummary.orders} đơn`}
             />
+          </section>
+
+          <section className="rounded-2xl bg-white p-5 shadow-sm">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h3 className="text-xl font-bold">Bảng lịch sử Hub chi tiết</h3>
+              <p className="text-sm font-medium text-slate-500">
+                Gross, tiền làm được thật và thưởng bị tách riêng.
+              </p>
+            </div>
+
+            <div className="mt-4 overflow-x-auto">
+              <table className="min-w-[920px] w-full border-collapse text-left text-sm">
+                <thead>
+                  <tr className="border-b text-xs uppercase text-slate-500">
+                    <th className="py-2 pr-3">Ngày</th>
+                    <th className="py-2 pr-3">Hub</th>
+                    <th className="py-2 pr-3">Ca</th>
+                    <th className="py-2 pr-3">Đơn</th>
+                    <th className="py-2 pr-3">Ghép</th>
+                    <th className="py-2 pr-3">Tổng gross</th>
+                    <th className="py-2 pr-3">Làm thật</th>
+                    <th className="py-2 pr-3">Thưởng tách</th>
+                    <th className="py-2 pr-3">Ghi chú</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredHubEntries.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan={9}
+                        className="py-4 text-center text-slate-500"
+                      >
+                        Không có dữ liệu trong bộ lọc này.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredHubEntries.map((entry) => {
+                      const income = calculateHubIncome(entry, settings);
+
+                      return (
+                        <tr key={entry.id} className="border-b last:border-0">
+                          <td className="py-3 pr-3 font-bold">{entry.date}</td>
+                          <td className="py-3 pr-3">
+                            {HUB_TYPE_LABEL[entry.hubType]}
+                          </td>
+                          <td className="py-3 pr-3">{entry.shiftName}</td>
+                          <td className="py-3 pr-3">{entry.order}</td>
+                          <td className="py-3 pr-3">
+                            {income.totalJoinChildOrders}
+                          </td>
+                          <td className="py-3 pr-3 font-bold">
+                            {formatMoney(income.total)}
+                          </td>
+                          <td className="py-3 pr-3 font-bold text-green-700">
+                            {formatMoney(income.workIncome)}
+                          </td>
+                          <td className="py-3 pr-3 text-amber-700">
+                            {formatMoney(income.excludedFromWorkIncome)}
+                          </td>
+                          <td className="max-w-[220px] truncate py-3 pr-3 text-slate-500">
+                            {entry.note || "Không có"}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
           </section>
 
           <section className="rounded-2xl bg-white p-5 shadow-sm">
@@ -1838,6 +2441,156 @@ function SummaryCard({ label, value }: { label: string; value: string }) {
       <p className="text-sm text-slate-500">{label}</p>
       <p className="mt-1 text-2xl font-black">{value}</p>
     </div>
+  );
+}
+
+function HubPeriodSummary({
+  title,
+  summary,
+}: {
+  title: string;
+  summary: HubAnalyticsSummary;
+}) {
+  return (
+    <article className="rounded-2xl border bg-slate-50 p-4">
+      <p className="text-sm font-bold text-slate-500">{title}</p>
+      <p className="mt-2 text-2xl font-black text-slate-900">
+        {formatMoney(summary.workIncome)}
+      </p>
+      <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
+        <p>
+          Ca: <strong>{summary.shifts}</strong>
+        </p>
+        <p>
+          Đơn: <strong>{summary.orders}</strong>
+        </p>
+        <p>
+          Ghép: <strong>{summary.joinOrders}</strong>
+        </p>
+        <p>
+          Giờ: <strong>{summary.hours}</strong>
+        </p>
+      </div>
+      <p className="mt-3 rounded-xl bg-white px-3 py-2 text-sm font-bold">
+        {formatMoney(summary.incomePerHour)}/giờ
+      </p>
+    </article>
+  );
+}
+
+function PerformancePanel({
+  title,
+  description,
+  items,
+  primaryMetric = "incomePerHour",
+}: {
+  title: string;
+  description: string;
+  items: HubPerformanceItem[];
+  primaryMetric?: "workIncome" | "incomePerHour";
+}) {
+  return (
+    <section className="rounded-2xl bg-white p-5 shadow-sm">
+      <h3 className="text-xl font-bold">{title}</h3>
+      <p className="mt-1 text-sm text-slate-500">{description}</p>
+
+      <div className="mt-4 grid gap-2">
+        {items.length === 0 ? (
+          <p className="rounded-xl bg-slate-100 p-4 text-sm text-slate-500">
+            Chưa có đủ dữ liệu.
+          </p>
+        ) : (
+          items.map((item) => (
+            <article key={item.key} className="rounded-xl border p-3">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h4 className="font-bold">{item.label}</h4>
+                  <p className="mt-1 text-sm text-slate-500">
+                    {item.shifts} ca · {item.orders} đơn · {item.joinOrders} ghép ·{" "}
+                    {item.hours} giờ
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="text-lg font-black">
+                    {primaryMetric === "workIncome"
+                      ? formatMoney(item.workIncome)
+                      : `${formatMoney(item.incomePerHour)}/giờ`}
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    {primaryMetric === "workIncome"
+                      ? `${formatMoney(item.incomePerHour)}/giờ`
+                      : `TB ca ${formatMoney(item.averageIncome)}`}
+                  </p>
+                </div>
+              </div>
+            </article>
+          ))
+        )}
+      </div>
+    </section>
+  );
+}
+
+function HubReportPanel({ report }: { report: HubReport }) {
+  const changeText =
+    report.changePercent === null
+      ? "Chưa có kỳ trước để so sánh"
+      : `${report.changePercent >= 0 ? "Tăng" : "Giảm"} ${Math.abs(
+          report.changePercent
+        )}% so với kỳ trước`;
+
+  return (
+    <section className="rounded-2xl bg-white p-5 shadow-sm">
+      <h3 className="text-xl font-bold">{report.title}</h3>
+      <p className="mt-1 text-sm text-slate-500">
+        {formatDateLabel(report.fromDate)} - {formatDateLabel(report.toDate)}
+      </p>
+
+      <div className="mt-4 rounded-xl bg-slate-900 p-4 text-white">
+        <p className="text-sm text-slate-300">Tiền làm được</p>
+        <p className="mt-1 text-3xl font-black">
+          {formatMoney(report.summary.workIncome)}
+        </p>
+        <p className="mt-2 text-sm text-slate-300">{changeText}</p>
+      </div>
+
+      <div className="mt-4 grid gap-2 text-sm">
+        <p>
+          Tuần/tháng này: <strong>{report.summary.shifts} ca</strong> ·{" "}
+          <strong>{report.summary.orders} đơn</strong> ·{" "}
+          <strong>{report.summary.hours} giờ</strong>
+        </p>
+        <p>
+          Ngày tốt nhất:{" "}
+          <strong>
+            {report.bestDay
+              ? `${report.bestDay.date} (${formatMoney(report.bestDay.workIncome)})`
+              : "Chưa có"}
+          </strong>
+        </p>
+        <p>
+          Ngày tệ nhất:{" "}
+          <strong>
+            {report.worstDay
+              ? `${report.worstDay.date} (${formatMoney(
+                  report.worstDay.workIncome
+                )})`
+              : "Chưa có"}
+          </strong>
+        </p>
+      </div>
+
+      <div className="mt-4 grid gap-2">
+        {report.notes.map((note) => (
+          <p
+            key={note}
+            className="rounded-lg bg-slate-100 px-3 py-2 text-sm text-slate-600"
+          >
+            {note}
+          </p>
+        ))}
+      </div>
+    </section>
   );
 }
 

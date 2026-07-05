@@ -20,7 +20,6 @@ export function BalanceChecksPage({
   setBalanceCheckCurrentPage,
   editBalanceCheck,
   deleteBalanceCheck,
-  navigateTo,
 }: BalanceChecksPageProps) {
   return (
     <>
@@ -32,13 +31,6 @@ export function BalanceChecksPage({
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={() => navigateTo("home", "menu")}
-          className="rounded-xl border bg-white px-4 py-2 font-medium shadow-sm hover:bg-slate-100"
-        >
-          Về trang chủ
-        </button>
       </div>
 
       <section className="grid gap-4">

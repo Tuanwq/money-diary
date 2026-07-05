@@ -1,4 +1,5 @@
 import type { Dispatch, FormEvent, SetStateAction } from "react";
+import { OtherExpenseLabelManager } from "../components/OtherExpenseLabelManager";
 import type { GoalScreen, Mood, Page } from "../types";
 import { formatMoney, formatMoneyInput, parseMoneyInput } from "../utils/money";
 
@@ -13,6 +14,7 @@ export type CloseDayForm = {
   lunch: string;
   dinner: string;
   other: string;
+  otherLabel: string;
   note: string;
   mood: Mood;
 };
@@ -58,23 +60,13 @@ export function CloseDayPage({
           </p>
         </div>
 
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => navigateTo("entry")}
-            className="rounded-xl border bg-white px-4 py-2 font-medium shadow-sm hover:bg-slate-100"
-          >
-            Form đầy đủ
-          </button>
-
-          <button
-            type="button"
-            onClick={() => navigateTo("home", "menu")}
-            className="rounded-xl border bg-white px-4 py-2 font-medium shadow-sm hover:bg-slate-100"
-          >
-            Về trang chủ
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={() => navigateTo("entry")}
+          className="rounded-xl border bg-white px-4 py-2 font-medium shadow-sm hover:bg-slate-100"
+        >
+          Form đầy đủ
+        </button>
       </div>
 
       <form
@@ -212,6 +204,12 @@ export function CloseDayPage({
                 placeholder="VD: 20.000"
                 onChange={(value) =>
                   setForm((prev) => ({ ...prev, other: value }))
+                }
+              />
+              <OtherExpenseLabelManager
+                value={form.otherLabel}
+                onChange={(value) =>
+                  setForm((prev) => ({ ...prev, otherLabel: value }))
                 }
               />
             </div>

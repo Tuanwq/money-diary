@@ -86,6 +86,7 @@ function createCloseDayForm(date = getToday()): CloseDayForm {
     lunch: "",
     dinner: "",
     other: "",
+    otherLabel: "",
     note: "",
     mood: "normal",
   };
@@ -438,6 +439,7 @@ useEffect(() => {
   lunch: "",
   dinner: "",
   other: "",
+  otherLabel: "",
   note: "",
 });
   const [closeDayForm, setCloseDayForm] = useState<CloseDayForm>(() =>
@@ -581,7 +583,8 @@ const filteredExpenses = sortedExpenses.filter((expense) => {
   const matchKeyword =
     !keyword ||
     expense.date.toLowerCase().includes(keyword) ||
-    expense.note.toLowerCase().includes(keyword);
+    expense.note.toLowerCase().includes(keyword) ||
+    (expense.otherLabel ?? "").toLowerCase().includes(keyword);
 
   const matchDate = isDateInRange(
     expense.date,
@@ -911,8 +914,15 @@ function buildCloseDayForm(date: string): CloseDayForm {
   const entry = entries.find((item) => item.date === date);
   const expense = expenses.find((item) => item.date === date);
   const expenseTotal = expense ? getExpenseTotal(expense) : 0;
+  const hasExpenseBreakdown = Boolean(
+    expense &&
+      (expense.breakfast > 0 ||
+        expense.lunch > 0 ||
+        expense.dinner > 0 ||
+        expense.otherLabel)
+  );
   const useTotalExpense =
-    !expense || (expense.breakfast === 0 && expense.lunch === 0 && expense.dinner === 0);
+    !expense || !hasExpenseBreakdown;
 
   return {
     date,
@@ -933,6 +943,7 @@ function buildCloseDayForm(date: string): CloseDayForm {
       !useTotalExpense && expense
         ? formatMoneyInput(String(expense.other ?? 0))
         : "",
+    otherLabel: !useTotalExpense ? expense?.otherLabel ?? "" : "",
     note: entry?.note || entry?.diary || expense?.note || "",
     mood: entry?.mood ?? "normal",
   };
@@ -1035,6 +1046,7 @@ function handleExpenseSubmit(event: React.FormEvent) {
       lunch,
       dinner,
       other,
+      otherLabel: expenseForm.otherLabel.trim(),
       note: expenseForm.note,
       createdAt: existingExpense?.createdAt ?? now,
       updatedAt: now,
@@ -1056,6 +1068,7 @@ function handleExpenseSubmit(event: React.FormEvent) {
     lunch: "",
     dinner: "",
     other: "",
+    otherLabel: "",
     note: "",
   });
 
@@ -1136,6 +1149,10 @@ function handleCloseDaySubmit(event: React.FormEvent) {
       lunch,
       dinner,
       other,
+      otherLabel:
+        closeDayForm.expenseMode === "meals"
+          ? closeDayForm.otherLabel.trim()
+          : "",
       note: note || existingExpense?.note || "",
       createdAt: existingExpense?.createdAt ?? now,
       updatedAt: now,
@@ -1331,6 +1348,7 @@ function editExpense(expense: ExpenseEntry) {
     lunch: formatMoneyInput(String(expense.lunch ?? 0)),
     dinner: formatMoneyInput(String(expense.dinner ?? 0)),
     other: formatMoneyInput(String(expense.other ?? 0)),
+    otherLabel: expense.otherLabel ?? "",
     note: expense.note,
   });
 
@@ -1927,6 +1945,7 @@ function renderBalanceCheckCard(title = "Kiểm kê số dư hôm nay") {
 
   {page === "hub" && (
     <HubPage
+      expenses={expenses}
       onAdjustDiaryContribution={(previousContribution, nextContribution) => {
         const now = new Date().toISOString();
 
@@ -1941,7 +1960,6 @@ function renderBalanceCheckCard(title = "Kiểm kê số dư hôm nay") {
 
         markLocalChanged("Đã đồng bộ tiền hub vào nhật ký, đang lưu cloud...");
       }}
-      onBackHome={() => navigateTo("home", "menu")}
       onMigrateLegacyDiaryIncome={(date, previousIncome, nextIncome) => {
         if (previousIncome === nextIncome) return;
 
@@ -2063,8 +2081,38 @@ function renderBalanceCheckCard(title = "Kiểm kê số dư hôm nay") {
       navigateTo={navigateTo}
       openCloseDay={() => openCloseDay()}
     />
+    {page !== "home" && (
+      <FloatingHomeButton onClick={() => navigateTo("home", "menu")} />
+    )}
   </>
 )}
     </div>
+  );
+}
+
+function FloatingHomeButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title="Về trang chủ"
+      aria-label="Về trang chủ"
+      className="fixed bottom-24 right-4 z-[60] flex h-14 w-14 items-center justify-center rounded-full bg-slate-900 text-white shadow-xl shadow-slate-900/25 transition hover:bg-slate-700 focus:outline-none focus:ring-4 focus:ring-slate-300 sm:bottom-8"
+    >
+      <svg
+        aria-hidden="true"
+        viewBox="0 0 24 24"
+        className="h-6 w-6"
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="2.4"
+      >
+        <path d="M3 10.5 12 3l9 7.5" />
+        <path d="M5 10v10h14V10" />
+        <path d="M9 20v-6h6v6" />
+      </svg>
+    </button>
   );
 }

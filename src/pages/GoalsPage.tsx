@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import {
   CartesianGrid,
@@ -16,11 +17,12 @@ import type {
   Goals,
   Page,
 } from "../types";
-import { getToday } from "../utils/date";
+import { getDaysLeft, getToday } from "../utils/date";
 import { getExpenseTotal, getTotalEntryMoney } from "../utils/entries";
 import {
   buildSubGoalProgressData,
   getDailyNeedForGoal,
+  getGoalTimeProgress,
   getProgress,
   getSubGoalSaved,
   isGoalBehind,
@@ -50,6 +52,23 @@ type SubGoalContributionForms = Record<
   string,
   { amount: string; note: string }
 >;
+
+const COMPLETED_DETAIL_PAGE_SIZE = 7;
+
+type CompletedDetailPageKey =
+  | "balance"
+  | "contributions"
+  | "balanceChecks"
+  | "expenses"
+  | "entries";
+
+const initialCompletedDetailPages: Record<CompletedDetailPageKey, number> = {
+  balance: 1,
+  contributions: 1,
+  balanceChecks: 1,
+  expenses: 1,
+  entries: 1,
+};
 
 type GoalsPageProps = {
   addContributionToSubGoal: (goalId: string) => void;
@@ -115,6 +134,201 @@ function getTrendClass(status: GoalForecast["trendStatus"]) {
   return "bg-slate-100 text-slate-700";
 }
 
+function getDeadlineStatusLabel(
+  status: GoalForecast["scenarios"][number]["deadlineStatus"]
+) {
+  if (status === "reached") return "Đã đạt";
+  if (status === "onTrack") return "Kịp deadline";
+  if (status === "late") return "Trễ deadline";
+  if (status === "notGrowing") return "Chưa đủ tốc độ";
+  return "Chưa có deadline";
+}
+
+function getDeadlineStatusClass(
+  status: GoalForecast["scenarios"][number]["deadlineStatus"]
+) {
+  if (status === "reached" || status === "onTrack") {
+    return "bg-green-50 text-green-700";
+  }
+
+  if (status === "late" || status === "notGrowing") {
+    return "bg-red-50 text-red-700";
+  }
+
+  return "bg-slate-100 text-slate-700";
+}
+
+function getDeadlineGapText(gap: number | null) {
+  if (gap === null) return "Chưa có deadline";
+  if (gap >= 0) return `Dư ${formatMoney(gap)}/ngày`;
+
+  return `Thiếu ${formatMoney(Math.abs(gap))}/ngày`;
+}
+
+function getDeadlineGapClass(gap: number | null) {
+  if (gap === null) return "bg-slate-100 text-slate-700";
+  return gap >= 0 ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700";
+}
+
+function getPageCount(totalItems: number) {
+  return Math.max(Math.ceil(totalItems / COMPLETED_DETAIL_PAGE_SIZE), 1);
+}
+
+function getPaginatedItems<T>(items: T[], page: number) {
+  const start = (page - 1) * COMPLETED_DETAIL_PAGE_SIZE;
+
+  return items.slice(start, start + COMPLETED_DETAIL_PAGE_SIZE);
+}
+
+function PaginationControls({
+  currentPage,
+  label,
+  onPageChange,
+  totalItems,
+}: {
+  currentPage: number;
+  label: string;
+  onPageChange: (page: number) => void;
+  totalItems: number;
+}) {
+  const totalPages = getPageCount(totalItems);
+
+  if (totalItems <= COMPLETED_DETAIL_PAGE_SIZE) return null;
+
+  return (
+    <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-slate-100 px-3 py-2 text-sm">
+      <p className="font-medium text-slate-600">
+        {label}: trang {currentPage}/{totalPages} · {totalItems} bản ghi
+      </p>
+
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={() => onPageChange(Math.max(currentPage - 1, 1))}
+          disabled={currentPage <= 1}
+          className="rounded-lg bg-white px-3 py-1 font-bold disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          Trước
+        </button>
+        <button
+          type="button"
+          onClick={() => onPageChange(Math.min(currentPage + 1, totalPages))}
+          disabled={currentPage >= totalPages}
+          className="rounded-lg bg-white px-3 py-1 font-bold disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          Sau
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function CompletedGoalMetric({
+  label,
+  tone = "neutral",
+  value,
+}: {
+  label: string;
+  tone?: "neutral" | "good" | "bad";
+  value: string;
+}) {
+  const toneClass =
+    tone === "good"
+      ? "text-green-700"
+      : tone === "bad"
+        ? "text-red-600"
+        : "text-slate-900";
+
+  return (
+    <div className="rounded-lg bg-slate-100 px-3 py-2">
+      <p className="text-xs font-medium text-slate-500">{label}</p>
+      <p className={`mt-0.5 font-bold ${toneClass}`}>{value}</p>
+    </div>
+  );
+}
+
+function CompletedDetailHeader({
+  count,
+  title,
+}: {
+  count: number;
+  title: string;
+}) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2">
+      <h3 className="text-lg font-bold">{title}</h3>
+      <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600">
+        {count} bản ghi
+      </span>
+    </div>
+  );
+}
+
+function CompactNote({ children }: { children: string }) {
+  return (
+    <p className="mt-2 rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600">
+      {children}
+    </p>
+  );
+}
+
+function ForecastPaceCard({
+  pace,
+}: {
+  pace: GoalForecast["paceForecasts"][number];
+}) {
+  return (
+    <article className="rounded-xl border p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 className="font-bold">{pace.label}</h3>
+          <p className="mt-1 text-sm text-slate-500">
+            {pace.fromDate} đến {pace.toDate} · {pace.daysUsed} ngày
+          </p>
+        </div>
+
+        <span
+          className={`rounded-full px-2 py-1 text-xs font-bold ${getDeadlineStatusClass(
+            pace.deadlineStatus
+          )}`}
+        >
+          {getDeadlineStatusLabel(pace.deadlineStatus)}
+        </span>
+      </div>
+
+      <div className="mt-4 grid grid-cols-2 gap-2 text-sm">
+        <div className="rounded-xl bg-slate-100 p-3">
+          <p className="text-slate-500">Ròng / ngày</p>
+          <p className="font-bold">{formatMoney(pace.averagePerDay)}</p>
+        </div>
+
+        <div className={`rounded-xl p-3 ${getDeadlineGapClass(pace.averageGapToDeadline)}`}>
+          <p className="opacity-80">So với deadline</p>
+          <p className="font-bold">{getDeadlineGapText(pace.averageGapToDeadline)}</p>
+        </div>
+
+        <div className="rounded-xl bg-slate-100 p-3">
+          <p className="text-slate-500">Ngày dự kiến</p>
+          <p className="font-bold">{pace.targetDate ?? "Chưa dự đoán"}</p>
+        </div>
+
+        <div className="rounded-xl bg-slate-100 p-3">
+          <p className="text-slate-500">Số ngày cần</p>
+          <p className="font-bold">
+            {pace.daysToTarget === null ? "Không rõ" : `${pace.daysToTarget} ngày`}
+          </p>
+        </div>
+      </div>
+
+      {pace.deadlineDelayDays !== null && (
+        <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-red-600">
+          Nếu giữ tốc độ này sẽ trễ khoảng {pace.deadlineDelayDays} ngày.
+        </p>
+      )}
+    </article>
+  );
+}
+
 export function GoalsPage({
   addContributionToSubGoal,
   addSubGoal,
@@ -163,6 +377,62 @@ export function GoalsPage({
   updateGoal,
   visibleBalanceMovementData,
 }: GoalsPageProps) {
+  const [completedDetailPages, setCompletedDetailPages] = useState(
+    initialCompletedDetailPages
+  );
+
+  function setCompletedDetailPage(
+    key: CompletedDetailPageKey,
+    page: number
+  ) {
+    setCompletedDetailPages((prev) => ({
+      ...prev,
+      [key]: page,
+    }));
+  }
+
+  const completedBalanceSnapshots = [
+    ...(selectedCompletedGoal?.balanceSnapshots ?? []),
+  ].sort((a, b) => b.date.localeCompare(a.date));
+  const completedContributions = [
+    ...(selectedCompletedGoal?.contributionsSnapshot ?? []),
+  ].sort((a, b) => b.date.localeCompare(a.date));
+  const completedBalanceChecks = [
+    ...(selectedCompletedGoal?.balanceChecksSnapshot ?? []),
+  ].sort((a, b) => b.date.localeCompare(a.date));
+  const completedExpenses = [
+    ...(selectedCompletedGoal?.expensesSnapshot ?? []),
+  ].sort((a, b) => b.date.localeCompare(a.date));
+  const completedEntries = [
+    ...(selectedCompletedGoal?.entriesSnapshot ?? []),
+  ].sort((a, b) => b.date.localeCompare(a.date));
+  const paginatedCompletedBalanceSnapshots = getPaginatedItems(
+    completedBalanceSnapshots,
+    completedDetailPages.balance
+  );
+  const paginatedCompletedContributions = getPaginatedItems(
+    completedContributions,
+    completedDetailPages.contributions
+  );
+  const paginatedCompletedBalanceChecks = getPaginatedItems(
+    completedBalanceChecks,
+    completedDetailPages.balanceChecks
+  );
+  const paginatedCompletedExpenses = getPaginatedItems(
+    completedExpenses,
+    completedDetailPages.expenses
+  );
+  const paginatedCompletedEntries = getPaginatedItems(
+    completedEntries,
+    completedDetailPages.entries
+  );
+  const selectedCompletedGoalProgress = selectedCompletedGoal
+    ? getProgress(selectedCompletedGoal.saved, selectedCompletedGoal.target)
+    : 0;
+  const selectedCompletedGoalDifference = selectedCompletedGoal
+    ? selectedCompletedGoal.saved - selectedCompletedGoal.target
+    : 0;
+
   return (
 
   <>
@@ -174,13 +444,6 @@ export function GoalsPage({
         </p>
       </div>
 
-      <button
-        type="button"
-        onClick={() => navigateTo("home", "menu")}
-        className="rounded-xl border bg-white px-4 py-2 font-medium shadow-sm hover:bg-slate-100"
-      >
-        Về trang chủ
-      </button>
     </div>
 
     {goalScreen === "subGoals" && (
@@ -437,6 +700,35 @@ export function GoalsPage({
         const behind = isGoalBehind(goal);
 
         const progressData = buildSubGoalProgressData(goal);
+        const sortedContributions = [...goal.contributions].sort((a, b) => {
+          const dateCompare = b.date.localeCompare(a.date);
+          if (dateCompare !== 0) return dateCompare;
+
+          return (b.createdAt ?? "").localeCompare(a.createdAt ?? "");
+        });
+        const totalContributed = Math.max(currentSaved - goal.saved, 0);
+        const contributionCount = goal.contributions.length;
+        const averageContribution =
+          contributionCount > 0
+            ? Math.round(totalContributed / contributionCount)
+            : 0;
+        const subGoalDaysLeft = getDaysLeft(goal.deadline);
+        const timeProgress = getGoalTimeProgress(goal.startDate, goal.deadline);
+        const expectedMoneyByTime = Math.round(
+          goal.target * (timeProgress / 100)
+        );
+        const paceGap = currentSaved - expectedMoneyByTime;
+        const nextMilestone = [25, 50, 75, 100].find(
+          (milestone) => progress < milestone
+        );
+        const nextMilestoneAmount = nextMilestone
+          ? Math.ceil(goal.target * (nextMilestone / 100))
+          : goal.target;
+        const missingToNextMilestone = Math.max(
+          nextMilestoneAmount - currentSaved,
+          0
+        );
+        const lastContribution = sortedContributions[0];
 
 
 
@@ -580,6 +872,69 @@ export function GoalsPage({
 
             </div>
 
+            <div className="mt-3 grid grid-cols-2 gap-3 lg:grid-cols-4">
+              <div className="rounded-xl bg-slate-100 p-3">
+                <p className="text-sm text-slate-500">Đã góp thêm</p>
+                <p className="font-bold">{formatMoney(totalContributed)}</p>
+              </div>
+
+              <div className="rounded-xl bg-slate-100 p-3">
+                <p className="text-sm text-slate-500">Số lần góp</p>
+                <p className="font-bold">{contributionCount} lần</p>
+              </div>
+
+              <div className="rounded-xl bg-slate-100 p-3">
+                <p className="text-sm text-slate-500">TB mỗi lần góp</p>
+                <p className="font-bold">{formatMoney(averageContribution)}</p>
+              </div>
+
+              <div className="rounded-xl bg-slate-100 p-3">
+                <p className="text-sm text-slate-500">Còn lại</p>
+                <p className="font-bold">{subGoalDaysLeft} ngày</p>
+              </div>
+
+              <div className="rounded-xl bg-slate-100 p-3">
+                <p className="text-sm text-slate-500">Tiến độ thời gian</p>
+                <p className="font-bold">{timeProgress}%</p>
+              </div>
+
+              <div
+                className={`rounded-xl p-3 ${
+                  paceGap >= 0 ? "bg-green-50" : "bg-red-50"
+                }`}
+              >
+                <p className="text-sm opacity-80">So với tiến độ</p>
+                <p className="font-bold">
+                  {paceGap >= 0 ? "Dư" : "Thiếu"}{" "}
+                  {formatMoney(Math.abs(paceGap))}
+                </p>
+              </div>
+
+              <div className="rounded-xl bg-slate-100 p-3">
+                <p className="text-sm text-slate-500">Mốc kế tiếp</p>
+                <p className="font-bold">
+                  {nextMilestone ? `${nextMilestone}%` : "Đã đủ"}
+                </p>
+              </div>
+
+              <div className="rounded-xl bg-slate-100 p-3">
+                <p className="text-sm text-slate-500">Cần tới mốc</p>
+                <p className="font-bold">
+                  {formatMoney(missingToNextMilestone)}
+                </p>
+              </div>
+            </div>
+
+            {lastContribution && (
+              <div className="mt-3 rounded-xl bg-slate-50 p-3 text-sm">
+                <p className="font-bold">Lần góp gần nhất</p>
+                <p className="mt-1 text-slate-600">
+                  {lastContribution.date} · {formatMoney(lastContribution.amount)}
+                  {lastContribution.note ? ` · ${lastContribution.note}` : ""}
+                </p>
+              </div>
+            )}
+
 
 
             <div className="mt-4">
@@ -593,6 +948,34 @@ export function GoalsPage({
               </p>
 
             </div>
+
+            {sortedContributions.length > 0 && (
+              <div className="mt-4 rounded-xl border p-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h4 className="font-bold">Lịch sử góp gần đây</h4>
+                  <span className="text-sm text-slate-500">
+                    {sortedContributions.length} bản ghi
+                  </span>
+                </div>
+
+                <div className="mt-3 grid gap-2">
+                  {sortedContributions.slice(0, 5).map((item) => (
+                    <div
+                      key={item.id}
+                      className="flex flex-wrap items-start justify-between gap-3 rounded-lg bg-slate-100 p-3 text-sm"
+                    >
+                      <div>
+                        <p className="font-bold">{item.date}</p>
+                        {item.note && (
+                          <p className="mt-1 text-slate-500">{item.note}</p>
+                        )}
+                      </div>
+                      <p className="font-bold">{formatMoney(item.amount)}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
 
 
@@ -1036,6 +1419,14 @@ export function GoalsPage({
 
     {goalScreen === "current" && (
       <>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <h2 className="text-2xl font-bold">Mục tiêu chính</h2>
+          <p className="text-sm text-slate-500">
+            Quản lý mục tiêu chính, mục tiêu ngày, tuần và tháng.
+          </p>
+      </div>
+
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
@@ -1052,6 +1443,7 @@ export function GoalsPage({
           >
             Hoàn thành mục tiêu
           </button>
+        </div>
         </div>
 
         <section className="grid gap-6 lg:grid-cols-3">
@@ -1453,6 +1845,62 @@ export function GoalsPage({
           </div>
 
           <div className="mt-4 grid gap-3 md:grid-cols-3">
+            <div className="rounded-xl bg-slate-900 p-4 text-white">
+              <p className="text-sm text-slate-300">
+                Tốc độ cần để kịp deadline
+              </p>
+              <p className="mt-1 text-2xl font-black">
+                {goalForecast.requiredAveragePerDay === null
+                  ? "Chưa có"
+                  : formatMoney(goalForecast.requiredAveragePerDay)}
+              </p>
+              <p className="mt-1 text-xs text-slate-300">
+                Còn {goalForecast.deadlineDaysLeft ?? 0} ngày đến deadline.
+              </p>
+            </div>
+
+            <div
+              className={`rounded-xl p-4 ${getDeadlineGapClass(
+                goalForecast.dailyGapToDeadline
+              )}`}
+            >
+              <p className="text-sm opacity-80">Tốc độ 7 ngày so với deadline</p>
+              <p className="mt-1 text-2xl font-black">
+                {getDeadlineGapText(goalForecast.dailyGapToDeadline)}
+              </p>
+              <p className="mt-1 text-xs opacity-80">
+                Dùng tốc độ 7 ngày gần nhất làm tốc độ hiện tại.
+              </p>
+            </div>
+
+            <div className="rounded-xl bg-slate-100 p-4">
+              <p className="text-sm text-slate-500">Tốc độ thực tế đã cân bằng</p>
+              <p className="mt-1 text-2xl font-black">
+                {formatMoney(goalForecast.realisticAveragePerDay)}
+              </p>
+              <p className="mt-1 text-xs text-slate-500">
+                Kết hợp 7 ngày, 30 ngày và khoảng bạn đang chọn.
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-4 grid gap-3 lg:grid-cols-2">
+            {goalForecast.paceForecasts.map((pace) => (
+              <ForecastPaceCard key={pace.id} pace={pace} />
+            ))}
+          </div>
+
+          <div className="mt-5">
+            <h3 className="text-lg font-bold">
+              Kịch bản thận trọng / thực tế / tốt
+            </h3>
+            <p className="mt-1 text-sm text-slate-500">
+              App dùng các tốc độ gần đây để ước lượng ngày đạt mục tiêu trong
+              từng kịch bản.
+            </p>
+          </div>
+
+          <div className="mt-4 grid gap-3 md:grid-cols-3">
             {goalForecast.scenarios.map((scenario) => (
               <article key={scenario.id} className="rounded-xl border p-4">
                 <div className="flex items-start justify-between gap-3">
@@ -1463,11 +1911,13 @@ export function GoalsPage({
                     </p>
                   </div>
 
-                  {scenario.deadlineDelayDays !== null && (
-                    <span className="rounded-full bg-red-50 px-2 py-1 text-xs font-bold text-red-600">
-                      Trễ {scenario.deadlineDelayDays} ngày
-                    </span>
-                  )}
+                  <span
+                    className={`rounded-full px-2 py-1 text-xs font-bold ${getDeadlineStatusClass(
+                      scenario.deadlineStatus
+                    )}`}
+                  >
+                    {getDeadlineStatusLabel(scenario.deadlineStatus)}
+                  </span>
                 </div>
 
                 <p className="mt-3 text-sm">
@@ -1478,6 +1928,11 @@ export function GoalsPage({
                 {scenario.daysToTarget !== null && (
                   <p className="mt-1 text-sm text-slate-500">
                     Cần khoảng {scenario.daysToTarget} ngày.
+                  </p>
+                )}
+                {scenario.deadlineDelayDays !== null && (
+                  <p className="mt-2 text-sm font-bold text-red-600">
+                    Trễ deadline khoảng {scenario.deadlineDelayDays} ngày.
                   </p>
                 )}
               </article>
@@ -1542,8 +1997,8 @@ export function GoalsPage({
                 </p>
                 <p className="mt-1 text-sm">
                   Cần khoảng {goalForecast.daysToTarget} ngày nữa nếu giữ tốc
-                  độ trung bình {formatMoney(goalForecast.averagePerDay)} mỗi
-                  ngày.
+                  độ thực tế {formatMoney(goalForecast.realisticAveragePerDay)}
+                  mỗi ngày.
                 </p>
                 {goalForecast.targetDate &&
                   goals.bigGoalDeadline &&
@@ -1632,6 +2087,14 @@ export function GoalsPage({
 
     {goalScreen === "completed" && (
       <>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="text-2xl font-bold">Các mục tiêu đã hoàn thành</h2>
+          <p className="text-sm text-slate-500">
+            Xem lại các mục tiêu cũ và lịch sử biến động tiền.
+          </p>
+        </div>
+
         <div>
           <button
             type="button"
@@ -1641,70 +2104,108 @@ export function GoalsPage({
             Quay lại
           </button>
         </div>
+      </div>
 
-        <section className="rounded-2xl bg-white p-5 shadow-sm">
-          <h2 className="text-xl font-bold">Các mục tiêu đã hoàn thành</h2>
+        <section className="rounded-2xl bg-white p-4 shadow-sm sm:p-5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-xl font-bold">Các mục tiêu đã hoàn thành</h2>
+              <p className="text-sm text-slate-500">
+                Danh sách rút gọn để xem nhanh mục tiêu, số tiền đạt được và
+                deadline.
+              </p>
+            </div>
+            <span className="rounded-full bg-slate-100 px-3 py-1 text-sm font-bold text-slate-600">
+              {completedGoals.length} mục tiêu
+            </span>
+          </div>
 
           {completedGoals.length === 0 ? (
             <p className="mt-4 text-slate-500">
               Bạn chưa hoàn thành mục tiêu nào.
             </p>
           ) : (
-            <div className="mt-4 grid gap-3">
-              {completedGoals.map((goal) => (
-                <article key={goal.id} className="rounded-xl border p-4">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <h3 className="font-bold">{goal.name}</h3>
-                      <p className="mt-1 text-sm text-slate-500">
-                        Hoàn thành ngày: {goal.completedAt}
-                      </p>
+            <div className="mt-4 divide-y rounded-xl border">
+              {completedGoals.map((goal) => {
+                const progress = getProgress(goal.saved, goal.target);
+                const difference = goal.saved - goal.target;
+
+                return (
+                  <article key={goal.id} className="p-4">
+                    <div className="grid gap-3 lg:grid-cols-[minmax(220px,1fr)_auto] lg:items-center">
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="font-bold">{goal.name}</h3>
+                          <span className="rounded-full bg-green-50 px-2 py-0.5 text-xs font-bold text-green-700">
+                            Đã hoàn thành
+                          </span>
+                          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-bold text-slate-600">
+                            {goal.goalType === "sub"
+                              ? "Mục tiêu phụ"
+                              : "Mục tiêu chính"}
+                          </span>
+                        </div>
+
+                        <p className="mt-1 text-sm text-slate-500">
+                          Hoàn thành {goal.completedAt} · Deadline{" "}
+                          {goal.deadline}
+                        </p>
+
+                        <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100">
+                          <div
+                            className="h-full rounded-full bg-green-500"
+                            style={{ width: `${progress}%` }}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap gap-2 lg:justify-end">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCompletedDetailPages(initialCompletedDetailPages);
+                            setSelectedCompletedGoalId(goal.id);
+                            navigateTo("goals", "completedDetail");
+                          }}
+                          className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-bold text-white hover:bg-slate-700"
+                        >
+                          Chi tiết
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => deleteCompletedGoal(goal.id)}
+                          className="rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-red-600 hover:bg-red-100"
+                        >
+                          Xóa
+                        </button>
+                      </div>
                     </div>
 
-                    <div className="flex flex-wrap gap-2">
-                      <span className="rounded-full bg-green-50 px-3 py-1 text-sm font-medium text-green-700">
-                        Đã hoàn thành
-                      </span>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSelectedCompletedGoalId(goal.id);
-                          navigateTo("goals", "completedDetail");
-                        }}
-                        className="rounded-full bg-slate-100 px-3 py-1 text-sm font-medium hover:bg-slate-200"
-                      >
-                        Xem chi tiết
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => deleteCompletedGoal(goal.id)}
-                        className="rounded-full bg-red-50 px-3 py-1 text-sm font-medium text-red-600 hover:bg-red-100"
-                      >
-                        Xóa
-                      </button>
+                    <div className="mt-3 grid grid-cols-2 gap-2 text-sm lg:grid-cols-4">
+                      <CompletedGoalMetric
+                        label="Mục tiêu"
+                        value={formatMoney(goal.target)}
+                      />
+                      <CompletedGoalMetric
+                        label="Đã đạt"
+                        value={formatMoney(goal.saved)}
+                      />
+                      <CompletedGoalMetric
+                        label="Chênh lệch"
+                        value={`${difference >= 0 ? "+" : "-"}${formatMoney(
+                          Math.abs(difference)
+                        )}`}
+                        tone={difference >= 0 ? "good" : "bad"}
+                      />
+                      <CompletedGoalMetric
+                        label="Tiến độ"
+                        value={`${progress}%`}
+                      />
                     </div>
-                  </div>
-
-                  <div className="mt-4 grid gap-3 text-sm md:grid-cols-3">
-                    <div className="rounded-xl bg-slate-100 p-3">
-                      <p className="text-slate-500">Mục tiêu</p>
-                      <p className="font-bold">{formatMoney(goal.target)}</p>
-                    </div>
-
-                    <div className="rounded-xl bg-slate-100 p-3">
-                      <p className="text-slate-500">Đã có khi hoàn thành</p>
-                      <p className="font-bold">{formatMoney(goal.saved)}</p>
-                    </div>
-
-                    <div className="rounded-xl bg-slate-100 p-3">
-                      <p className="text-slate-500">Hạn mục tiêu</p>
-                      <p className="font-bold">{goal.deadline}</p>
-                    </div>
-                  </div>
-                </article>
-              ))}
+                  </article>
+                );
+              })}
             </div>
           )}
         </section>
@@ -1752,60 +2253,101 @@ export function GoalsPage({
           </button>
         </div>
 
-        <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          <div className="rounded-2xl bg-white p-4 shadow-sm">
-            <p className="text-sm text-slate-500">Mục tiêu</p>
-            <p className="mt-1 text-lg font-bold">
-              {formatMoney(selectedCompletedGoal.target)}
-            </p>
+        <section className="rounded-2xl bg-white p-4 shadow-sm sm:p-5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 className="text-xl font-bold">Tổng quan</h3>
+              <p className="text-sm text-slate-500">
+                Các số liệu chính của mục tiêu đã hoàn thành.
+              </p>
+            </div>
+            <span className="rounded-full bg-green-50 px-3 py-1 text-sm font-bold text-green-700">
+              {selectedCompletedGoal.goalType === "sub"
+                ? "Mục tiêu phụ"
+                : "Mục tiêu chính"}
+            </span>
           </div>
 
-          <div className="rounded-2xl bg-white p-4 shadow-sm">
-            <p className="text-sm text-slate-500">Đã đạt</p>
-            <p className="mt-1 text-lg font-bold">
-              {formatMoney(selectedCompletedGoal.saved)}
-            </p>
+          <div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-100">
+            <div
+              className="h-full rounded-full bg-green-500"
+              style={{ width: `${selectedCompletedGoalProgress}%` }}
+            />
           </div>
 
-          <div className="rounded-2xl bg-white p-4 shadow-sm">
-            <p className="text-sm text-slate-500">Deadline</p>
-            <p className="mt-1 text-lg font-bold">
-              {selectedCompletedGoal.deadline}
-            </p>
-          </div>
-
-          <div className="rounded-2xl bg-white p-4 shadow-sm">
-            <p className="text-sm text-slate-500">Ngày hoàn thành</p>
-            <p className="mt-1 text-lg font-bold">
-              {selectedCompletedGoal.completedAt}
-            </p>
+          <div className="mt-4 grid grid-cols-2 gap-2 lg:grid-cols-4">
+            <CompletedGoalMetric
+              label="Mục tiêu"
+              value={formatMoney(selectedCompletedGoal.target)}
+            />
+            <CompletedGoalMetric
+              label="Đã đạt"
+              value={formatMoney(selectedCompletedGoal.saved)}
+            />
+            <CompletedGoalMetric
+              label="Chênh lệch"
+              value={`${
+                selectedCompletedGoalDifference >= 0 ? "+" : "-"
+              }${formatMoney(Math.abs(selectedCompletedGoalDifference))}`}
+              tone={selectedCompletedGoalDifference >= 0 ? "good" : "bad"}
+            />
+            <CompletedGoalMetric
+              label="Tiến độ"
+              value={`${selectedCompletedGoalProgress}%`}
+            />
+            <CompletedGoalMetric
+              label="Deadline"
+              value={selectedCompletedGoal.deadline}
+            />
+            <CompletedGoalMetric
+              label="Hoàn thành"
+              value={selectedCompletedGoal.completedAt}
+            />
+            <CompletedGoalMetric
+              label="Tổng thu"
+              value={formatMoney(selectedCompletedGoal.totalIncome ?? 0)}
+            />
+            <CompletedGoalMetric
+              label="Tổng chi"
+              value={formatMoney(selectedCompletedGoal.totalExpense ?? 0)}
+            />
+            <CompletedGoalMetric
+              label="Tiền thực tế"
+              value={formatMoney(selectedCompletedGoal.actualMoney ?? 0)}
+            />
+            <CompletedGoalMetric
+              label="Tổng hành trình"
+              value={formatMoney(selectedCompletedGoal.totalJourneyMoney ?? 0)}
+            />
+            <CompletedGoalMetric
+              label="Tổng giờ"
+              value={`${selectedCompletedGoal.totalHours ?? 0} giờ`}
+            />
+            <CompletedGoalMetric
+              label="Tổng đơn"
+              value={`${selectedCompletedGoal.totalOrders ?? 0} đơn`}
+            />
           </div>
         </section>
 
-        <section className="rounded-2xl bg-white p-5 shadow-sm">
-          <h3 className="text-xl font-bold">
-            Biến động tiền của mục tiêu này
-          </h3>
-
-          <p className="mt-1 text-sm text-slate-500">
-            Gồm tổng tiền và tiền thực tế hiện có trong thời gian thực hiện mục
-            tiêu.
-          </p>
-
-          {!selectedCompletedGoal.balanceSnapshots ||
-          selectedCompletedGoal.balanceSnapshots.length === 0 ? (
-            <p className="mt-4 rounded-xl bg-slate-100 p-4 text-sm text-slate-500">
-              Mục tiêu này chưa có dữ liệu biến động tiền. Những mục tiêu hoàn
-              thành trước khi thêm chức năng này có thể sẽ không có biểu đồ.
+        {completedBalanceSnapshots.length > 0 && (
+          <section className="rounded-2xl bg-white p-4 shadow-sm sm:p-5">
+            <CompletedDetailHeader
+              count={completedBalanceSnapshots.length}
+              title="Biểu đồ biến động"
+            />
+            <p className="mt-1 text-sm text-slate-500">
+              Tổng tiền và tiền thực tế trong thời gian thực hiện mục tiêu.
             </p>
-          ) : (
             <div className="mt-4 h-72">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart
-                  data={selectedCompletedGoal.balanceSnapshots.map((item: BalanceSnapshot) => ({
-                    ...item,
-                    label: item.date.slice(5),
-                  }))}
+                  data={[...completedBalanceSnapshots]
+                    .reverse()
+                    .map((item: BalanceSnapshot) => ({
+                      ...item,
+                      label: item.date.slice(5),
+                    }))}
                 >
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="label" />
@@ -1828,8 +2370,8 @@ export function GoalsPage({
                 </LineChart>
               </ResponsiveContainer>
             </div>
-          )}
-        </section>
+          </section>
+        )}
 
         {selectedCompletedGoal.goalProgressSnapshots &&
           selectedCompletedGoal.goalProgressSnapshots.length > 0 && (
@@ -1865,198 +2407,191 @@ export function GoalsPage({
             </section>
           )}
 
-          {selectedCompletedGoal.contributionsSnapshot &&
-  selectedCompletedGoal.contributionsSnapshot.length > 0 && (
-    <section className="rounded-2xl bg-white p-5 shadow-sm">
-      <h3 className="text-xl font-bold">Lịch sử góp tiền</h3>
+          {completedContributions.length > 0 && (
+    <section className="rounded-2xl bg-white p-4 shadow-sm sm:p-5">
+      <CompletedDetailHeader
+        count={completedContributions.length}
+        title="Lịch sử góp tiền"
+      />
 
-      <div className="mt-4 grid gap-3">
-        {selectedCompletedGoal.contributionsSnapshot.map((item) => (
-          <article key={item.id} className="rounded-xl border p-4">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <h4 className="font-bold">{item.date}</h4>
-                <p className="text-sm text-slate-500">
-                  Góp: {formatMoney(item.amount)}
-                </p>
-              </div>
-            </div>
-
-            {item.note && (
-              <p className="mt-3 rounded-lg bg-slate-100 p-3 text-sm text-slate-700">
-                {item.note}
-              </p>
-            )}
-          </article>
+      <div className="mt-3 overflow-hidden rounded-xl border">
+        {paginatedCompletedContributions.map((item) => (
+          <div
+            key={item.id}
+            className="grid gap-2 border-b p-3 text-sm last:border-b-0 sm:grid-cols-[120px_1fr_auto] sm:items-center"
+          >
+            <p className="font-bold">{item.date}</p>
+            <p className="text-slate-500">{item.note || "Không có ghi chú"}</p>
+            <p className="font-black text-green-700">
+              {formatMoney(item.amount)}
+            </p>
+          </div>
         ))}
       </div>
+      <PaginationControls
+        currentPage={completedDetailPages.contributions}
+        label="Lịch sử góp tiền"
+        onPageChange={(page) =>
+          setCompletedDetailPage("contributions", page)
+        }
+        totalItems={completedContributions.length}
+      />
     </section>
   )}
 
-        <section className="grid grid-cols-2 gap-3 lg:grid-cols-6">
-  <div className="rounded-2xl bg-white p-4 shadow-sm">
-    <p className="text-sm text-slate-500">Tổng thu</p>
-    <p className="mt-1 text-lg font-bold">
-      {formatMoney(selectedCompletedGoal.totalIncome ?? 0)}
-    </p>
-  </div>
+        {completedBalanceSnapshots.length > 0 && (
+          <section className="rounded-2xl bg-white p-4 shadow-sm sm:p-5">
+            <CompletedDetailHeader
+              count={completedBalanceSnapshots.length}
+              title="Chi tiết từng ngày"
+            />
 
-  <div className="rounded-2xl bg-white p-4 shadow-sm">
-    <p className="text-sm text-slate-500">Tổng chi</p>
-    <p className="mt-1 text-lg font-bold">
-      {formatMoney(selectedCompletedGoal.totalExpense ?? 0)}
-    </p>
-  </div>
-
-  <div className="rounded-2xl bg-white p-4 shadow-sm">
-    <p className="text-sm text-slate-500">Tiền thực tế</p>
-    <p className="mt-1 text-lg font-bold">
-      {formatMoney(selectedCompletedGoal.actualMoney ?? 0)}
-    </p>
-  </div>
-
-  <div className="rounded-2xl bg-white p-4 shadow-sm">
-    <p className="text-sm text-slate-500">Tổng hành trình</p>
-    <p className="mt-1 text-lg font-bold">
-      {formatMoney(selectedCompletedGoal.totalJourneyMoney ?? 0)}
-    </p>
-  </div>
-
-  <div className="rounded-2xl bg-white p-4 shadow-sm">
-    <p className="text-sm text-slate-500">Tổng giờ</p>
-    <p className="mt-1 text-lg font-bold">
-      {selectedCompletedGoal.totalHours ?? 0} giờ
-    </p>
-  </div>
-
-  <div className="rounded-2xl bg-white p-4 shadow-sm">
-    <p className="text-sm text-slate-500">Tổng đơn</p>
-    <p className="mt-1 text-lg font-bold">
-      {selectedCompletedGoal.totalOrders ?? 0} đơn
-    </p>
-  </div>
-</section>
-
-        {selectedCompletedGoal.balanceSnapshots &&
-        selectedCompletedGoal.balanceSnapshots.length > 0 && (
-          <section className="rounded-2xl bg-white p-5 shadow-sm">
-            <h3 className="text-xl font-bold">Chi tiết từng ngày</h3>
-
-            <div className="mt-4 grid gap-3">
-              {selectedCompletedGoal.balanceSnapshots.map((item: BalanceSnapshot) => (
-                <article
+            <div className="mt-3 overflow-hidden rounded-xl border text-sm">
+              {paginatedCompletedBalanceSnapshots.map((item: BalanceSnapshot) => (
+                <div
                   key={item.date}
-                  className="rounded-xl border p-4"
+                  className="grid gap-2 border-b p-3 last:border-b-0 lg:grid-cols-[110px_1fr_1fr_1fr] lg:items-center"
                 >
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                      <h4 className="font-bold">{item.date}</h4>
-                      <p className="text-sm text-slate-500">
-                        Thu: {formatMoney(item.income)} · Chi:{" "}
-                        {formatMoney(item.expense)}
-                      </p>
-                    </div>
-                  </div>
+                  <p className="font-bold">{item.date}</p>
+                  <p className="text-slate-500">
+                    Thu {formatMoney(item.income)} · Chi{" "}
+                    {formatMoney(item.expense)}
+                  </p>
+                  <p>
+                    <span className="text-slate-500">Tổng tiền: </span>
+                    <strong>{formatMoney(item.totalMoney)}</strong>
+                  </p>
+                  <p>
+                    <span className="text-slate-500">Thực tế: </span>
+                    <strong>{formatMoney(item.actualMoney)}</strong>
+                  </p>
+                </div>
+              ))}
+            </div>
+            <PaginationControls
+              currentPage={completedDetailPages.balance}
+              label="Chi tiết từng ngày"
+              onPageChange={(page) => setCompletedDetailPage("balance", page)}
+              totalItems={completedBalanceSnapshots.length}
+            />
+          </section>
+        )}
 
-                  <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
-                    <div className="rounded-xl bg-slate-100 p-3">
-                      <p className="text-slate-500">Tổng tiền</p>
-                      <p className="font-bold">{formatMoney(item.totalMoney)}</p>
-                    </div>
+        {completedBalanceChecks.length > 0 && (
+          <section className="rounded-2xl bg-white p-4 shadow-sm sm:p-5">
+            <CompletedDetailHeader
+              count={completedBalanceChecks.length}
+              title="Kiểm kê trong mục tiêu này"
+            />
 
-                    <div className="rounded-xl bg-slate-100 p-3">
-                      <p className="text-slate-500">Tiền thực tế</p>
-                      <p className="font-bold">{formatMoney(item.actualMoney)}</p>
-                    </div>
+            <div className="mt-3 overflow-hidden rounded-xl border">
+              {paginatedCompletedBalanceChecks.map((item) => (
+                <article key={item.id} className="border-b p-3 last:border-b-0">
+                  <div className="grid gap-2 text-sm lg:grid-cols-[110px_1fr_auto] lg:items-center">
+                    <p className="font-bold">{item.date}</p>
+                    <p className="text-slate-500">
+                      Mặt {formatMoney(item.cash)} · TK {formatMoney(item.bank)} ·
+                      App {formatMoney(item.appMoney)} · Thực tế{" "}
+                      {formatMoney(item.actualMoney)}
+                    </p>
+                    <p
+                      className={`font-bold ${
+                        item.difference < 0 ? "text-red-600" : "text-green-700"
+                      }`}
+                    >
+                      Lệch {formatMoney(item.difference)}
+                    </p>
                   </div>
+                  {item.note && <CompactNote>{item.note}</CompactNote>}
                 </article>
               ))}
             </div>
+            <PaginationControls
+              currentPage={completedDetailPages.balanceChecks}
+              label="Kiểm kê"
+              onPageChange={(page) =>
+                setCompletedDetailPage("balanceChecks", page)
+              }
+              totalItems={completedBalanceChecks.length}
+            />
           </section>
         )}
   
-  {selectedCompletedGoal.expensesSnapshot &&
-  selectedCompletedGoal.expensesSnapshot.length > 0 && (
-    <section className="rounded-2xl bg-white p-5 shadow-sm">
-      <h3 className="text-xl font-bold">Chi tiêu trong mục tiêu này</h3>
+  {completedExpenses.length > 0 && (
+    <section className="rounded-2xl bg-white p-4 shadow-sm sm:p-5">
+      <CompletedDetailHeader
+        count={completedExpenses.length}
+        title="Chi tiêu trong mục tiêu này"
+      />
 
-      <div className="mt-4 grid gap-3">
-        {selectedCompletedGoal.expensesSnapshot.map((expense) => {
+      <div className="mt-3 overflow-hidden rounded-xl border">
+        {paginatedCompletedExpenses.map((expense) => {
           const total = getExpenseTotal(expense);
 
           return (
-            <article key={expense.id} className="rounded-xl border p-4">
-              <div>
-                <h4 className="font-bold">{expense.date}</h4>
-                <p className="text-sm text-slate-500">
-                  Tổng chi: {formatMoney(total)}
+            <article key={expense.id} className="border-b p-3 last:border-b-0">
+              <div className="grid gap-2 text-sm lg:grid-cols-[110px_1fr_auto] lg:items-center">
+                <p className="font-bold">{expense.date}</p>
+                <p className="text-slate-500">
+                  Sáng {formatMoney(expense.breakfast)} · Trưa{" "}
+                  {formatMoney(expense.lunch)} · Tối{" "}
+                  {formatMoney(expense.dinner)} ·{" "}
+                  {expense.otherLabel ? `Khác (${expense.otherLabel})` : "Khác"}{" "}
+                  {formatMoney(expense.other)}
+                </p>
+                <p className="font-black text-red-600">
+                  {formatMoney(total)}
                 </p>
               </div>
 
-              <div className="mt-3 grid grid-cols-2 gap-2 text-sm lg:grid-cols-4">
-                <div className="rounded-xl bg-slate-100 p-3">
-                  <p className="text-slate-500">Sáng</p>
-                  <p className="font-bold">{formatMoney(expense.breakfast)}</p>
-                </div>
-
-                <div className="rounded-xl bg-slate-100 p-3">
-                  <p className="text-slate-500">Trưa</p>
-                  <p className="font-bold">{formatMoney(expense.lunch)}</p>
-                </div>
-
-                <div className="rounded-xl bg-slate-100 p-3">
-                  <p className="text-slate-500">Tối</p>
-                  <p className="font-bold">{formatMoney(expense.dinner)}</p>
-                </div>
-
-                <div className="rounded-xl bg-slate-100 p-3">
-                  <p className="text-slate-500">Khác</p>
-                  <p className="font-bold">{formatMoney(expense.other)}</p>
-                </div>
-              </div>
-
-              {expense.note && (
-                <p className="mt-3 rounded-lg bg-slate-100 p-3 text-sm text-slate-700">
-                  {expense.note}
-                </p>
-              )}
+              {expense.note && <CompactNote>{expense.note}</CompactNote>}
             </article>
           );
         })}
       </div>
+      <PaginationControls
+        currentPage={completedDetailPages.expenses}
+        label="Chi tiêu"
+        onPageChange={(page) => setCompletedDetailPage("expenses", page)}
+        totalItems={completedExpenses.length}
+      />
     </section>
   )}
 
-  {selectedCompletedGoal.entriesSnapshot &&
-  selectedCompletedGoal.entriesSnapshot.length > 0 && (
-    <section className="rounded-2xl bg-white p-5 shadow-sm">
-      <h3 className="text-xl font-bold">Nhật ký trong mục tiêu này</h3>
+  {completedEntries.length > 0 && (
+    <section className="rounded-2xl bg-white p-4 shadow-sm sm:p-5">
+      <CompletedDetailHeader
+        count={completedEntries.length}
+        title="Nhật ký trong mục tiêu này"
+      />
 
-      <div className="mt-4 grid gap-3">
-        {selectedCompletedGoal.entriesSnapshot.map((entry) => (
-          <article key={entry.id} className="rounded-xl border p-4">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <h4 className="font-bold">{entry.date}</h4>
-                <p className="text-sm text-slate-500">
-                  Thu: {formatMoney(getTotalEntryMoney(entry))} ·{" "}
-                  {entry.workHours} giờ · {entry.orderCount ?? 0} đơn
-                </p>
-              </div>
+      <div className="mt-3 overflow-hidden rounded-xl border">
+        {paginatedCompletedEntries.map((entry) => (
+          <article key={entry.id} className="border-b p-3 last:border-b-0">
+            <div className="grid gap-2 text-sm lg:grid-cols-[110px_1fr] lg:items-center">
+              <p className="font-bold">{entry.date}</p>
+              <p className="text-slate-500">
+                Thu {formatMoney(getTotalEntryMoney(entry))} ·{" "}
+                {entry.workHours} giờ · {entry.orderCount ?? 0} đơn
+              </p>
             </div>
 
             {entry.diary && (
-              <p className="mt-3 whitespace-pre-line text-sm">{entry.diary}</p>
-            )}
-
-            {entry.note && (
-              <p className="mt-2 rounded-lg bg-slate-100 p-3 text-sm text-slate-700">
-                {entry.note}
+              <p className="mt-2 whitespace-pre-line text-sm text-slate-700">
+                {entry.diary}
               </p>
             )}
+
+            {entry.note && <CompactNote>{entry.note}</CompactNote>}
           </article>
         ))}
       </div>
+      <PaginationControls
+        currentPage={completedDetailPages.entries}
+        label="Nhật ký"
+        onPageChange={(page) => setCompletedDetailPage("entries", page)}
+        totalItems={completedEntries.length}
+      />
     </section>
   )}
       </>

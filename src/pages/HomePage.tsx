@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import type { RefObject, ReactNode } from "react";
 import { AiFinanceInsight } from "../components/AiFinanceInsight";
 import { DataWarningsPanel } from "../components/DataWarningsPanel";
@@ -87,7 +88,7 @@ export function HomePage({
   dataWarnings,
   goToTodayEntryForm,
   goToTodayBalanceCheck,
-  // openCloseDay,
+  openCloseDay,
   onDataWarningAction,
   selectedActualIncome,
   selectedMainIncome,
@@ -103,6 +104,28 @@ export function HomePage({
   renderBalanceCheckCard,
   navigateTo,
 }: HomePageProps) {
+  const missingTodayItems = [
+    !todayEntry ? "ca Hub/nhật ký" : "",
+    !todayExpense ? "chi tiêu" : "",
+    !todayBalanceCheck ? "kiểm kê" : "",
+  ].filter(Boolean);
+  const shouldShowEndOfDayReminder =
+    isSelectedToday && new Date().getHours() >= 18 && missingTodayItems.length > 0;
+
+  useEffect(() => {
+    if (!shouldShowEndOfDayReminder) return;
+    if (!("Notification" in window)) return;
+    if (Notification.permission !== "granted") return;
+
+    const storageKey = `money-diary-end-day-reminder-${todayString}`;
+    if (localStorage.getItem(storageKey)) return;
+
+    new Notification("Nhắc chốt ngày", {
+      body: `Bạn còn thiếu: ${missingTodayItems.join(", ")}.`,
+    });
+    localStorage.setItem(storageKey, "1");
+  }, [missingTodayItems, shouldShowEndOfDayReminder, todayString]);
+
   return (
     <>
       <section className="grid gap-4">
@@ -312,6 +335,13 @@ export function HomePage({
           onAction={onDataWarningAction}
         />
 
+        {shouldShowEndOfDayReminder && (
+          <EndOfDayReminder
+            missingItems={missingTodayItems}
+            onCloseDay={openCloseDay}
+          />
+        )}
+
         <div ref={balanceCheckSectionRef}>
           {renderBalanceCheckCard("Kiểm kê số dư hôm nay")}
         </div>
@@ -361,6 +391,53 @@ export function HomePage({
         />
       </section> */}
     </>
+  );
+}
+
+function EndOfDayReminder({
+  missingItems,
+  onCloseDay,
+}: {
+  missingItems: string[];
+  onCloseDay: () => void;
+}) {
+  function requestNotificationPermission() {
+    if (!("Notification" in window)) {
+      alert("Trình duyệt này chưa hỗ trợ thông báo hệ thống.");
+      return;
+    }
+
+    void Notification.requestPermission();
+  }
+
+  return (
+    <section className="rounded-2xl border border-amber-200 bg-amber-50 p-4 shadow-sm">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h3 className="font-bold text-amber-900">Nhắc chốt ngày</h3>
+          <p className="mt-1 text-sm text-amber-800">
+            Hôm nay còn thiếu: <strong>{missingItems.join(", ")}</strong>.
+          </p>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={requestNotificationPermission}
+            className="rounded-xl bg-white px-3 py-2 text-sm font-bold text-amber-900 shadow-sm hover:bg-amber-100"
+          >
+            Bật thông báo
+          </button>
+          <button
+            type="button"
+            onClick={onCloseDay}
+            className="rounded-xl bg-slate-900 px-3 py-2 text-sm font-bold text-white hover:bg-slate-700"
+          >
+            Chốt ngày
+          </button>
+        </div>
+      </div>
+    </section>
   );
 }
 
