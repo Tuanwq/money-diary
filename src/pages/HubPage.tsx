@@ -1216,7 +1216,7 @@ export function HubPage({
 
       </div>
 
-      <section className="grid grid-cols-2 gap-2 rounded-2xl bg-white p-2 shadow-sm md:grid-cols-5">
+      <section className="flex gap-2 overflow-x-auto rounded-2xl bg-white p-2 shadow-sm">
         <TabButton active={tab === "add"} onClick={() => setTab("add")}>
           Thêm ca hub và nhật kí
         </TabButton>
@@ -1979,7 +1979,81 @@ export function HubPage({
             </div>
 
             <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(280px,360px)_1fr]">
-              <div className="rounded-2xl border bg-slate-50 p-4">
+              {/* Mobile filter gọn */}
+              <div className="grid gap-4 sm:hidden">
+                <div className="rounded-2xl border bg-slate-50 p-4">
+                  <p className="text-sm font-bold text-slate-700">Chọn ngày nhanh</p>
+
+                  <input
+                    type="date"
+                    value={listCustomFromDate}
+                    onChange={(event) => {
+                      const nextDate = event.target.value;
+
+                      setListTimeFilter("custom");
+                      setListCustomFromDate(nextDate);
+                      setListCustomToDate(nextDate);
+
+                      if (nextDate) {
+                        setListCalendarMonth(nextDate.slice(0, 7));
+                      }
+                    }}
+                    className="mt-2 w-full rounded-xl border bg-white px-3 py-2"
+                  />
+
+                  <p className="mt-3 rounded-xl bg-white p-3 text-sm font-medium text-slate-600">
+                    Đang xem:{" "}
+                    <strong>
+                      {getRangeLabel(listDateRange.fromDate, listDateRange.toDate)}
+                    </strong>
+                  </p>
+                </div>
+
+                <div>
+                  <p className="text-sm font-bold text-slate-700">Lọc theo loại</p>
+
+                  <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
+                    {(["ALL", ...HUB_TYPES] as HubTypeFilter[]).map((hubType) => (
+                      <button
+                        key={hubType}
+                        type="button"
+                        onClick={() => setListHubTypeFilter(hubType)}
+                        className={`shrink-0 rounded-xl px-3 py-2 text-sm font-bold ${
+                          listHubTypeFilter === hubType
+                            ? "bg-slate-900 text-white"
+                            : "bg-slate-100 hover:bg-slate-200"
+                        }`}
+                      >
+                        {hubType === "ALL" ? "Tất cả" : HUB_TYPE_LABEL[hubType]}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-sm font-bold text-slate-700">Lọc theo thời gian</p>
+
+                  <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
+                    {HUB_TIME_FILTERS.map((filter) => (
+                      <button
+                        key={filter.value}
+                        type="button"
+                        onClick={() => selectListTimeFilter(filter.value)}
+                        className={`shrink-0 rounded-xl px-3 py-2 text-sm font-bold ${
+                          listTimeFilter === filter.value
+                            ? "bg-slate-900 text-white"
+                            : "bg-slate-100 hover:bg-slate-200"
+                        }`}
+                      >
+                        {filter.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Desktop / tablet calendar */}
+              <div className="hidden rounded-2xl border bg-slate-50 p-4 sm:block">
                 <div className="flex items-center justify-between gap-3">
                   <button
                     type="button"
@@ -1988,9 +2062,11 @@ export function HubPage({
                   >
                     ‹
                   </button>
+
                   <h4 className="text-center font-black capitalize">
                     {formatMonthLabel(listCalendarMonth)}
                   </h4>
+
                   <button
                     type="button"
                     onClick={() => changeCalendarMonth(1)}
@@ -2025,6 +2101,7 @@ export function HubPage({
                         } ${isToday && !isSelected ? "ring-2 ring-slate-300" : ""}`}
                       >
                         {day.day}
+
                         {day.hasEntry && (
                           <span
                             className={`absolute bottom-1 left-1/2 h-1.5 w-1.5 -translate-x-1/2 rounded-full ${
@@ -2038,35 +2115,32 @@ export function HubPage({
                 </div>
               </div>
 
-              <div className="grid content-start gap-4">
+              {/* Desktop / tablet filters */}
+              <div className="hidden content-start gap-4 sm:grid">
                 <div>
-                  <p className="text-sm font-bold text-slate-700">
-                    Lọc theo loại
-                  </p>
+                  <p className="text-sm font-bold text-slate-700">Lọc theo loại</p>
+
                   <div className="mt-2 flex flex-wrap gap-2">
-                    {(["ALL", ...HUB_TYPES] as HubTypeFilter[]).map(
-                      (hubType) => (
-                        <button
-                          key={hubType}
-                          type="button"
-                          onClick={() => setListHubTypeFilter(hubType)}
-                          className={`rounded-xl px-3 py-2 text-sm font-bold ${
-                            listHubTypeFilter === hubType
-                              ? "bg-slate-900 text-white"
-                              : "bg-slate-100 hover:bg-slate-200"
-                          }`}
-                        >
-                          {hubType === "ALL" ? "Tất cả" : HUB_TYPE_LABEL[hubType]}
-                        </button>
-                      )
-                    )}
+                    {(["ALL", ...HUB_TYPES] as HubTypeFilter[]).map((hubType) => (
+                      <button
+                        key={hubType}
+                        type="button"
+                        onClick={() => setListHubTypeFilter(hubType)}
+                        className={`rounded-xl px-3 py-2 text-sm font-bold ${
+                          listHubTypeFilter === hubType
+                            ? "bg-slate-900 text-white"
+                            : "bg-slate-100 hover:bg-slate-200"
+                        }`}
+                      >
+                        {hubType === "ALL" ? "Tất cả" : HUB_TYPE_LABEL[hubType]}
+                      </button>
+                    ))}
                   </div>
                 </div>
 
                 <div>
-                  <p className="text-sm font-bold text-slate-700">
-                    Lọc theo thời gian
-                  </p>
+                  <p className="text-sm font-bold text-slate-700">Lọc theo thời gian</p>
+
                   <div className="mt-2 flex flex-wrap gap-2">
                     {HUB_TIME_FILTERS.map((filter) => (
                       <button
@@ -2095,6 +2169,7 @@ export function HubPage({
                         onChange={(event) => {
                           setListCustomFromDate(event.target.value);
                           setListTimeFilter("custom");
+
                           if (event.target.value) {
                             setListCalendarMonth(event.target.value.slice(0, 7));
                           }
@@ -2111,6 +2186,7 @@ export function HubPage({
                         onChange={(event) => {
                           setListCustomToDate(event.target.value);
                           setListTimeFilter("custom");
+
                           if (event.target.value) {
                             setListCalendarMonth(event.target.value.slice(0, 7));
                           }
@@ -2122,11 +2198,8 @@ export function HubPage({
                 )}
 
                 <p className="rounded-xl bg-slate-100 p-3 text-sm font-medium text-slate-600">
-                  Bạn đang xem dữ liệu {getRangeLabel(
-                    listDateRange.fromDate,
-                    listDateRange.toDate
-                  )}{" "}
-                  ·{" "}
+                  Bạn đang xem dữ liệu{" "}
+                  {getRangeLabel(listDateRange.fromDate, listDateRange.toDate)} ·{" "}
                   {listHubTypeFilter === "ALL"
                     ? "tất cả hub"
                     : HUB_TYPE_LABEL[listHubTypeFilter]}
@@ -2151,7 +2224,7 @@ export function HubPage({
             />
           </section>
 
-          <section className="rounded-2xl bg-white p-5 shadow-sm">
+          <section className="hidden rounded-2xl bg-white p-5 shadow-sm md:block">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <h3 className="text-xl font-bold">Bảng lịch sử Hub chi tiết</h3>
               <p className="text-sm font-medium text-slate-500">
@@ -2403,7 +2476,7 @@ function TabButton({ active, children, onClick }: ButtonProps) {
     <button
       type="button"
       onClick={onClick}
-      className={`rounded-xl px-3 py-2 text-sm font-bold ${
+      className={`shrink-0 whitespace-nowrap rounded-xl px-3 py-2 text-sm font-bold ${
         active ? "bg-slate-900 text-white" : "hover:bg-slate-100"
       }`}
     >
