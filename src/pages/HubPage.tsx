@@ -1216,7 +1216,7 @@ export function HubPage({
 
       </div>
 
-      <section className="flex gap-2 overflow-x-auto rounded-2xl bg-white p-2 shadow-sm">
+      <section className="grid grid-cols-2 gap-2 rounded-2xl bg-white p-2 shadow-sm sm:grid-cols-3 lg:grid-cols-5">
         <TabButton active={tab === "add"} onClick={() => setTab("add")}>
           Thêm ca hub và nhật kí
         </TabButton>
@@ -1243,7 +1243,7 @@ export function HubPage({
         </TabButton>
       </section>
 
-      <section className="grid gap-3 md:grid-cols-3">
+      <section className="grid gap-2 sm:grid-cols-3">
         <SummaryCard
           label="Tiền làm được hôm nay"
           value={formatMoney(todayHubSummary.workIncome)}
@@ -1960,9 +1960,9 @@ export function HubPage({
 
       {tab === "list" && (
         <section className="grid gap-5">
-          <section className="rounded-2xl bg-white p-5 shadow-sm">
+          <section className="rounded-2xl bg-white p-4 shadow-sm sm:p-5">
             <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
+              <div className="min-w-0">
                 <h3 className="text-xl font-bold">Hub của tôi</h3>
                 <p className="text-sm text-slate-500">
                   Lọc ca hub theo loại, thời gian hoặc chọn trực tiếp trên lịch.
@@ -1972,16 +1972,16 @@ export function HubPage({
               <button
                 type="button"
                 onClick={() => setTab("add")}
-                className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-bold text-white hover:bg-slate-700"
+                className="w-full rounded-xl bg-slate-900 px-4 py-2 text-sm font-bold text-white hover:bg-slate-700 sm:w-auto"
               >
                 Thêm ca mới
               </button>
             </div>
 
-            <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(280px,360px)_1fr]">
+            <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(280px,360px)_1fr]">
               {/* Mobile filter gọn */}
-              <div className="grid gap-4 sm:hidden">
-                <div className="rounded-2xl border bg-slate-50 p-4">
+              <div className="grid gap-4 lg:hidden">
+                <div className="rounded-2xl border bg-slate-50 p-3">
                   <p className="text-sm font-bold text-slate-700">Chọn ngày nhanh</p>
 
                   <input
@@ -2053,7 +2053,7 @@ export function HubPage({
               </div>
 
               {/* Desktop / tablet calendar */}
-              <div className="hidden rounded-2xl border bg-slate-50 p-4 sm:block">
+              <div className="hidden rounded-2xl border bg-slate-50 p-4 lg:block">
                 <div className="flex items-center justify-between gap-3">
                   <button
                     type="button"
@@ -2116,7 +2116,7 @@ export function HubPage({
               </div>
 
               {/* Desktop / tablet filters */}
-              <div className="hidden content-start gap-4 sm:grid">
+              <div className="hidden content-start gap-4 lg:grid">
                 <div>
                   <p className="text-sm font-bold text-slate-700">Lọc theo loại</p>
 
@@ -2209,7 +2209,7 @@ export function HubPage({
             </div>
           </section>
 
-          <section className="grid gap-3 md:grid-cols-3">
+          <section className="grid gap-2 sm:grid-cols-3">
             <SummaryCard
               label="Số ca đang xem"
               value={`${filteredHubEntries.length} ca`}
@@ -2224,7 +2224,7 @@ export function HubPage({
             />
           </section>
 
-          <section className="hidden rounded-2xl bg-white p-5 shadow-sm md:block">
+          <section className="hidden rounded-2xl bg-white p-5 shadow-sm lg:block">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <h3 className="text-xl font-bold">Bảng lịch sử Hub chi tiết</h3>
               <p className="text-sm font-medium text-slate-500">
@@ -2293,7 +2293,7 @@ export function HubPage({
             </div>
           </section>
 
-          <section className="rounded-2xl bg-white p-5 shadow-sm">
+          <section className="rounded-2xl bg-white p-4 shadow-sm sm:p-5">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <h3 className="text-xl font-bold">Kết quả lọc</h3>
               <p className="text-sm font-medium text-slate-500">
@@ -2476,8 +2476,10 @@ function TabButton({ active, children, onClick }: ButtonProps) {
     <button
       type="button"
       onClick={onClick}
-      className={`shrink-0 whitespace-nowrap rounded-xl px-3 py-2 text-sm font-bold ${
-        active ? "bg-slate-900 text-white" : "hover:bg-slate-100"
+      className={`flex min-h-11 w-full items-center justify-center rounded-xl px-2 py-2 text-center text-xs font-bold leading-snug sm:text-sm lg:whitespace-nowrap lg:px-3 ${
+        active
+          ? "bg-slate-900 text-white"
+          : "bg-slate-50 text-slate-700 hover:bg-slate-100"
       }`}
     >
       {children}
@@ -2510,9 +2512,11 @@ function FormBlock({ title, children }: { title: string; children: ReactNode }) 
 
 function SummaryCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl bg-white p-4 shadow-sm">
+    <div className="min-w-0 rounded-2xl bg-white p-3 shadow-sm sm:p-4">
       <p className="text-sm text-slate-500">{label}</p>
-      <p className="mt-1 text-2xl font-black">{value}</p>
+      <p className="mt-1 break-words text-xl font-black leading-tight sm:text-2xl">
+        {value}
+      </p>
     </div>
   );
 }

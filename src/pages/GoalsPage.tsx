@@ -62,6 +62,8 @@ type CompletedDetailPageKey =
   | "expenses"
   | "entries";
 
+type CompletedDetailPanelKey = "contributions" | "expenses" | "entries";
+
 const initialCompletedDetailPages: Record<CompletedDetailPageKey, number> = {
   balance: 1,
   contributions: 1,
@@ -272,6 +274,50 @@ function CompactNote({ children }: { children: string }) {
   );
 }
 
+function CompletedDetailPanelNav({
+  activePanel,
+  onToggle,
+  options,
+}: {
+  activePanel: CompletedDetailPanelKey | null;
+  onToggle: (panel: CompletedDetailPanelKey) => void;
+  options: Array<{
+    count: number;
+    label: string;
+    value: CompletedDetailPanelKey;
+  }>;
+}) {
+  return (
+    <section className="rounded-2xl bg-white p-3 shadow-sm sm:p-4">
+      <div className="grid gap-2 sm:grid-cols-3">
+        {options.map((option) => {
+          const isActive = activePanel === option.value;
+
+          return (
+            <button
+              key={option.value}
+              type="button"
+              aria-pressed={isActive}
+              disabled={option.count === 0}
+              onClick={() => onToggle(option.value)}
+              className={`flex min-h-11 w-full items-center justify-center gap-2 rounded-xl px-3 py-2 text-center text-sm font-bold transition sm:px-4 ${
+                isActive
+                  ? "bg-slate-900 text-white shadow-sm"
+                  : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+              } disabled:cursor-not-allowed disabled:opacity-40`}
+            >
+              <span>{option.label}</span>
+              <span className="rounded-full bg-white/70 px-2 py-0.5 text-xs text-slate-700">
+                {option.count}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 function ForecastPaceCard({
   pace,
 }: {
@@ -380,6 +426,8 @@ export function GoalsPage({
   const [completedDetailPages, setCompletedDetailPages] = useState(
     initialCompletedDetailPages
   );
+  const [completedDetailPanel, setCompletedDetailPanel] =
+    useState<CompletedDetailPanelKey | null>(null);
 
   function setCompletedDetailPage(
     key: CompletedDetailPageKey,
@@ -432,6 +480,34 @@ export function GoalsPage({
   const selectedCompletedGoalDifference = selectedCompletedGoal
     ? selectedCompletedGoal.saved - selectedCompletedGoal.target
     : 0;
+  const completedDetailPanelOptions: Array<{
+    count: number;
+    label: string;
+    value: CompletedDetailPanelKey;
+  }> = [
+    {
+      count: completedContributions.length,
+      label: "Lịch sử góp tiền",
+      value: "contributions",
+    },
+    {
+      count: completedExpenses.length,
+      label: "Chi tiêu trong mục tiêu này",
+      value: "expenses",
+    },
+    {
+      count: completedEntries.length,
+      label: "Nhật ký trong mục tiêu này",
+      value: "entries",
+    },
+  ];
+  const hasCompletedDetailPanels = completedDetailPanelOptions.some(
+    (option) => option.count > 0
+  );
+
+  function toggleCompletedDetailPanel(panel: CompletedDetailPanelKey) {
+    setCompletedDetailPanel((current) => (current === panel ? null : panel));
+  }
 
   return (
 
@@ -2163,6 +2239,7 @@ export function GoalsPage({
                         <button
                           type="button"
                           onClick={() => {
+                            setCompletedDetailPanel(null);
                             setCompletedDetailPages(initialCompletedDetailPages);
                             setSelectedCompletedGoalId(goal.id);
                             navigateTo("goals", "completedDetail");
@@ -2407,37 +2484,131 @@ export function GoalsPage({
             </section>
           )}
 
-          {completedContributions.length > 0 && (
-    <section className="rounded-2xl bg-white p-4 shadow-sm sm:p-5">
-      <CompletedDetailHeader
-        count={completedContributions.length}
-        title="Lịch sử góp tiền"
-      />
+        {hasCompletedDetailPanels && (
+          <CompletedDetailPanelNav
+            activePanel={completedDetailPanel}
+            onToggle={toggleCompletedDetailPanel}
+            options={completedDetailPanelOptions}
+          />
+        )}
 
-      <div className="mt-3 overflow-hidden rounded-xl border">
-        {paginatedCompletedContributions.map((item) => (
-          <div
-            key={item.id}
-            className="grid gap-2 border-b p-3 text-sm last:border-b-0 sm:grid-cols-[120px_1fr_auto] sm:items-center"
-          >
-            <p className="font-bold">{item.date}</p>
-            <p className="text-slate-500">{item.note || "Không có ghi chú"}</p>
-            <p className="font-black text-green-700">
-              {formatMoney(item.amount)}
-            </p>
-          </div>
-        ))}
-      </div>
-      <PaginationControls
-        currentPage={completedDetailPages.contributions}
-        label="Lịch sử góp tiền"
-        onPageChange={(page) =>
-          setCompletedDetailPage("contributions", page)
-        }
-        totalItems={completedContributions.length}
-      />
-    </section>
-  )}
+        {completedContributions.length > 0 &&
+          completedDetailPanel === "contributions" && (
+            <section className="rounded-2xl bg-white p-4 shadow-sm sm:p-5">
+              <CompletedDetailHeader
+                count={completedContributions.length}
+                title="Lịch sử góp tiền"
+              />
+
+              <div className="mt-3 overflow-hidden rounded-xl border">
+                {paginatedCompletedContributions.map((item) => (
+                  <div
+                    key={item.id}
+                    className="grid gap-2 border-b p-3 text-sm last:border-b-0 sm:grid-cols-[120px_1fr_auto] sm:items-center"
+                  >
+                    <p className="font-bold">{item.date}</p>
+                    <p className="text-slate-500">
+                      {item.note || "Không có ghi chú"}
+                    </p>
+                    <p className="font-black text-green-700">
+                      {formatMoney(item.amount)}
+                    </p>
+                  </div>
+                ))}
+              </div>
+              <PaginationControls
+                currentPage={completedDetailPages.contributions}
+                label="Lịch sử góp tiền"
+                onPageChange={(page) =>
+                  setCompletedDetailPage("contributions", page)
+                }
+                totalItems={completedContributions.length}
+              />
+            </section>
+          )}
+
+        {completedExpenses.length > 0 && completedDetailPanel === "expenses" && (
+          <section className="rounded-2xl bg-white p-4 shadow-sm sm:p-5">
+            <CompletedDetailHeader
+              count={completedExpenses.length}
+              title="Chi tiêu trong mục tiêu này"
+            />
+
+            <div className="mt-3 overflow-hidden rounded-xl border">
+              {paginatedCompletedExpenses.map((expense) => {
+                const total = getExpenseTotal(expense);
+
+                return (
+                  <article
+                    key={expense.id}
+                    className="border-b p-3 last:border-b-0"
+                  >
+                    <div className="grid gap-2 text-sm lg:grid-cols-[110px_1fr_auto] lg:items-center">
+                      <p className="font-bold">{expense.date}</p>
+                      <p className="text-slate-500">
+                        Sáng {formatMoney(expense.breakfast)} · Trưa{" "}
+                        {formatMoney(expense.lunch)} · Tối{" "}
+                        {formatMoney(expense.dinner)} ·{" "}
+                        {expense.otherLabel
+                          ? `Khác (${expense.otherLabel})`
+                          : "Khác"}{" "}
+                        {formatMoney(expense.other)}
+                      </p>
+                      <p className="font-black text-red-600">
+                        {formatMoney(total)}
+                      </p>
+                    </div>
+
+                    {expense.note && <CompactNote>{expense.note}</CompactNote>}
+                  </article>
+                );
+              })}
+            </div>
+            <PaginationControls
+              currentPage={completedDetailPages.expenses}
+              label="Chi tiêu"
+              onPageChange={(page) => setCompletedDetailPage("expenses", page)}
+              totalItems={completedExpenses.length}
+            />
+          </section>
+        )}
+
+        {completedEntries.length > 0 && completedDetailPanel === "entries" && (
+          <section className="rounded-2xl bg-white p-4 shadow-sm sm:p-5">
+            <CompletedDetailHeader
+              count={completedEntries.length}
+              title="Nhật ký trong mục tiêu này"
+            />
+
+            <div className="mt-3 overflow-hidden rounded-xl border">
+              {paginatedCompletedEntries.map((entry) => (
+                <article key={entry.id} className="border-b p-3 last:border-b-0">
+                  <div className="grid gap-2 text-sm lg:grid-cols-[110px_1fr] lg:items-center">
+                    <p className="font-bold">{entry.date}</p>
+                    <p className="text-slate-500">
+                      Thu {formatMoney(getTotalEntryMoney(entry))} ·{" "}
+                      {entry.workHours} giờ · {entry.orderCount ?? 0} đơn
+                    </p>
+                  </div>
+
+                  {entry.diary && (
+                    <p className="mt-2 whitespace-pre-line text-sm text-slate-700">
+                      {entry.diary}
+                    </p>
+                  )}
+
+                  {entry.note && <CompactNote>{entry.note}</CompactNote>}
+                </article>
+              ))}
+            </div>
+            <PaginationControls
+              currentPage={completedDetailPages.entries}
+              label="Nhật ký"
+              onPageChange={(page) => setCompletedDetailPage("entries", page)}
+              totalItems={completedEntries.length}
+            />
+          </section>
+        )}
 
         {completedBalanceSnapshots.length > 0 && (
           <section className="rounded-2xl bg-white p-4 shadow-sm sm:p-5">
@@ -2517,83 +2688,6 @@ export function GoalsPage({
           </section>
         )}
   
-  {completedExpenses.length > 0 && (
-    <section className="rounded-2xl bg-white p-4 shadow-sm sm:p-5">
-      <CompletedDetailHeader
-        count={completedExpenses.length}
-        title="Chi tiêu trong mục tiêu này"
-      />
-
-      <div className="mt-3 overflow-hidden rounded-xl border">
-        {paginatedCompletedExpenses.map((expense) => {
-          const total = getExpenseTotal(expense);
-
-          return (
-            <article key={expense.id} className="border-b p-3 last:border-b-0">
-              <div className="grid gap-2 text-sm lg:grid-cols-[110px_1fr_auto] lg:items-center">
-                <p className="font-bold">{expense.date}</p>
-                <p className="text-slate-500">
-                  Sáng {formatMoney(expense.breakfast)} · Trưa{" "}
-                  {formatMoney(expense.lunch)} · Tối{" "}
-                  {formatMoney(expense.dinner)} ·{" "}
-                  {expense.otherLabel ? `Khác (${expense.otherLabel})` : "Khác"}{" "}
-                  {formatMoney(expense.other)}
-                </p>
-                <p className="font-black text-red-600">
-                  {formatMoney(total)}
-                </p>
-              </div>
-
-              {expense.note && <CompactNote>{expense.note}</CompactNote>}
-            </article>
-          );
-        })}
-      </div>
-      <PaginationControls
-        currentPage={completedDetailPages.expenses}
-        label="Chi tiêu"
-        onPageChange={(page) => setCompletedDetailPage("expenses", page)}
-        totalItems={completedExpenses.length}
-      />
-    </section>
-  )}
-
-  {completedEntries.length > 0 && (
-    <section className="rounded-2xl bg-white p-4 shadow-sm sm:p-5">
-      <CompletedDetailHeader
-        count={completedEntries.length}
-        title="Nhật ký trong mục tiêu này"
-      />
-
-      <div className="mt-3 overflow-hidden rounded-xl border">
-        {paginatedCompletedEntries.map((entry) => (
-          <article key={entry.id} className="border-b p-3 last:border-b-0">
-            <div className="grid gap-2 text-sm lg:grid-cols-[110px_1fr] lg:items-center">
-              <p className="font-bold">{entry.date}</p>
-              <p className="text-slate-500">
-                Thu {formatMoney(getTotalEntryMoney(entry))} ·{" "}
-                {entry.workHours} giờ · {entry.orderCount ?? 0} đơn
-              </p>
-            </div>
-
-            {entry.diary && (
-              <p className="mt-2 whitespace-pre-line text-sm text-slate-700">
-                {entry.diary}
-              </p>
-            )}
-
-            {entry.note && <CompactNote>{entry.note}</CompactNote>}
-          </article>
-        ))}
-      </div>
-      <PaginationControls
-        currentPage={completedDetailPages.entries}
-        label="Nhật ký"
-        onPageChange={(page) => setCompletedDetailPage("entries", page)}
-        totalItems={completedEntries.length}
-      />
-    </section>
-  )}
       </>
     )}
   </>
