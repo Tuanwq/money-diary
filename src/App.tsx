@@ -35,6 +35,7 @@ import type {
   GoalContribution,
   Goals,
   Mood,
+  OtherExpenseItem,
   SubGoal,
 } from "./types";
 import {
@@ -54,6 +55,7 @@ import {
   getExpenseTotal,
   getMainIncome,
   getNormalIncome,
+  getOtherExpenseItems,
   getReceivedMoney,
   getTotalEntryMoney,
 } from "./utils/entries";
@@ -73,6 +75,38 @@ import {
 } from "./utils/dataWarnings";
 import { buildGoalForecast } from "./utils/forecast";
 import { calculateHubIncome } from "./utils/hubIncome";
+import {
+  createOtherExpenseItemForm,
+  type OtherExpenseItemForm,
+} from "./utils/otherExpenseForms";
+
+function buildOtherExpenseFormItems(expense?: ExpenseEntry): OtherExpenseItemForm[] {
+  const items = expense ? getOtherExpenseItems(expense) : [];
+
+  if (items.length === 0) return [createOtherExpenseItemForm()];
+
+  return items.map((item) => ({
+    id: item.id || crypto.randomUUID(),
+    amount: formatMoneyInput(String(item.amount)),
+    label: item.label,
+  }));
+}
+
+function normalizeOtherExpenseItems(
+  items: OtherExpenseItemForm[]
+): OtherExpenseItem[] {
+  return items
+    .map((item) => ({
+      id: item.id || crypto.randomUUID(),
+      label: item.label.trim(),
+      amount: parseMoneyInput(item.amount),
+    }))
+    .filter((item) => item.amount > 0);
+}
+
+function getSingleOtherExpenseLabel(items: OtherExpenseItem[]) {
+  return items.length === 1 ? items[0].label : "";
+}
 
 function createCloseDayForm(date = getToday()): CloseDayForm {
   return {
@@ -85,8 +119,7 @@ function createCloseDayForm(date = getToday()): CloseDayForm {
     breakfast: "",
     lunch: "",
     dinner: "",
-    other: "",
-    otherLabel: "",
+    otherItems: [createOtherExpenseItemForm()],
     note: "",
     mood: "normal",
   };
@@ -438,8 +471,7 @@ useEffect(() => {
   breakfast: "",
   lunch: "",
   dinner: "",
-  other: "",
-  otherLabel: "",
+  otherItems: [createOtherExpenseItemForm()],
   note: "",
 });
   const [closeDayForm, setCloseDayForm] = useState<CloseDayForm>(() =>
@@ -584,7 +616,10 @@ const filteredExpenses = sortedExpenses.filter((expense) => {
     !keyword ||
     expense.date.toLowerCase().includes(keyword) ||
     expense.note.toLowerCase().includes(keyword) ||
-    (expense.otherLabel ?? "").toLowerCase().includes(keyword);
+    (expense.otherLabel ?? "").toLowerCase().includes(keyword) ||
+    getOtherExpenseItems(expense).some((item) =>
+      item.label.toLowerCase().includes(keyword)
+    );
 
   const matchDate = isDateInRange(
     expense.date,
@@ -914,12 +949,13 @@ function buildCloseDayForm(date: string): CloseDayForm {
   const entry = entries.find((item) => item.date === date);
   const expense = expenses.find((item) => item.date === date);
   const expenseTotal = expense ? getExpenseTotal(expense) : 0;
+  const otherItems = expense ? getOtherExpenseItems(expense) : [];
   const hasExpenseBreakdown = Boolean(
     expense &&
       (expense.breakfast > 0 ||
         expense.lunch > 0 ||
         expense.dinner > 0 ||
-        expense.otherLabel)
+        otherItems.length > 0)
   );
   const useTotalExpense =
     !expense || !hasExpenseBreakdown;
@@ -939,11 +975,9 @@ function buildCloseDayForm(date: string): CloseDayForm {
     breakfast: expense ? formatMoneyInput(String(expense.breakfast ?? 0)) : "",
     lunch: expense ? formatMoneyInput(String(expense.lunch ?? 0)) : "",
     dinner: expense ? formatMoneyInput(String(expense.dinner ?? 0)) : "",
-    other:
-      !useTotalExpense && expense
-        ? formatMoneyInput(String(expense.other ?? 0))
-        : "",
-    otherLabel: !useTotalExpense ? expense?.otherLabel ?? "" : "",
+    otherItems: !useTotalExpense ? buildOtherExpenseFormItems(expense) : [
+      createOtherExpenseItemForm(),
+    ],
     note: entry?.note || entry?.diary || expense?.note || "",
     mood: entry?.mood ?? "normal",
   };
@@ -1023,7 +1057,8 @@ function handleExpenseSubmit(event: React.FormEvent) {
   const breakfast = parseMoneyInput(expenseForm.breakfast);
   const lunch = parseMoneyInput(expenseForm.lunch);
   const dinner = parseMoneyInput(expenseForm.dinner);
-  const other = parseMoneyInput(expenseForm.other);
+  const otherItems = normalizeOtherExpenseItems(expenseForm.otherItems);
+  const other = otherItems.reduce((sum, item) => sum + item.amount, 0);
 
   if (breakfast < 0 || lunch < 0 || dinner < 0 || other < 0) {
     alert("Chi tiêu không được âm.");
@@ -1046,7 +1081,8 @@ function handleExpenseSubmit(event: React.FormEvent) {
       lunch,
       dinner,
       other,
-      otherLabel: expenseForm.otherLabel.trim(),
+      otherLabel: getSingleOtherExpenseLabel(otherItems),
+      otherItems,
       note: expenseForm.note,
       createdAt: existingExpense?.createdAt ?? now,
       updatedAt: now,
@@ -1067,8 +1103,7 @@ function handleExpenseSubmit(event: React.FormEvent) {
     breakfast: "",
     lunch: "",
     dinner: "",
-    other: "",
-    otherLabel: "",
+    otherItems: [createOtherExpenseItemForm()],
     note: "",
   });
 
@@ -1098,9 +1133,13 @@ function handleCloseDaySubmit(event: React.FormEvent) {
     closeDayForm.expenseMode === "meals"
       ? parseMoneyInput(closeDayForm.dinner)
       : 0;
+  const otherItems =
+    closeDayForm.expenseMode === "meals"
+      ? normalizeOtherExpenseItems(closeDayForm.otherItems)
+      : [];
   const other =
     closeDayForm.expenseMode === "meals"
-      ? parseMoneyInput(closeDayForm.other)
+      ? otherItems.reduce((sum, item) => sum + item.amount, 0)
       : parseMoneyInput(closeDayForm.expenseTotal);
   const expenseTotal = breakfast + lunch + dinner + other;
   const note = closeDayForm.note.trim();
@@ -1149,10 +1188,8 @@ function handleCloseDaySubmit(event: React.FormEvent) {
       lunch,
       dinner,
       other,
-      otherLabel:
-        closeDayForm.expenseMode === "meals"
-          ? closeDayForm.otherLabel.trim()
-          : "",
+      otherLabel: getSingleOtherExpenseLabel(otherItems),
+      otherItems,
       note: note || existingExpense?.note || "",
       createdAt: existingExpense?.createdAt ?? now,
       updatedAt: now,
@@ -1347,8 +1384,7 @@ function editExpense(expense: ExpenseEntry) {
     breakfast: formatMoneyInput(String(expense.breakfast ?? 0)),
     lunch: formatMoneyInput(String(expense.lunch ?? 0)),
     dinner: formatMoneyInput(String(expense.dinner ?? 0)),
-    other: formatMoneyInput(String(expense.other ?? 0)),
-    otherLabel: expense.otherLabel ?? "",
+    otherItems: buildOtherExpenseFormItems(expense),
     note: expense.note,
   });
 

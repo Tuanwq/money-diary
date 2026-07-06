@@ -1,4 +1,4 @@
-import type { DailyEntry, ExpenseEntry } from "../types";
+import type { DailyEntry, ExpenseEntry, OtherExpenseItem } from "../types";
 
 export type OtherExpenseBreakdownItem = {
   label: string;
@@ -35,7 +35,36 @@ export function getExpenseTotal(expense: ExpenseEntry) {
 }
 
 export function getOtherExpenseLabel(expense: ExpenseEntry) {
+  const items = getOtherExpenseItems(expense);
+
+  if (items.length === 1) return items[0].label;
+  if (items.length > 1) return `${items.length} khoản khác`;
+
   return expense.otherLabel?.trim() || UNLABELED_OTHER_EXPENSE_LABEL;
+}
+
+export function getOtherExpenseItems(expense: ExpenseEntry): OtherExpenseItem[] {
+  const savedItems =
+    expense.otherItems
+      ?.filter((item) => item.amount > 0)
+      .map((item) => ({
+        ...item,
+        label: item.label?.trim() || UNLABELED_OTHER_EXPENSE_LABEL,
+      })) ?? [];
+
+  if (savedItems.length > 0) return savedItems;
+
+  if (expense.other > 0) {
+    return [
+      {
+        id: `${expense.id}-legacy-other`,
+        amount: expense.other,
+        label: expense.otherLabel?.trim() || UNLABELED_OTHER_EXPENSE_LABEL,
+      },
+    ];
+  }
+
+  return [];
 }
 
 export function buildOtherExpenseBreakdown(
@@ -46,23 +75,23 @@ export function buildOtherExpenseBreakdown(
 
   expenses
     .filter((expense) => {
-      if (expense.other <= 0) return false;
       if (!range) return true;
 
       return expense.date >= range.fromDate && expense.date <= range.toDate;
     })
     .forEach((expense) => {
-      const label = getOtherExpenseLabel(expense);
-      const current = breakdown.get(label) ?? {
-        label,
-        total: 0,
-        count: 0,
-      };
+      getOtherExpenseItems(expense).forEach((item) => {
+        const current = breakdown.get(item.label) ?? {
+          label: item.label,
+          total: 0,
+          count: 0,
+        };
 
-      breakdown.set(label, {
-        ...current,
-        total: current.total + expense.other,
-        count: current.count + 1,
+        breakdown.set(item.label, {
+          ...current,
+          total: current.total + item.amount,
+          count: current.count + 1,
+        });
       });
     });
 

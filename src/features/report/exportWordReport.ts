@@ -12,6 +12,7 @@ import {
   getBonusMoney,
   getExpenseTotal,
   getMainIncome,
+  getOtherExpenseItems,
   getReceivedMoney,
   getTotalEntryMoney,
 } from "../../utils/entries";
@@ -72,11 +73,13 @@ function formatSignedMoney(value: number) {
 }
 
 function formatOtherExpense(expense: ExpenseEntry) {
-  const label = expense.otherLabel?.trim();
+  const items = getOtherExpenseItems(expense);
 
-  return label
-    ? `${formatMoney(expense.other)} (${label})`
-    : formatMoney(expense.other);
+  if (items.length === 0) return formatMoney(expense.other);
+
+  return items
+    .map((item) => `${item.label}: ${formatMoney(item.amount)}`)
+    .join("; ");
 }
 
 function reportCell(value: unknown, className = "") {

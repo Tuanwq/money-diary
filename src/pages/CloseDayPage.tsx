@@ -1,7 +1,11 @@
 import type { Dispatch, FormEvent, SetStateAction } from "react";
-import { OtherExpenseLabelManager } from "../components/OtherExpenseLabelManager";
+import { OtherExpenseItemsInput } from "../components/OtherExpenseItemsInput";
 import type { GoalScreen, Mood, Page } from "../types";
 import { formatMoney, formatMoneyInput, parseMoneyInput } from "../utils/money";
+import {
+  getOtherExpenseItemsTotal,
+  type OtherExpenseItemForm,
+} from "../utils/otherExpenseForms";
 
 export type CloseDayForm = {
   date: string;
@@ -13,8 +17,7 @@ export type CloseDayForm = {
   breakfast: string;
   lunch: string;
   dinner: string;
-  other: string;
-  otherLabel: string;
+  otherItems: OtherExpenseItemForm[];
   note: string;
   mood: Mood;
 };
@@ -42,7 +45,7 @@ export function CloseDayPage({
       : parseMoneyInput(form.breakfast) +
         parseMoneyInput(form.lunch) +
         parseMoneyInput(form.dinner) +
-        parseMoneyInput(form.other);
+        getOtherExpenseItemsTotal(form.otherItems);
 
   const netMoney =
     parseMoneyInput(form.income) +
@@ -198,18 +201,10 @@ export function CloseDayPage({
                   setForm((prev) => ({ ...prev, dinner: value }))
                 }
               />
-              <MoneyInput
-                label="Khác"
-                value={form.other}
-                placeholder="VD: 20.000"
-                onChange={(value) =>
-                  setForm((prev) => ({ ...prev, other: value }))
-                }
-              />
-              <OtherExpenseLabelManager
-                value={form.otherLabel}
-                onChange={(value) =>
-                  setForm((prev) => ({ ...prev, otherLabel: value }))
+              <OtherExpenseItemsInput
+                items={form.otherItems}
+                onChange={(otherItems) =>
+                  setForm((prev) => ({ ...prev, otherItems }))
                 }
               />
             </div>

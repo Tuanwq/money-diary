@@ -23,9 +23,16 @@ export type ExpenseEntry = {
   dinner: number;
   other: number;
   otherLabel?: string;
+  otherItems?: OtherExpenseItem[];
   note: string;
   createdAt: string;
   updatedAt?: string;
+};
+
+export type OtherExpenseItem = {
+  id: string;
+  label: string;
+  amount: number;
 };
 
 export type BalanceCheckEntry = {

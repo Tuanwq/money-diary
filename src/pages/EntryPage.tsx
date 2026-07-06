@@ -1,8 +1,12 @@
 import type { Dispatch, FormEvent, ReactNode, SetStateAction } from "react";
-import { OtherExpenseLabelManager } from "../components/OtherExpenseLabelManager";
+import { OtherExpenseItemsInput } from "../components/OtherExpenseItemsInput";
 import type { GoalScreen, Mood, Page } from "../types";
 import { getToday } from "../utils/date";
 import { formatMoney, formatMoneyInput, parseMoneyInput } from "../utils/money";
+import {
+  getOtherExpenseItemsTotal,
+  type OtherExpenseItemForm,
+} from "../utils/otherExpenseForms";
 
 export type DailyEntryForm = {
   date: string;
@@ -21,8 +25,7 @@ export type ExpenseEntryForm = {
   breakfast: string;
   lunch: string;
   dinner: string;
-  other: string;
-  otherLabel: string;
+  otherItems: OtherExpenseItemForm[];
   note: string;
 };
 
@@ -109,7 +112,7 @@ function ExpenseForm({
     parseMoneyInput(expenseForm.breakfast) +
     parseMoneyInput(expenseForm.lunch) +
     parseMoneyInput(expenseForm.dinner) +
-    parseMoneyInput(expenseForm.other);
+    getOtherExpenseItemsTotal(expenseForm.otherItems);
 
   return (
     <form
@@ -162,18 +165,10 @@ function ExpenseForm({
             setExpenseForm((prev) => ({ ...prev, dinner: value }))
           }
         />
-        <MoneyInput
-          label="Khác"
-          value={expenseForm.other}
-          placeholder="VD: 20.000"
-          onChange={(value) =>
-            setExpenseForm((prev) => ({ ...prev, other: value }))
-          }
-        />
-        <OtherExpenseLabelManager
-          value={expenseForm.otherLabel}
-          onChange={(value) =>
-            setExpenseForm((prev) => ({ ...prev, otherLabel: value }))
+        <OtherExpenseItemsInput
+          items={expenseForm.otherItems}
+          onChange={(otherItems) =>
+            setExpenseForm((prev) => ({ ...prev, otherItems }))
           }
         />
 
@@ -213,8 +208,7 @@ function ExpenseForm({
               breakfast: "",
               lunch: "",
               dinner: "",
-              other: "",
-              otherLabel: "",
+              otherItems: [],
               note: "",
             });
           }}

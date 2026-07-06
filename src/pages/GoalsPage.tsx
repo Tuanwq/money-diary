@@ -18,7 +18,11 @@ import type {
   Page,
 } from "../types";
 import { getDaysLeft, getToday } from "../utils/date";
-import { getExpenseTotal, getTotalEntryMoney } from "../utils/entries";
+import {
+  getExpenseTotal,
+  getOtherExpenseItems,
+  getTotalEntryMoney,
+} from "../utils/entries";
 import {
   buildSubGoalProgressData,
   getDailyNeedForGoal,
@@ -2537,6 +2541,15 @@ export function GoalsPage({
             <div className="mt-3 overflow-hidden rounded-xl border">
               {paginatedCompletedExpenses.map((expense) => {
                 const total = getExpenseTotal(expense);
+                const otherItems = getOtherExpenseItems(expense);
+                const otherText =
+                  otherItems.length > 0
+                    ? otherItems
+                        .map(
+                          (item) => `${item.label} ${formatMoney(item.amount)}`
+                        )
+                        .join(" · ")
+                    : formatMoney(expense.other);
 
                 return (
                   <article
@@ -2548,11 +2561,7 @@ export function GoalsPage({
                       <p className="text-slate-500">
                         Sáng {formatMoney(expense.breakfast)} · Trưa{" "}
                         {formatMoney(expense.lunch)} · Tối{" "}
-                        {formatMoney(expense.dinner)} ·{" "}
-                        {expense.otherLabel
-                          ? `Khác (${expense.otherLabel})`
-                          : "Khác"}{" "}
-                        {formatMoney(expense.other)}
+                        {formatMoney(expense.dinner)} · Khác {otherText}
                       </p>
                       <p className="font-black text-red-600">
                         {formatMoney(total)}
