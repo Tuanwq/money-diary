@@ -8,6 +8,7 @@ export const STORAGE_EXPENSES_KEY = "money_diary_expenses";
 export const STORAGE_BALANCE_CHECKS_KEY = "money_diary_balance_checks";
 export const STORAGE_OTHER_EXPENSE_LABELS_KEY =
   "money_diary_other_expense_labels";
+export const STORAGE_APP_CHANGE_LOGS_KEY = "money_diary_app_change_logs";
 
 export const ITEMS_PER_PAGE = 7;
 

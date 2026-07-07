@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import type { RefObject, ReactNode } from "react";
 import { AiFinanceInsight } from "../components/AiFinanceInsight";
+import { AutopilotPanel } from "../components/AutopilotPanel";
 import { DataWarningsPanel } from "../components/DataWarningsPanel";
 import { StatCard } from "../components/StatCard";
 import { TodayDashboard } from "../components/TodayDashboard";
@@ -280,7 +281,7 @@ export function HomePage({
           onBalanceCheckClick={goToTodayBalanceCheck}
         />
 
-                <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
           <StatCard
             title={
               isSelectedToday ? "Tiền thực tế hôm nay" : "Tiền thực tế ngày này"
@@ -345,6 +346,17 @@ export function HomePage({
         <div ref={balanceCheckSectionRef}>
           {renderBalanceCheckCard("Kiểm kê số dư hôm nay")}
         </div>
+
+        <AutopilotPanel
+          actualMoney={actualMoney}
+          balanceChecks={balanceChecks}
+          entries={entries}
+          expenses={expenses}
+          goals={goals}
+          today={todayString}
+          navigateToGoals={() => navigateTo("goals", "current")}
+          navigateToHub={() => navigateTo("hub")}
+        />
       </section>
 
       {/* <section className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">

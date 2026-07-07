@@ -73,6 +73,7 @@ export type Page =
   | "history"
   | "expenses"
   | "balanceChecks"
+  | "changes"
   | "hub";
 
 export type GoalScreen =
@@ -156,4 +157,38 @@ export type SyncableDatedItem = {
   date: string;
   createdAt?: string;
   updatedAt?: string;
+};
+
+export type AppDataKey =
+  | "entries"
+  | "expenses"
+  | "balanceChecks"
+  | "goals"
+  | "completedGoals";
+
+export type AppChangeAction =
+  | "create"
+  | "update"
+  | "delete"
+  | "complete"
+  | "restore";
+
+export type AppChangePatch = {
+  key: AppDataKey;
+  before: unknown;
+  after: unknown;
+  beforeSummary: string;
+  afterSummary: string;
+};
+
+export type AppChangeLog = {
+  id: string;
+  action: AppChangeAction;
+  title: string;
+  description: string;
+  date?: string;
+  patches: AppChangePatch[];
+  originalChangeId?: string;
+  restoredAt?: string;
+  createdAt: string;
 };

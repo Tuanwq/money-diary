@@ -4,6 +4,7 @@ import { exportWordReport } from "./features/report/exportWordReport";
 import { useAppNavigation } from "./hooks/useAppNavigation";
 import { useCloudSync } from "./hooks/useCloudSync";
 import { useMoneyDiaryData } from "./hooks/useMoneyDiaryData";
+import { AppChangeLogPage } from "./pages/AppChangeLogPage";
 import { AuthPage } from "./pages/AuthPage";
 import { BalanceChecksPage } from "./pages/BalanceChecksPage";
 import { CloseDayPage, type CloseDayForm } from "./pages/CloseDayPage";
@@ -13,7 +14,7 @@ import { GoalsPage } from "./pages/GoalsPage";
 import { HistoryPage } from "./pages/HistoryPage";
 import { HomePage } from "./pages/HomePage";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ITEMS_PER_PAGE } from "./constants";
+import { ITEMS_PER_PAGE, STORAGE_APP_CHANGE_LOGS_KEY } from "./constants";
 import {
   DEFAULT_HUB_SETTINGS,
   STORAGE_HUB_ENTRIES_KEY,
@@ -29,6 +30,9 @@ import type { HubEntry, HubSettings } from "./types/hub";
 import type {
   BalanceCheckEntry,
   BalanceSnapshot,
+  AppChangeLog,
+  AppChangePatch,
+  AppDataKey,
   CompletedGoal,
   DailyEntry,
   ExpenseEntry,
@@ -66,6 +70,7 @@ import {
   getSubGoalSaved,
 } from "./utils/goals";
 import {
+  formatMoney,
   formatMoneyInput,
   parseMoneyInput,
 } from "./utils/money";
@@ -141,6 +146,152 @@ function loadLocalJson<T>(key: string, fallback: T): T {
   } catch {
     return fallback;
   }
+}
+
+type AppDataSnapshot = {
+  entries: DailyEntry[];
+  expenses: ExpenseEntry[];
+  balanceChecks: BalanceCheckEntry[];
+  goals: Goals;
+  completedGoals: CompletedGoal[];
+};
+
+const APP_DATA_LABELS: Record<AppDataKey, string> = {
+  entries: "Nhật ký",
+  expenses: "Chi tiêu",
+  balanceChecks: "Kiểm kê",
+  goals: "Mục tiêu",
+  completedGoals: "Mục tiêu đã hoàn thành",
+};
+
+function cloneForChangeLog<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
+}
+
+function createAppChangePatch<T>({
+  key,
+  before,
+  after,
+  beforeSummary,
+  afterSummary,
+}: {
+  key: AppDataKey;
+  before: T;
+  after: T;
+  beforeSummary: string;
+  afterSummary: string;
+}): AppChangePatch {
+  return {
+    key,
+    before: cloneForChangeLog(before),
+    after: cloneForChangeLog(after),
+    beforeSummary,
+    afterSummary,
+  };
+}
+
+function describeDailyEntry(entry?: DailyEntry) {
+  if (!entry) return "Chưa có nhật ký ngày này.";
+
+  return [
+    `Ngày ${entry.date}`,
+    `Làm: ${formatMoney(entry.income)}`,
+    `Thưởng: ${formatMoney(entry.bonusMoney ?? 0)}`,
+    `Nhận: ${formatMoney(entry.receivedMoney ?? 0)}`,
+    `Đơn: ${entry.orderCount ?? 0}`,
+    `Giờ: ${roundWorkHours(entry.workHours ?? 0)}`,
+  ].join("\n");
+}
+
+function describeExpenseEntry(expense?: ExpenseEntry) {
+  if (!expense) return "Chưa có chi tiêu ngày này.";
+
+  const otherItems = getOtherExpenseItems(expense);
+  const otherText =
+    otherItems.length > 0
+      ? otherItems
+          .map((item) => `${item.label || "Khác"}: ${formatMoney(item.amount)}`)
+          .join(", ")
+      : formatMoney(expense.other ?? 0);
+
+  return [
+    `Ngày ${expense.date}`,
+    `Tổng chi: ${formatMoney(getExpenseTotal(expense))}`,
+    `Sáng: ${formatMoney(expense.breakfast)}`,
+    `Trưa: ${formatMoney(expense.lunch)}`,
+    `Tối: ${formatMoney(expense.dinner)}`,
+    `Khác: ${otherText}`,
+  ].join("\n");
+}
+
+function describeBalanceCheck(check?: BalanceCheckEntry) {
+  if (!check) return "Chưa có kiểm kê ngày này.";
+
+  return [
+    `Ngày ${check.date}`,
+    `App tính: ${formatMoney(check.appMoney)}`,
+    `Tiền thật: ${formatMoney(check.actualMoney)}`,
+    `Lệch: ${formatMoney(check.difference)}`,
+    `Tiền mặt: ${formatMoney(check.cash)}`,
+    `Tài khoản: ${formatMoney(check.bank)}`,
+  ].join("\n");
+}
+
+function describeSubGoal(goal?: SubGoal) {
+  if (!goal) return "Không còn mục tiêu phụ này.";
+
+  return [
+    goal.name,
+    `Mục tiêu: ${formatMoney(goal.target)}`,
+    `Đã có: ${formatMoney(getSubGoalSaved(goal))}`,
+    `Hạn: ${goal.deadline}`,
+    `Số lần góp: ${goal.contributions.length}`,
+  ].join("\n");
+}
+
+function describeMainGoal(goals: Goals) {
+  return [
+    goals.bigGoalName,
+    `Mục tiêu lớn: ${formatMoney(goals.bigGoalTarget)}`,
+    `Tiền ban đầu/đã có: ${formatMoney(goals.bigGoalSaved)}`,
+    `Hạn: ${goals.bigGoalDeadline}`,
+    `Mục tiêu phụ: ${goals.subGoals?.length ?? 0}`,
+  ].join("\n");
+}
+
+function describeCompletedGoal(goal?: CompletedGoal) {
+  if (!goal) return "Không có mục tiêu hoàn thành này.";
+
+  return [
+    goal.name,
+    `Mục tiêu: ${formatMoney(goal.target)}`,
+    `Đã có khi hoàn thành: ${formatMoney(goal.saved)}`,
+    `Hoàn thành ngày: ${goal.completedAt}`,
+  ].join("\n");
+}
+
+function describeCollectionSnapshot(key: AppDataKey, value: unknown) {
+  if (key === "entries" && Array.isArray(value)) {
+    return `${value.length} bản ghi nhật ký.`;
+  }
+
+  if (key === "expenses" && Array.isArray(value)) {
+    return `${value.length} bản ghi chi tiêu.`;
+  }
+
+  if (key === "balanceChecks" && Array.isArray(value)) {
+    return `${value.length} bản ghi kiểm kê.`;
+  }
+
+  if (key === "completedGoals" && Array.isArray(value)) {
+    return `${value.length} mục tiêu đã hoàn thành.`;
+  }
+
+  if (key === "goals") {
+    return describeMainGoal(value as Goals);
+  }
+
+  return `Dữ liệu ${APP_DATA_LABELS[key]} đã thay đổi.`;
 }
 
 function buildHubDiaryMigrationTotals() {
@@ -292,6 +443,9 @@ export default function App() {
     balanceChecks,
     setBalanceChecks,
   } = useMoneyDiaryData();
+  const [appChangeLogs, setAppChangeLogs] = useState<AppChangeLog[]>(() =>
+    loadLocalJson<AppChangeLog[]>(STORAGE_APP_CHANGE_LOGS_KEY, [])
+  );
   const [balanceCheckCurrentPage, setBalanceCheckCurrentPage] = useState(1);
 
   const [balanceCheckForm, setBalanceCheckForm] = useState({
@@ -453,6 +607,104 @@ useEffect(() => {
 
   balanceCheckDraftDirtyRef.current = false;
 }, [selectedDate, balanceChecks, balanceCheckForm.date]);
+
+useEffect(() => {
+  localStorage.setItem(
+    STORAGE_APP_CHANGE_LOGS_KEY,
+    JSON.stringify(appChangeLogs.slice(0, 300))
+  );
+}, [appChangeLogs]);
+
+function getCurrentAppSnapshot(): AppDataSnapshot {
+  return {
+    entries,
+    expenses,
+    balanceChecks,
+    goals,
+    completedGoals,
+  };
+}
+
+function createChangeLog(input: Omit<AppChangeLog, "id" | "createdAt">) {
+  return {
+    ...input,
+    id: crypto.randomUUID(),
+    createdAt: new Date().toISOString(),
+  };
+}
+
+function recordAppChange(input: Omit<AppChangeLog, "id" | "createdAt">) {
+  setAppChangeLogs((prev) => [createChangeLog(input), ...prev].slice(0, 300));
+}
+
+function restoreChangeLog(id: string) {
+  const log = appChangeLogs.find((item) => item.id === id);
+
+  if (!log || log.restoredAt) return;
+
+  const confirmed = confirm(
+    `Khôi phục thay đổi "${log.title}"?\n\nCác phần liên quan sẽ quay về trạng thái trước thay đổi này.`
+  );
+
+  if (!confirmed) return;
+
+  const beforeRestore = getCurrentAppSnapshot();
+  const restoredSnapshot: AppDataSnapshot = {
+    ...beforeRestore,
+  };
+
+  for (const patch of log.patches) {
+    if (patch.key === "entries") {
+      restoredSnapshot.entries = patch.before as DailyEntry[];
+    } else if (patch.key === "expenses") {
+      restoredSnapshot.expenses = patch.before as ExpenseEntry[];
+    } else if (patch.key === "balanceChecks") {
+      restoredSnapshot.balanceChecks = patch.before as BalanceCheckEntry[];
+    } else if (patch.key === "goals") {
+      restoredSnapshot.goals = patch.before as Goals;
+    } else if (patch.key === "completedGoals") {
+      restoredSnapshot.completedGoals = patch.before as CompletedGoal[];
+    }
+  }
+
+  setEntries(restoredSnapshot.entries);
+  setExpenses(restoredSnapshot.expenses);
+  setBalanceChecks(restoredSnapshot.balanceChecks);
+  setGoals(restoredSnapshot.goals);
+  setCompletedGoals(restoredSnapshot.completedGoals);
+
+  const restorePatches = log.patches.map((patch) => {
+    const key = patch.key;
+
+    return createAppChangePatch({
+      key,
+      before: beforeRestore[key],
+      after: restoredSnapshot[key],
+      beforeSummary: describeCollectionSnapshot(key, beforeRestore[key]),
+      afterSummary: patch.beforeSummary,
+    });
+  });
+  const now = new Date().toISOString();
+
+  setAppChangeLogs((prev) => [
+    createChangeLog({
+      action: "restore",
+      title: `Khôi phục: ${log.title}`,
+      description: `Đã đưa dữ liệu về trạng thái trước thay đổi lúc ${new Date(
+        log.createdAt
+      ).toLocaleString("vi-VN")}.`,
+      date: log.date,
+      originalChangeId: log.id,
+      patches: restorePatches,
+    }),
+    ...prev.map((item) =>
+      item.id === log.id ? { ...item, restoredAt: now } : item
+    ),
+  ]);
+
+  markLocalChanged("Đã khôi phục dữ liệu từ lịch sử thay đổi, đang lưu cloud...");
+  setSyncStatus("Đã khôi phục dữ liệu");
+}
 
   const [form, setForm] = useState({
     date: getToday(),
@@ -1067,32 +1319,44 @@ function handleExpenseSubmit(event: React.FormEvent) {
 
   const now = new Date().toISOString();
   const savedDate = expenseForm.date;
+  const existingExpense = expenses.find(
+    (expense) => expense.date === expenseForm.date
+  );
+  const newExpense: ExpenseEntry = {
+    id: existingExpense?.id ?? crypto.randomUUID(),
+    date: expenseForm.date,
+    breakfast,
+    lunch,
+    dinner,
+    other,
+    otherLabel: getSingleOtherExpenseLabel(otherItems),
+    otherItems,
+    note: expenseForm.note,
+    createdAt: existingExpense?.createdAt ?? now,
+    updatedAt: now,
+  };
+  const nextExpenses = [
+    ...expenses.filter((expense) => expense.date !== expenseForm.date),
+    newExpense,
+  ];
+
   markLocalChanged("Đã sửa chi tiêu, đang lưu cloud...");
 
-  setExpenses((prev) => {
-    const existingExpense = prev.find(
-      (expense) => expense.date === expenseForm.date
-    );
-
-    const newExpense: ExpenseEntry = {
-      id: existingExpense?.id ?? crypto.randomUUID(),
-      date: expenseForm.date,
-      breakfast,
-      lunch,
-      dinner,
-      other,
-      otherLabel: getSingleOtherExpenseLabel(otherItems),
-      otherItems,
-      note: expenseForm.note,
-      createdAt: existingExpense?.createdAt ?? now,
-      updatedAt: now,
-    };
-
-    const withoutSameDate = prev.filter(
-      (expense) => expense.date !== expenseForm.date
-    );
-
-    return [...withoutSameDate, newExpense];
+  setExpenses(nextExpenses);
+  recordAppChange({
+    action: existingExpense ? "update" : "create",
+    title: existingExpense ? "Cập nhật chi tiêu" : "Thêm chi tiêu",
+    description: `Chi tiêu ngày ${savedDate}.`,
+    date: savedDate,
+    patches: [
+      createAppChangePatch({
+        key: "expenses",
+        before: expenses,
+        after: nextExpenses,
+        beforeSummary: describeExpenseEntry(existingExpense),
+        afterSummary: describeExpenseEntry(newExpense),
+      }),
+    ],
   });
 
   setSelectedDate(savedDate);
@@ -1151,54 +1415,69 @@ function handleCloseDaySubmit(event: React.FormEvent) {
 
   const now = new Date().toISOString();
   const savedDate = closeDayForm.date;
+  const existingEntry = entries.find((entry) => entry.date === savedDate);
+  const newEntry: DailyEntry = {
+    id: existingEntry?.id ?? crypto.randomUUID(),
+    date: savedDate,
+    diary: note || existingEntry?.diary || "",
+    income,
+    receivedMoney,
+    bonusMoney,
+    orderCount: existingEntry?.orderCount ?? 0,
+    workHours: roundWorkHours(existingEntry?.workHours ?? 0),
+    mood: closeDayForm.mood,
+    note: note || existingEntry?.note || "",
+    createdAt: existingEntry?.createdAt ?? now,
+    updatedAt: now,
+  };
+  const nextEntries = [
+    ...entries.filter((entry) => entry.date !== savedDate),
+    newEntry,
+  ];
+  const existingExpense = expenses.find((expense) => expense.date === savedDate);
+  const newExpense: ExpenseEntry = {
+    id: existingExpense?.id ?? crypto.randomUUID(),
+    date: savedDate,
+    breakfast,
+    lunch,
+    dinner,
+    other,
+    otherLabel: getSingleOtherExpenseLabel(otherItems),
+    otherItems,
+    note: note || existingExpense?.note || "",
+    createdAt: existingExpense?.createdAt ?? now,
+    updatedAt: now,
+  };
+  const nextExpenses = [
+    ...expenses.filter((expense) => expense.date !== savedDate),
+    newExpense,
+  ];
 
   markLocalChanged("Đã chốt ngày, đang lưu cloud...");
 
-  setEntries((prev) => {
-    const existingEntry = prev.find((entry) => entry.date === savedDate);
-
-    const newEntry: DailyEntry = {
-      id: existingEntry?.id ?? crypto.randomUUID(),
-      date: savedDate,
-      diary: note || existingEntry?.diary || "",
-      income,
-      receivedMoney,
-      bonusMoney,
-      orderCount: existingEntry?.orderCount ?? 0,
-      workHours: roundWorkHours(existingEntry?.workHours ?? 0),
-      mood: closeDayForm.mood,
-      note: note || existingEntry?.note || "",
-      createdAt: existingEntry?.createdAt ?? now,
-      updatedAt: now,
-    };
-
-    return [
-      ...prev.filter((entry) => entry.date !== savedDate),
-      newEntry,
-    ];
-  });
-
-  setExpenses((prev) => {
-    const existingExpense = prev.find((expense) => expense.date === savedDate);
-
-    const newExpense: ExpenseEntry = {
-      id: existingExpense?.id ?? crypto.randomUUID(),
-      date: savedDate,
-      breakfast,
-      lunch,
-      dinner,
-      other,
-      otherLabel: getSingleOtherExpenseLabel(otherItems),
-      otherItems,
-      note: note || existingExpense?.note || "",
-      createdAt: existingExpense?.createdAt ?? now,
-      updatedAt: now,
-    };
-
-    return [
-      ...prev.filter((expense) => expense.date !== savedDate),
-      newExpense,
-    ];
+  setEntries(nextEntries);
+  setExpenses(nextExpenses);
+  recordAppChange({
+    action: existingEntry || existingExpense ? "update" : "create",
+    title: "Chốt ngày",
+    description: `Chốt thu nhập, chi tiêu và ghi chú ngày ${savedDate}.`,
+    date: savedDate,
+    patches: [
+      createAppChangePatch({
+        key: "entries",
+        before: entries,
+        after: nextEntries,
+        beforeSummary: describeDailyEntry(existingEntry),
+        afterSummary: describeDailyEntry(newEntry),
+      }),
+      createAppChangePatch({
+        key: "expenses",
+        before: expenses,
+        after: nextExpenses,
+        beforeSummary: describeExpenseEntry(existingExpense),
+        afterSummary: describeExpenseEntry(newExpense),
+      }),
+    ],
   });
 
   setSelectedDate(savedDate);
@@ -1229,31 +1508,44 @@ function handleBalanceCheckSubmit(event: React.FormEvent) {
   const actualMoney = cash + bank;
   const difference = actualMoney - appMoney;
   const now = new Date().toISOString();
+  const existing = balanceChecks.find(
+    (item) => item.date === balanceCheckForm.date
+  );
+  const newCheck: BalanceCheckEntry = {
+    id: existing?.id ?? crypto.randomUUID(),
+    date: balanceCheckForm.date,
+    cash,
+    bank,
+    appMoney,
+    actualMoney,
+    difference,
+    note: balanceCheckForm.note,
+    createdAt: existing?.createdAt ?? now,
+    updatedAt: now,
+  };
+  const nextBalanceChecks = [
+    ...balanceChecks.filter((item) => item.date !== balanceCheckForm.date),
+    newCheck,
+  ];
 
   markLocalChanged("Đã lưu kiểm kê số dư, đang lưu cloud...");
   balanceCheckDraftDirtyRef.current = false;
 
-  setBalanceChecks((prev) => {
-    const existing = prev.find((item) => item.date === balanceCheckForm.date);
-
-    const newCheck: BalanceCheckEntry = {
-      id: existing?.id ?? crypto.randomUUID(),
-      date: balanceCheckForm.date,
-      cash,
-      bank,
-      appMoney,
-      actualMoney,
-      difference,
-      note: balanceCheckForm.note,
-      createdAt: existing?.createdAt ?? now,
-      updatedAt: now,
-    };
-
-    const withoutSameDate = prev.filter(
-      (item) => item.date !== balanceCheckForm.date
-    );
-
-    return [...withoutSameDate, newCheck];
+  setBalanceChecks(nextBalanceChecks);
+  recordAppChange({
+    action: existing ? "update" : "create",
+    title: existing ? "Cập nhật kiểm kê số dư" : "Thêm kiểm kê số dư",
+    description: `Kiểm kê ngày ${balanceCheckForm.date}.`,
+    date: balanceCheckForm.date,
+    patches: [
+      createAppChangePatch({
+        key: "balanceChecks",
+        before: balanceChecks,
+        after: nextBalanceChecks,
+        beforeSummary: describeBalanceCheck(existing),
+        afterSummary: describeBalanceCheck(newCheck),
+      }),
+    ],
   });
 
   setSyncStatus("Đã lưu kiểm kê số dư");
@@ -1261,12 +1553,32 @@ function handleBalanceCheckSubmit(event: React.FormEvent) {
 }
 
 function deleteBalanceCheck(id: string) {
+  const checkToDelete = balanceChecks.find((item) => item.id === id);
+  if (!checkToDelete) return;
+
   const confirmed = confirm("Bạn có chắc muốn xóa kiểm kê số dư này không?");
   if (!confirmed) return;
 
+  const nextBalanceChecks = balanceChecks.filter((item) => item.id !== id);
+
   markLocalChanged("Đã xóa kiểm kê số dư, đang lưu cloud...");
 
-  setBalanceChecks((prev) => prev.filter((item) => item.id !== id));
+  setBalanceChecks(nextBalanceChecks);
+  recordAppChange({
+    action: "delete",
+    title: "Xóa kiểm kê số dư",
+    description: `Xóa kiểm kê ngày ${checkToDelete.date}.`,
+    date: checkToDelete.date,
+    patches: [
+      createAppChangePatch({
+        key: "balanceChecks",
+        before: balanceChecks,
+        after: nextBalanceChecks,
+        beforeSummary: describeBalanceCheck(checkToDelete),
+        afterSummary: "Đã xóa kiểm kê này.",
+      }),
+    ],
+  });
 }
 
 function editBalanceCheck(item: BalanceCheckEntry) {
@@ -1314,12 +1626,7 @@ function editBalanceCheck(item: BalanceCheckEntry) {
 
     const savedDate = form.date;
     const now = new Date().toISOString();
-
-    markLocalChanged("Đã sửa nhật ký, đang lưu cloud...");
-
-    setEntries((prev) => {
-      const existingEntry = prev.find((entry) => entry.date === form.date);
-
+    const existingEntry = entries.find((entry) => entry.date === form.date);
     const newEntry: DailyEntry = {
       id: existingEntry?.id ?? crypto.randomUUID(),
       date: form.date,
@@ -1334,9 +1641,28 @@ function editBalanceCheck(item: BalanceCheckEntry) {
       createdAt: existingEntry?.createdAt ?? now,
       updatedAt: now,
     };
+    const nextEntries = [
+      ...entries.filter((entry) => entry.date !== form.date),
+      newEntry,
+    ];
 
-      const withoutSameDate = prev.filter((entry) => entry.date !== form.date);
-      return [...withoutSameDate, newEntry];
+    markLocalChanged("Đã sửa nhật ký, đang lưu cloud...");
+
+    setEntries(nextEntries);
+    recordAppChange({
+      action: existingEntry ? "update" : "create",
+      title: existingEntry ? "Cập nhật nhật ký" : "Thêm nhật ký",
+      description: `Nhật ký ngày ${savedDate}.`,
+      date: savedDate,
+      patches: [
+        createAppChangePatch({
+          key: "entries",
+          before: entries,
+          after: nextEntries,
+          beforeSummary: describeDailyEntry(existingEntry),
+          afterSummary: describeDailyEntry(newEntry),
+        }),
+      ],
     });
 
     setForm({
@@ -1399,21 +1725,61 @@ function editExpense(expense: ExpenseEntry) {
 }
 
 function deleteExpense(id: string) {
+  const expenseToDelete = expenses.find((expense) => expense.id === id);
+  if (!expenseToDelete) return;
+
   const confirmed = confirm("Bạn có chắc muốn xóa chi tiêu này không?");
   if (!confirmed) return;
 
+  const nextExpenses = expenses.filter((expense) => expense.id !== id);
+
   markLocalChanged("Đã xóa chi tiêu, đang lưu cloud...");
 
-  setExpenses((prev) => prev.filter((expense) => expense.id !== id));
+  setExpenses(nextExpenses);
+  recordAppChange({
+    action: "delete",
+    title: "Xóa chi tiêu",
+    description: `Xóa chi tiêu ngày ${expenseToDelete.date}.`,
+    date: expenseToDelete.date,
+    patches: [
+      createAppChangePatch({
+        key: "expenses",
+        before: expenses,
+        after: nextExpenses,
+        beforeSummary: describeExpenseEntry(expenseToDelete),
+        afterSummary: "Đã xóa chi tiêu này.",
+      }),
+    ],
+  });
 }
 
 function deleteEntry(id: string) {
+  const entryToDelete = entries.find((entry) => entry.id === id);
+  if (!entryToDelete) return;
+
   const confirmed = confirm("Bạn có chắc muốn xóa nhật ký này không?");
   if (!confirmed) return;
 
+  const nextEntries = entries.filter((entry) => entry.id !== id);
+
   markLocalChanged("Đã xóa nhật ký, đang lưu cloud...");
 
-  setEntries((prev) => prev.filter((entry) => entry.id !== id));
+  setEntries(nextEntries);
+  recordAppChange({
+    action: "delete",
+    title: "Xóa nhật ký",
+    description: `Xóa nhật ký ngày ${entryToDelete.date}.`,
+    date: entryToDelete.date,
+    patches: [
+      createAppChangePatch({
+        key: "entries",
+        before: entries,
+        after: nextEntries,
+        beforeSummary: describeDailyEntry(entryToDelete),
+        afterSummary: "Đã xóa nhật ký này.",
+      }),
+    ],
+  });
 }
 
 function completeCurrentGoal() {
@@ -1493,21 +1859,64 @@ function completeCurrentGoal() {
     balanceSnapshots,
     balanceChecksSnapshot,
   };
-
-  setCompletedGoals((prev) => [completedGoal, ...prev]);
-
-  setEntries([]);
-  setExpenses([]);
-  setBalanceChecks([]);
-
-  setGoals((prev) => ({
-    ...prev,
+  const nextCompletedGoals = [completedGoal, ...completedGoals];
+  const nextGoals = {
+    ...goals,
     bigGoalName: "Mục tiêu mới",
     bigGoalTarget: 0,
     bigGoalSaved: 0,
     bigGoalDeadline: getToday(),
     bigGoalStartDate: getToday(),
-  }));
+  };
+
+  setCompletedGoals(nextCompletedGoals);
+  setEntries([]);
+  setExpenses([]);
+  setBalanceChecks([]);
+  setGoals(nextGoals);
+  recordAppChange({
+    action: "complete",
+    title: "Hoàn thành mục tiêu chính",
+    description: `Lưu hành trình "${completedGoal.name}" vào mục tiêu đã hoàn thành và reset dữ liệu hiện tại.`,
+    date: completedGoal.completedAt,
+    patches: [
+      createAppChangePatch({
+        key: "completedGoals",
+        before: completedGoals,
+        after: nextCompletedGoals,
+        beforeSummary: `${completedGoals.length} mục tiêu đã hoàn thành.`,
+        afterSummary: describeCompletedGoal(completedGoal),
+      }),
+      createAppChangePatch({
+        key: "entries",
+        before: entries,
+        after: [],
+        beforeSummary: describeCollectionSnapshot("entries", entries),
+        afterSummary: "Đã reset nhật ký hiện tại.",
+      }),
+      createAppChangePatch({
+        key: "expenses",
+        before: expenses,
+        after: [],
+        beforeSummary: describeCollectionSnapshot("expenses", expenses),
+        afterSummary: "Đã reset chi tiêu hiện tại.",
+      }),
+      createAppChangePatch({
+        key: "balanceChecks",
+        before: balanceChecks,
+        after: [],
+        beforeSummary: describeCollectionSnapshot("balanceChecks", balanceChecks),
+        afterSummary: "Đã reset kiểm kê hiện tại.",
+      }),
+      createAppChangePatch({
+        key: "goals",
+        before: goals,
+        after: nextGoals,
+        beforeSummary: describeMainGoal(goals),
+        afterSummary: describeMainGoal(nextGoals),
+      }),
+    ],
+  });
 
   setSelectedDate(getToday());
   setEditingDate(null);
@@ -1548,13 +1957,29 @@ function addSubGoal() {
     createdAt: now,
     updatedAt: now,
   };
+  const nextGoals = {
+    ...goals,
+    subGoals: [...(goals.subGoals ?? []), newSubGoal],
+  };
 
   markLocalChanged("Đã thêm mục tiêu phụ, đang lưu cloud...");
 
-  setGoals((prev) => ({
-    ...prev,
-    subGoals: [...(prev.subGoals ?? []), newSubGoal],
-  }));
+  setGoals(nextGoals);
+  recordAppChange({
+    action: "create",
+    title: "Thêm mục tiêu phụ",
+    description: `Thêm mục tiêu phụ "${newSubGoal.name}".`,
+    date: newSubGoal.startDate,
+    patches: [
+      createAppChangePatch({
+        key: "goals",
+        before: goals,
+        after: nextGoals,
+        beforeSummary: `${goals.subGoals?.length ?? 0} mục tiêu phụ.`,
+        afterSummary: describeSubGoal(newSubGoal),
+      }),
+    ],
+  });
 
   setSubGoalForm({
     name: "",
@@ -1566,15 +1991,35 @@ function addSubGoal() {
 }
 
 function deleteSubGoal(id: string) {
+  const subGoalToDelete = (goals.subGoals ?? []).find((goal) => goal.id === id);
+  if (!subGoalToDelete) return;
+
   const confirmed = confirm("Bạn có chắc muốn xóa mục tiêu phụ này không?");
   if (!confirmed) return;
 
+  const nextGoals = {
+    ...goals,
+    subGoals: (goals.subGoals ?? []).filter((goal) => goal.id !== id),
+  };
+
   markLocalChanged("Đã xóa mục tiêu phụ, đang lưu cloud...");
 
-  setGoals((prev) => ({
-    ...prev,
-    subGoals: (prev.subGoals ?? []).filter((goal) => goal.id !== id),
-  }));
+  setGoals(nextGoals);
+  recordAppChange({
+    action: "delete",
+    title: "Xóa mục tiêu phụ",
+    description: `Xóa mục tiêu phụ "${subGoalToDelete.name}".`,
+    date: subGoalToDelete.startDate,
+    patches: [
+      createAppChangePatch({
+        key: "goals",
+        before: goals,
+        after: nextGoals,
+        beforeSummary: describeSubGoal(subGoalToDelete),
+        afterSummary: "Đã xóa mục tiêu phụ này.",
+      }),
+    ],
+  });
 }
 
 function addContributionToSubGoal(goalId: string) {
@@ -1600,12 +2045,10 @@ function addContributionToSubGoal(goalId: string) {
     createdAt: now,
     updatedAt: now,
   };
-
-  markLocalChanged("Đã góp tiền vào mục tiêu phụ, đang lưu cloud...");
-
-  setGoals((prev) => ({
-    ...prev,
-    subGoals: (prev.subGoals ?? []).map((goal) => {
+  const targetGoal = (goals.subGoals ?? []).find((goal) => goal.id === goalId);
+  const nextGoals = {
+    ...goals,
+    subGoals: (goals.subGoals ?? []).map((goal) => {
       if (goal.id !== goalId) return goal;
 
       return {
@@ -1614,7 +2057,29 @@ function addContributionToSubGoal(goalId: string) {
         updatedAt: now,
       };
     }),
-  }));
+  };
+  const nextGoal = (nextGoals.subGoals ?? []).find((goal) => goal.id === goalId);
+
+  markLocalChanged("Đã góp tiền vào mục tiêu phụ, đang lưu cloud...");
+
+  setGoals(nextGoals);
+  recordAppChange({
+    action: "update",
+    title: "Góp tiền mục tiêu phụ",
+    description: targetGoal
+      ? `Góp ${formatMoney(amount)} vào "${targetGoal.name}".`
+      : `Góp ${formatMoney(amount)} vào mục tiêu phụ.`,
+    date: contribution.date,
+    patches: [
+      createAppChangePatch({
+        key: "goals",
+        before: goals,
+        after: nextGoals,
+        beforeSummary: describeSubGoal(targetGoal),
+        afterSummary: describeSubGoal(nextGoal),
+      }),
+    ],
+  });
 
   setSubGoalContributionForms((prev) => ({
     ...prev,
@@ -1682,29 +2147,72 @@ function completeSubGoal(goalId: string) {
     contributionsSnapshot: goal.contributions,
     goalProgressSnapshots: buildSubGoalProgressData(goal),
   };
+  const nextCompletedGoals = [completedGoal, ...completedGoals];
+  const nextGoals = {
+    ...goals,
+    subGoals: (goals.subGoals ?? []).filter((item) => item.id !== goalId),
+  };
 
   markLocalChanged("Đã hoàn thành mục tiêu phụ, đang lưu cloud..."); 
 
-  setCompletedGoals((prev) => [completedGoal, ...prev]);
-
-  setGoals((prev) => ({
-    ...prev,
-    subGoals: (prev.subGoals ?? []).filter((item) => item.id !== goalId),
-  }));
+  setCompletedGoals(nextCompletedGoals);
+  setGoals(nextGoals);
+  recordAppChange({
+    action: "complete",
+    title: "Hoàn thành mục tiêu phụ",
+    description: `Hoàn thành mục tiêu phụ "${goal.name}".`,
+    date: completedGoal.completedAt,
+    patches: [
+      createAppChangePatch({
+        key: "goals",
+        before: goals,
+        after: nextGoals,
+        beforeSummary: describeSubGoal(goal),
+        afterSummary: "Đã chuyển mục tiêu phụ sang danh sách hoàn thành.",
+      }),
+      createAppChangePatch({
+        key: "completedGoals",
+        before: completedGoals,
+        after: nextCompletedGoals,
+        beforeSummary: `${completedGoals.length} mục tiêu đã hoàn thành.`,
+        afterSummary: describeCompletedGoal(completedGoal),
+      }),
+    ],
+  });
 
   navigateTo("goals", "completed");
 }
 
 function deleteCompletedGoal(id: string) {
+  const completedGoalToDelete = completedGoals.find((goal) => goal.id === id);
+  if (!completedGoalToDelete) return;
+
   const confirmed = confirm(
     "Bạn có chắc muốn xóa mục tiêu đã hoàn thành này không?"
   );
 
   if (!confirmed) return;
 
+  const nextCompletedGoals = completedGoals.filter((goal) => goal.id !== id);
+
   markLocalChanged("Đã xóa mục tiêu hoàn thành, đang lưu cloud...");
 
-  setCompletedGoals((prev) => prev.filter((goal) => goal.id !== id));
+  setCompletedGoals(nextCompletedGoals);
+  recordAppChange({
+    action: "delete",
+    title: "Xóa mục tiêu đã hoàn thành",
+    description: `Xóa mục tiêu đã hoàn thành "${completedGoalToDelete.name}".`,
+    date: completedGoalToDelete.completedAt,
+    patches: [
+      createAppChangePatch({
+        key: "completedGoals",
+        before: completedGoals,
+        after: nextCompletedGoals,
+        beforeSummary: describeCompletedGoal(completedGoalToDelete),
+        afterSummary: "Đã xóa mục tiêu hoàn thành này.",
+      }),
+    ],
+  });
 }
 
 function updateGoal(key: keyof Goals, value: string) {
@@ -1713,13 +2221,41 @@ function updateGoal(key: keyof Goals, value: string) {
     "bigGoalDeadline",
     "bigGoalStartDate",
   ];
+  const fieldLabels: Partial<Record<keyof Goals, string>> = {
+    dailyIncome: "Tiền / ngày",
+    dailyHours: "Giờ làm / ngày",
+    weeklyIncome: "Tiền / tuần",
+    weeklyHours: "Giờ làm / tuần",
+    monthlyIncome: "Tiền / tháng",
+    monthlyHours: "Giờ làm / tháng",
+  };
+  const nextValue = textFields.includes(key) ? value : Number(value);
+  const previousValue = goals[key];
+
+  if (previousValue === nextValue) return;
+
+  const nextGoals = {
+    ...goals,
+    [key]: nextValue,
+  };
 
   markLocalChanged("Đã cập nhật mục tiêu, đang lưu cloud...");
 
-  setGoals((prev) => ({
-    ...prev,
-    [key]: textFields.includes(key) ? value : Number(value),
-  }));
+  setGoals(nextGoals);
+  recordAppChange({
+    action: "update",
+    title: "Cập nhật mốc mục tiêu",
+    description: `Cập nhật ${fieldLabels[key] ?? String(key)}.`,
+    patches: [
+      createAppChangePatch({
+        key: "goals",
+        before: goals,
+        after: nextGoals,
+        beforeSummary: `${fieldLabels[key] ?? String(key)}: ${previousValue}`,
+        afterSummary: `${fieldLabels[key] ?? String(key)}: ${nextValue}`,
+      }),
+    ],
+  });
 }
 
 function saveMainGoal() {
@@ -1741,17 +2277,33 @@ function saveMainGoal() {
     alert("Bạn cần nhập ngày bắt đầu và hạn mục tiêu.");
     return;
   }
-
-  markLocalChanged("Đã lưu mục tiêu lớn, đang lưu cloud...");
-
-  setGoals((prev) => ({
-    ...prev,
+  const nextGoals = {
+    ...goals,
     bigGoalName: name,
     bigGoalTarget: target,
     bigGoalSaved: saved,
     bigGoalStartDate: mainGoalForm.bigGoalStartDate,
     bigGoalDeadline: mainGoalForm.bigGoalDeadline,
-  }));
+  };
+
+  markLocalChanged("Đã lưu mục tiêu lớn, đang lưu cloud...");
+
+  setGoals(nextGoals);
+  recordAppChange({
+    action: "update",
+    title: "Lưu mục tiêu lớn",
+    description: `Cập nhật mục tiêu lớn "${name}".`,
+    date: nextGoals.bigGoalStartDate,
+    patches: [
+      createAppChangePatch({
+        key: "goals",
+        before: goals,
+        after: nextGoals,
+        beforeSummary: describeMainGoal(goals),
+        afterSummary: describeMainGoal(nextGoals),
+      }),
+    ],
+  });
 
   alert("Đã lưu mục tiêu lớn.");
 }
@@ -1853,6 +2405,7 @@ function renderBalanceCheckCard(title = "Kiểm kê số dư hôm nay") {
             email={session.user.email}
             syncStatus={syncStatus}
             onExportWord={exportToWord}
+            onOpenChangeLog={() => navigateTo("changes")}
             onLogout={handleLogout}
           />
 
@@ -1984,15 +2537,29 @@ function renderBalanceCheckCard(title = "Kiểm kê số dư hôm nay") {
       expenses={expenses}
       onAdjustDiaryContribution={(previousContribution, nextContribution) => {
         const now = new Date().toISOString();
-
-        setEntries((prev) =>
-          applyHubDiaryContributionChange(
-            prev,
-            previousContribution,
-            nextContribution,
-            now
-          )
+        const nextEntries = applyHubDiaryContributionChange(
+          entries,
+          previousContribution,
+          nextContribution,
+          now
         );
+
+        setEntries(nextEntries);
+        recordAppChange({
+          action: "update",
+          title: "Đồng bộ thay đổi Hub vào nhật ký",
+          description: "Hub đã điều chỉnh tiền, đơn hoặc giờ trong nhật ký.",
+          date: nextContribution?.date ?? previousContribution?.date,
+          patches: [
+            createAppChangePatch({
+              key: "entries",
+              before: entries,
+              after: nextEntries,
+              beforeSummary: describeCollectionSnapshot("entries", entries),
+              afterSummary: describeCollectionSnapshot("entries", nextEntries),
+            }),
+          ],
+        });
 
         markLocalChanged("Đã đồng bộ tiền hub vào nhật ký, đang lưu cloud...");
       }}
@@ -2026,29 +2593,44 @@ function renderBalanceCheckCard(title = "Kiểm kê số dư hôm nay") {
         const appendText = (current?: string, next?: string) => {
           return [current, next].filter(Boolean).join("\n");
         };
+        const existing = entries.find((entry) => entry.date === date);
+        const newEntry: DailyEntry = {
+          id: existing?.id ?? crypto.randomUUID(),
+          date,
+          diary: appendText(existing?.diary, diaryPayload.diary),
+          income: (existing?.income ?? 0) + amount,
+          receivedMoney:
+            (existing?.receivedMoney ?? 0) + diaryPayload.receivedMoney,
+          bonusMoney: (existing?.bonusMoney ?? 0) + diaryPayload.bonusMoney,
+          orderCount: (existing?.orderCount ?? 0) + diaryPayload.orderCount,
+          workHours: roundWorkHours(
+            (existing?.workHours ?? 0) + diaryPayload.workHours
+          ),
+          mood: diaryPayload.mood,
+          note: appendText(existing?.note, diaryPayload.note),
+          createdAt: existing?.createdAt ?? now,
+          updatedAt: now,
+        };
+        const nextEntries = [
+          ...entries.filter((entry) => entry.date !== date),
+          newEntry,
+        ];
 
-        setEntries((prev) => {
-          const existing = prev.find((entry) => entry.date === date);
-
-          const newEntry: DailyEntry = {
-            id: existing?.id ?? crypto.randomUUID(),
-            date,
-            diary: appendText(existing?.diary, diaryPayload.diary),
-            income: (existing?.income ?? 0) + amount,
-            receivedMoney:
-              (existing?.receivedMoney ?? 0) + diaryPayload.receivedMoney,
-            bonusMoney: (existing?.bonusMoney ?? 0) + diaryPayload.bonusMoney,
-            orderCount: (existing?.orderCount ?? 0) + diaryPayload.orderCount,
-            workHours: roundWorkHours(
-              (existing?.workHours ?? 0) + diaryPayload.workHours
-            ),
-            mood: diaryPayload.mood,
-            note: appendText(existing?.note, diaryPayload.note),
-            createdAt: existing?.createdAt ?? now,
-            updatedAt: now,
-          };
-
-          return [...prev.filter((entry) => entry.date !== date), newEntry];
+        setEntries(nextEntries);
+        recordAppChange({
+          action: existing ? "update" : "create",
+          title: "Lưu ca Hub vào nhật ký",
+          description: `Hub đã cộng tiền vào nhật ký ngày ${date}.`,
+          date,
+          patches: [
+            createAppChangePatch({
+              key: "entries",
+              before: entries,
+              after: nextEntries,
+              beforeSummary: describeDailyEntry(existing),
+              afterSummary: describeDailyEntry(newEntry),
+            }),
+          ],
         });
 
         markLocalChanged("Đã lưu ca hub vào nhật ký, đang lưu cloud...");
@@ -2110,6 +2692,13 @@ function renderBalanceCheckCard(title = "Kiểm kê số dư hôm nay") {
       setExpenseCurrentPage={setExpenseCurrentPage}
       expenseTotalPages={expenseTotalPages}
       navigateTo={navigateTo}
+    />
+  )}
+  {page === "changes" && (
+    <AppChangeLogPage
+      changeLogs={appChangeLogs}
+      navigateTo={navigateTo}
+      restoreChangeLog={restoreChangeLog}
     />
   )}</main>
 
