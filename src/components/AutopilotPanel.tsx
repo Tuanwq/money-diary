@@ -12,7 +12,7 @@ import {
   type AutopilotGoal,
   type AutopilotGoalStatus,
 } from "../utils/autopilot";
-import { addDaysToDateString, formatDateShort } from "../utils/date";
+import { formatDateShort } from "../utils/date";
 import { formatMoney } from "../utils/money";
 import {
   buildMoneyRadar,
@@ -327,20 +327,14 @@ function getRadarStatusClass(status: MoneyRadarSeverity) {
 }
 
 function MoneyRadarPanel({ radar }: { radar: MoneyRadar }) {
-  const [auditRange, setAuditRange] = useState<"last7" | "last30" | "all">(
-    "last30"
+  const [auditIndex, setAuditIndex] = useState(0);
+  const safeAuditIndex = Math.min(
+    auditIndex,
+    Math.max(radar.dailyAudits.length - 1, 0)
   );
-  const newestAuditDate = radar.dailyAudits[0]?.date ?? "";
-  const auditFromDate =
-    auditRange === "last7" && newestAuditDate
-      ? addDaysToDateString(newestAuditDate, -6)
-      : auditRange === "last30" && newestAuditDate
-        ? addDaysToDateString(newestAuditDate, -29)
-        : "";
-  const visibleAudits =
-    auditRange === "all" || !auditFromDate
-      ? radar.dailyAudits
-      : radar.dailyAudits.filter((audit) => audit.date >= auditFromDate);
+  const selectedAudit = radar.dailyAudits[safeAuditIndex];
+  const canGoOlder = safeAuditIndex < radar.dailyAudits.length - 1;
+  const canGoNewer = safeAuditIndex > 0;
 
   return (
     <section className="rounded-2xl bg-white p-4 shadow-sm sm:p-5">
@@ -414,43 +408,54 @@ function MoneyRadarPanel({ radar }: { radar: MoneyRadar }) {
           <div>
             <h4 className="text-lg font-black">Dữ liệu lệch tiền ngày cũ</h4>
             <p className="mt-1 text-sm text-slate-500">
-              Xem lại từng lần kiểm kê để biết ngày nào thiếu, dư hoặc lệch nhẹ.
+              Dùng nút chuyển ngày để xem lại từng lần kiểm kê.
             </p>
           </div>
 
-          <div className="grid grid-cols-3 rounded-xl bg-slate-100 p-1 text-xs font-bold">
-            {[
-              { label: "7 ngày", value: "last7" },
-              { label: "30 ngày", value: "last30" },
-              { label: "Tất cả", value: "all" },
-            ].map((item) => (
-              <button
-                key={item.value}
-                type="button"
-                onClick={() =>
-                  setAuditRange(item.value as "last7" | "last30" | "all")
-                }
-                className={`rounded-lg px-3 py-2 ${
-                  auditRange === item.value
-                    ? "bg-slate-900 text-white"
-                    : "text-slate-600 hover:bg-white"
-                }`}
-              >
-                {item.label}
-              </button>
-            ))}
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setAuditIndex(safeAuditIndex + 1)}
+              disabled={!canGoOlder}
+              title="Xem ngày cũ hơn"
+              className={`flex h-10 w-10 items-center justify-center rounded-full border text-lg font-black ${
+                canGoOlder
+                  ? "bg-white text-slate-900 hover:bg-slate-100"
+                  : "cursor-not-allowed bg-slate-100 text-slate-300"
+              }`}
+            >
+              &lt;
+            </button>
+
+            <span className="min-w-12 text-center text-xs font-bold text-slate-500">
+              {radar.dailyAudits.length === 0
+                ? "0/0"
+                : `${safeAuditIndex + 1}/${radar.dailyAudits.length}`}
+            </span>
+
+            <button
+              type="button"
+              onClick={() => setAuditIndex(Math.max(safeAuditIndex - 1, 0))}
+              disabled={!canGoNewer}
+              title="Xem ngày mới hơn"
+              className={`flex h-10 w-10 items-center justify-center rounded-full border text-lg font-black ${
+                canGoNewer
+                  ? "bg-white text-slate-900 hover:bg-slate-100"
+                  : "cursor-not-allowed bg-slate-100 text-slate-300"
+              }`}
+            >
+              &gt;
+            </button>
           </div>
         </div>
 
-        <div className="mt-4 grid gap-3">
-          {visibleAudits.length === 0 ? (
-            <p className="rounded-xl bg-slate-100 p-3 text-sm font-medium text-slate-500">
-              Chưa có dữ liệu kiểm kê cũ trong khoảng này.
-            </p>
+        <div className="mt-4">
+          {selectedAudit ? (
+            <MoneyRadarAuditCard audit={selectedAudit} />
           ) : (
-            visibleAudits.map((audit) => (
-              <MoneyRadarAuditCard key={audit.date} audit={audit} />
-            ))
+            <p className="rounded-xl bg-slate-100 p-3 text-sm font-medium text-slate-500">
+              Chưa có dữ liệu kiểm kê cũ.
+            </p>
           )}
         </div>
       </div>
