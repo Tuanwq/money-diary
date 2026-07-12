@@ -286,7 +286,7 @@ export function HomePage({
             </div>
 
             <div className="goal-section__right">
-              <div className="col-span-3 min-w-0 sm:col-span-1">
+              <div className="goal-section__analysis col-span-3 min-w-0 sm:col-span-1">
                 <AiFinanceInsight
                   entries={entries}
                   expenses={expenses}
@@ -300,7 +300,7 @@ export function HomePage({
                 type="button"
                 onClick={goToPreviousDay}
                 aria-label="Xem ngày trước"
-                className="app-secondary-button rounded-xl px-4 py-2 text-lg font-bold shadow-sm"
+                className="app-secondary-button goal-section__nav-button goal-section__nav-button--previous rounded-xl px-4 py-2 text-lg font-bold shadow-sm"
               >
                 {"<"}
               </button>
@@ -310,7 +310,7 @@ export function HomePage({
                 onClick={goToNextDay}
                 disabled={isSelectedToday}
                 aria-label="Xem ngày sau"
-                className={`app-secondary-button rounded-xl px-4 py-2 text-lg font-bold shadow-sm ${
+                className={`app-secondary-button goal-section__nav-button goal-section__nav-button--next rounded-xl px-4 py-2 text-lg font-bold shadow-sm ${
                   isSelectedToday
                     ? "cursor-not-allowed opacity-40"
                     : ""
@@ -323,7 +323,7 @@ export function HomePage({
                 type="button"
                 onClick={goToToday}
                 disabled={isSelectedToday}
-                className={`app-secondary-button rounded-xl px-4 py-2 text-sm font-bold shadow-sm ${
+                className={`app-secondary-button goal-section__today-button rounded-xl px-4 py-2 text-sm font-bold shadow-sm ${
                   isSelectedToday
                     ? "cursor-not-allowed opacity-40"
                     : ""
@@ -337,7 +337,7 @@ export function HomePage({
                 value={selectedDate}
                 max={todayString}
                 onChange={(e) => handleSelectDate(e.target.value)}
-                className="app-input col-span-3 min-w-0 rounded-xl border px-4 py-2 text-sm shadow-sm sm:col-span-1"
+                className="app-input goal-section__date-input col-span-3 min-w-0 rounded-xl border px-4 py-2 text-sm shadow-sm sm:col-span-1"
               />
             </div>
           </div>

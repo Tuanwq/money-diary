@@ -303,7 +303,7 @@ textarea {
 
 .goal-section {
   box-sizing: border-box;
-  padding: 16px;
+  padding: 14px;
   transition:
     padding 180ms ease,
     border-radius 180ms ease,
@@ -323,7 +323,7 @@ textarea {
 }
 
 .goal-section--compact {
-  padding: 10px 12px;
+  padding: 8px 10px;
   border-radius: 18px;
   background: color-mix(in srgb, var(--surface) 94%, transparent);
   box-shadow: 0 16px 36px color-mix(in srgb, var(--secondary) 12%, transparent);
@@ -333,13 +333,13 @@ textarea {
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 16px;
+  gap: 12px;
   min-width: 0;
   transition: gap 180ms ease;
 }
 
 .goal-section--compact .goal-section__content {
-  gap: 10px;
+  gap: 8px;
 }
 
 .goal-section__left,
@@ -349,17 +349,17 @@ textarea {
 
 .goal-section__left {
   display: grid;
-  gap: 12px;
+  gap: 10px;
   transition: gap 180ms ease;
 }
 
 .goal-section--compact .goal-section__left {
-  gap: 8px;
+  gap: 6px;
 }
 
 .goal-section__title {
   display: grid;
-  gap: 4px;
+  gap: 2px;
   min-width: 0;
   transition: gap 180ms ease;
 }
@@ -392,10 +392,10 @@ textarea {
 .goal-section__cards {
   display: flex;
   align-items: flex-end;
-  gap: 12px;
+  gap: 8px;
   min-width: 0;
   overflow-x: auto;
-  padding-bottom: 4px;
+  padding-bottom: 2px;
   scroll-snap-type: x proximity;
   transition:
     gap 180ms ease,
@@ -403,23 +403,70 @@ textarea {
 }
 
 .goal-section--compact .goal-section__cards {
-  gap: 8px;
+  gap: 6px;
   padding-bottom: 0;
 }
 
 .goal-section__right {
   display: grid;
-  grid-template-columns: 1fr auto auto;
-  gap: 12px;
+  grid-template-columns:
+    minmax(44px, 0.8fr) minmax(44px, 0.8fr) minmax(96px, 1.4fr);
+  gap: 8px;
   transition: gap 180ms ease;
 }
 
 .goal-section--compact .goal-section__right {
-  gap: 8px;
+  gap: 6px;
+}
+
+.goal-section__analysis,
+.goal-section__date-input {
+  grid-column: 1 / -1;
+  min-width: 0;
+  width: 100%;
+}
+
+.goal-section__analysis {
+  grid-row: 1;
+}
+
+.goal-section__analysis .app-primary-button {
+  width: 100%;
+}
+
+.goal-section__nav-button,
+.goal-section__today-button {
+  min-width: 0;
+  width: 100%;
+  padding-inline: 0.75rem;
+}
+
+.goal-section__nav-button--previous {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+.goal-section__today-button {
+  grid-column: 3;
+  grid-row: 2;
+}
+
+.goal-section__nav-button--next {
+  grid-column: 2;
+  grid-row: 2;
+}
+
+.goal-section__date-input {
+  grid-row: 3;
 }
 
 .goal-section__main-card,
 .goal-section__sub-card {
+  display: grid;
+  min-height: 58px;
+  min-width: 76px;
+  align-content: center;
+  scroll-snap-align: start;
   transition:
     padding 180ms ease,
     border-radius 180ms ease,
@@ -442,12 +489,16 @@ textarea {
 
 .goal-section--compact .goal-section__main-card {
   border-radius: 14px;
-  padding: 8px 12px;
+  min-height: 44px;
+  min-width: 64px;
+  padding: 6px 10px;
 }
 
 .goal-section--compact .goal-section__sub-card {
   border-radius: 12px;
-  padding: 7px 10px;
+  min-height: 44px;
+  min-width: 64px;
+  padding: 6px 10px;
 }
 
 .goal-section--compact .goal-section__main-value {
@@ -469,7 +520,7 @@ textarea {
 .goal-section--compact .goal-section__right .app-primary-button,
 .goal-section--compact .goal-section__right .app-secondary-button,
 .goal-section--compact .goal-section__right .app-input {
-  min-height: 40px;
+  min-height: 36px;
 }
 
 .goal-section--compact .goal-section__right .app-primary-button,
@@ -504,6 +555,19 @@ textarea {
   }
 }
 
+@media (min-width: 640px) and (max-width: 1023.98px) {
+  .goal-section__right {
+    display: grid;
+    grid-template-columns:
+      minmax(56px, 0.9fr) minmax(56px, 0.9fr) minmax(128px, 1.3fr);
+    gap: 10px;
+  }
+
+  .goal-section--compact .goal-section__right {
+    gap: 8px;
+  }
+}
+
 @media (min-width: 1024px) {
   .goal-section {
     padding: 24px 32px;
@@ -522,11 +586,67 @@ textarea {
 
   .goal-section__left {
     flex: 1 1 auto;
+    gap: 12px;
+  }
+
+  .goal-section--compact .goal-section__left {
+    gap: 8px;
+  }
+
+  .goal-section__title {
+    gap: 4px;
+  }
+
+  .goal-section__cards {
+    gap: 12px;
+  }
+
+  .goal-section--compact .goal-section__cards {
+    gap: 8px;
   }
 
   .goal-section__right {
     flex: 0 1 auto;
     justify-content: flex-end;
+  }
+
+  .goal-section__analysis,
+  .goal-section__date-input,
+  .goal-section__analysis .app-primary-button,
+  .goal-section__nav-button,
+  .goal-section__today-button {
+    width: auto;
+  }
+
+  .goal-section__nav-button,
+  .goal-section__today-button {
+    padding-inline: 1rem;
+  }
+
+  .goal-section__main-card,
+  .goal-section__sub-card {
+    display: block;
+    min-height: auto;
+    min-width: 0;
+    scroll-snap-align: none;
+  }
+
+  .goal-section--compact .goal-section__main-card {
+    min-height: auto;
+    min-width: 0;
+    padding: 8px 12px;
+  }
+
+  .goal-section--compact .goal-section__sub-card {
+    min-height: auto;
+    min-width: 0;
+    padding: 7px 10px;
+  }
+
+  .goal-section--compact .goal-section__right .app-primary-button,
+  .goal-section--compact .goal-section__right .app-secondary-button,
+  .goal-section--compact .goal-section__right .app-input {
+    min-height: 40px;
   }
 }
 
