@@ -56,7 +56,7 @@ export function BottomNav({
   ];
 
   return (
-    <nav className="fixed inset-x-0 bottom-[var(--bottom-nav-offset)] z-50 border-t border-emerald-100 bg-white/95 pb-[env(safe-area-inset-bottom)] shadow-[0_-4px_20px_rgba(4,120,87,0.12)] backdrop-blur lg:inset-x-auto lg:left-1/2 lg:right-auto lg:-translate-x-1/2 lg:rounded-3xl lg:border lg:bg-white/90 lg:px-2 lg:pb-0">
+    <nav className="fixed inset-x-0 bottom-[var(--bottom-nav-offset)] z-50 border-t border-emerald-100 bg-white/95 pb-[env(safe-area-inset-bottom)] shadow-[0_-4px_20px_var(--bottom-nav-shadow)] backdrop-blur lg:inset-x-auto lg:left-1/2 lg:right-auto lg:-translate-x-1/2 lg:rounded-3xl lg:border lg:bg-white/90 lg:px-2 lg:pb-0">
       <div className="mx-auto grid max-w-6xl grid-cols-6 gap-1 px-2 py-2 lg:flex lg:w-max lg:max-w-none lg:grid-cols-none lg:px-0">
         {items.map((item) => (
           <button
@@ -73,7 +73,7 @@ export function BottomNav({
             <span className="text-lg leading-none sm:text-xl lg:text-base">
               {item.icon}
             </span>
-            <span className="mt-1 max-w-full truncate lg:mt-0">
+            <span className="sr-only lg:not-sr-only lg:mt-0 lg:max-w-full lg:truncate">
               {item.label}
             </span>
           </button>

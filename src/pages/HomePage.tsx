@@ -106,6 +106,7 @@ export function HomePage({
   navigateTo,
 }: HomePageProps) {
   const [showMoreStats, setShowMoreStats] = useState(false);
+  const [isGoalNavigationCompact, setIsGoalNavigationCompact] = useState(false);
   const missingTodayItems = [
     !todayEntry ? "ca Hub/nhật ký" : "",
     !todayExpense ? "chi tiêu" : "",
@@ -127,6 +128,27 @@ export function HomePage({
     });
     localStorage.setItem(storageKey, "1");
   }, [missingTodayItems, shouldShowEndOfDayReminder, todayString]);
+
+  useEffect(() => {
+    let animationFrame = 0;
+
+    function updateGoalNavigationMode() {
+      window.cancelAnimationFrame(animationFrame);
+      animationFrame = window.requestAnimationFrame(() => {
+        setIsGoalNavigationCompact(window.scrollY > 120);
+      });
+    }
+
+    updateGoalNavigationMode();
+    window.addEventListener("scroll", updateGoalNavigationMode, {
+      passive: true,
+    });
+
+    return () => {
+      window.cancelAnimationFrame(animationFrame);
+      window.removeEventListener("scroll", updateGoalNavigationMode);
+    };
+  }, []);
 
   const primaryStats = [
     {
@@ -176,140 +198,148 @@ export function HomePage({
   return (
     <>
       <section className="grid gap-3 sm:gap-4">
-        <div className="app-card grid gap-4 rounded-2xl p-4 sm:bg-transparent sm:p-0 sm:shadow-none lg:flex lg:items-center lg:justify-between">
-          <div className="min-w-0">
-            <h2 className="text-lg font-black tracking-tight sm:text-xl">
-              {isSelectedToday ? "Mục tiêu hôm nay" : "Mục tiêu ngày đang xem"}
-            </h2>
+        <div
+          className={`app-card goal-section goal-navigation rounded-2xl ${
+            isGoalNavigationCompact ? "goal-section--compact" : ""
+          }`}
+        >
+          <div className="goal-section__content">
+            <div className="goal-section__left">
+              <div className="goal-section__title">
+                <h2 className="goal-section__heading text-lg font-black tracking-tight sm:text-xl">
+                  {isSelectedToday ? "Mục tiêu hôm nay" : "Mục tiêu ngày đang xem"}
+                </h2>
 
-            <p className="text-sm text-slate-500">
-              Ngày:{" "}
-              <strong>
-                {isSelectedToday ? "Hôm nay" : formatDateShort(selectedDate)}
-              </strong>
-            </p>
+                <p className="goal-section__meta text-sm text-slate-500">
+                  Ngày:{" "}
+                  <strong>
+                    {isSelectedToday ? "Hôm nay" : formatDateShort(selectedDate)}
+                  </strong>
+                </p>
+              </div>
 
-            <div className="mt-3 flex snap-x items-end gap-2 overflow-x-auto pb-1 sm:flex-wrap sm:overflow-visible sm:pb-0">
-              <div
-                title={`Mục tiêu chính: ${goals.bigGoalName}`}
-                className={`shrink-0 rounded-2xl px-4 py-3 ${
-                  isBigGoalBehind ? "bg-red-50" : "bg-emerald-700 text-white"
-                }`}
-              >
-                <p
-                  className={`text-xs ${
-                    isBigGoalBehind ? "text-red-600" : "text-slate-200"
+              <div className="goal-section__cards snap-x">
+                <div
+                  title={`Mục tiêu chính: ${goals.bigGoalName}`}
+                  className={`goal-section__main-card shrink-0 rounded-2xl px-4 py-3 ${
+                    isBigGoalBehind ? "bg-red-50" : "bg-emerald-700 text-white"
                   }`}
                 >
-                  Mục tiêu chính
-                </p>
-
-                <div className="flex items-end gap-1">
-                  <span
-                    className={`text-3xl font-black ${
-                      isBigGoalBehind ? "text-red-600" : "text-white"
-                    }`}
-                  >
-                    {daysLeft}
-                  </span>
-                  <span
-                    className={`pb-1 text-sm font-medium ${
+                  <p
+                    className={`goal-section__card-label text-xs ${
                       isBigGoalBehind ? "text-red-600" : "text-slate-200"
                     }`}
                   >
-                    ngày
-                  </span>
+                    Mục tiêu chính
+                  </p>
+
+                  <div className="flex items-end gap-1">
+                    <span
+                      className={`goal-section__main-value text-3xl font-black ${
+                        isBigGoalBehind ? "text-red-600" : "text-white"
+                      }`}
+                    >
+                      {daysLeft}
+                    </span>
+                    <span
+                      className={`goal-section__unit pb-1 text-sm font-medium ${
+                        isBigGoalBehind ? "text-red-600" : "text-slate-200"
+                      }`}
+                    >
+                      ngày
+                    </span>
+                  </div>
                 </div>
+
+                {(goals.subGoals ?? []).map((goal) => {
+                  const subDaysLeft = getDaysLeft(goal.deadline);
+                  const behind = isGoalBehind(goal);
+
+                  return (
+                    <div
+                      key={goal.id}
+                      title={`${goal.name} · còn ${subDaysLeft} ngày`}
+                      className={`goal-section__sub-card shrink-0 rounded-xl px-3 py-2 ${
+                        behind ? "bg-red-50" : "bg-emerald-50"
+                      } shadow-sm ring-1 ring-slate-100`}
+                    >
+                      <p
+                        className={`goal-section__card-label text-xs ${
+                          behind ? "text-red-600" : "text-slate-500"
+                        }`}
+                      >
+                        Phụ
+                      </p>
+
+                      <p
+                        className={`goal-section__sub-value text-lg font-black ${
+                          behind ? "text-red-600" : "text-slate-900"
+                        }`}
+                      >
+                        {subDaysLeft}
+                        <span className="ml-1 text-xs font-medium">ngày</span>
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="goal-section__right">
+              <div className="col-span-3 min-w-0 sm:col-span-1">
+                <AiFinanceInsight
+                  entries={entries}
+                  expenses={expenses}
+                  balanceChecks={balanceChecks}
+                  goals={goals}
+                  today={todayString}
+                />
               </div>
 
-              {(goals.subGoals ?? []).map((goal) => {
-                const subDaysLeft = getDaysLeft(goal.deadline);
-                const behind = isGoalBehind(goal);
+              <button
+                type="button"
+                onClick={goToPreviousDay}
+                aria-label="Xem ngày trước"
+                className="app-secondary-button rounded-xl px-4 py-2 text-lg font-bold shadow-sm"
+              >
+                {"<"}
+              </button>
 
-                return (
-                  <div
-                    key={goal.id}
-                    title={`${goal.name} · còn ${subDaysLeft} ngày`}
-                    className={`shrink-0 rounded-xl px-3 py-2 ${
-                      behind ? "bg-red-50" : "bg-emerald-50"
-                    } shadow-sm ring-1 ring-slate-100`}
-                  >
-                    <p
-                      className={`text-xs ${
-                        behind ? "text-red-600" : "text-slate-500"
-                      }`}
-                    >
-                      Phụ
-                    </p>
+              <button
+                type="button"
+                onClick={goToNextDay}
+                disabled={isSelectedToday}
+                aria-label="Xem ngày sau"
+                className={`app-secondary-button rounded-xl px-4 py-2 text-lg font-bold shadow-sm ${
+                  isSelectedToday
+                    ? "cursor-not-allowed opacity-40"
+                    : ""
+                }`}
+              >
+                {">"}
+              </button>
 
-                    <p
-                      className={`text-lg font-black ${
-                        behind ? "text-red-600" : "text-slate-900"
-                      }`}
-                    >
-                      {subDaysLeft}
-                      <span className="ml-1 text-xs font-medium">ngày</span>
-                    </p>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+              <button
+                type="button"
+                onClick={goToToday}
+                disabled={isSelectedToday}
+                className={`app-secondary-button rounded-xl px-4 py-2 text-sm font-bold shadow-sm ${
+                  isSelectedToday
+                    ? "cursor-not-allowed opacity-40"
+                    : ""
+                }`}
+              >
+                Hôm nay
+              </button>
 
-          <div className="grid w-full grid-cols-[1fr_auto_auto] gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center">
-            <div className="col-span-3 sm:col-span-1">
-              <AiFinanceInsight
-                entries={entries}
-                expenses={expenses}
-                balanceChecks={balanceChecks}
-                goals={goals}
-                today={todayString}
+              <input
+                type="date"
+                value={selectedDate}
+                max={todayString}
+                onChange={(e) => handleSelectDate(e.target.value)}
+                className="app-input col-span-3 min-w-0 rounded-xl border px-4 py-2 text-sm shadow-sm sm:col-span-1"
               />
             </div>
-
-            <button
-              type="button"
-              onClick={goToPreviousDay}
-              aria-label="Xem ngày trước"
-              className="app-secondary-button rounded-xl px-4 py-2 text-lg font-bold shadow-sm"
-            >
-              {"<"}
-            </button>
-
-            <button
-              type="button"
-              onClick={goToNextDay}
-              disabled={isSelectedToday}
-              aria-label="Xem ngày sau"
-              className={`app-secondary-button rounded-xl px-4 py-2 text-lg font-bold shadow-sm ${
-                isSelectedToday
-                  ? "cursor-not-allowed opacity-40"
-                  : ""
-              }`}
-            >
-              {">"}
-            </button>
-
-            <button
-              type="button"
-              onClick={goToToday}
-              disabled={isSelectedToday}
-              className={`app-secondary-button rounded-xl px-4 py-2 text-sm font-bold shadow-sm ${
-                isSelectedToday
-                  ? "cursor-not-allowed opacity-40"
-                  : ""
-              }`}
-            >
-              Hôm nay
-            </button>
-
-            <input
-              type="date"
-              value={selectedDate}
-              max={todayString}
-              onChange={(e) => handleSelectDate(e.target.value)}
-              className="app-input col-span-3 rounded-xl border px-4 py-2 text-sm shadow-sm sm:col-span-1"
-            />
           </div>
         </div>
 

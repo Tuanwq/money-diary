@@ -281,7 +281,7 @@ export function AutopilotPanel({
 
       {isOpen && (
         <div className="fixed inset-0 z-[90] bg-slate-950/60 px-3 py-4 backdrop-blur-sm sm:px-6">
-          <div className="mx-auto flex max-h-[92vh] max-w-5xl flex-col overflow-hidden rounded-2xl bg-[#eef7f2] shadow-2xl">
+          <div className="mx-auto flex max-h-[92vh] max-w-5xl flex-col overflow-hidden rounded-2xl bg-[var(--background)] shadow-2xl">
             <header className="flex flex-wrap items-start justify-between gap-3 border-b bg-white px-4 py-4 sm:px-5">
               <div>
                 <p className="text-xs font-bold uppercase tracking-wide text-slate-500">

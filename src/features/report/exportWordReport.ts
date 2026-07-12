@@ -466,20 +466,20 @@ export function exportWordReport({
         <meta charset="utf-8" />
         <title>Báo cáo Money Diary</title>
         <style>
-          body { color: #0f172a; font-family: Arial, sans-serif; font-size: 12px; line-height: 1.45; }
+          body { color: #1C271F; font-family: Arial, sans-serif; font-size: 12px; line-height: 1.45; }
           h1 { font-size: 24px; margin: 0 0 6px; text-align: center; text-transform: uppercase; }
-          h2 { border-bottom: 2px solid #0f172a; font-size: 18px; margin: 28px 0 10px; padding-bottom: 5px; }
+          h2 { border-bottom: 2px solid #557A5B; font-size: 18px; margin: 28px 0 10px; padding-bottom: 5px; }
           h3 { font-size: 15px; margin: 22px 0 6px; }
-          h4 { color: #334155; font-size: 13px; margin: 16px 0 6px; }
+          h4 { color: #5F6E63; font-size: 13px; margin: 16px 0 6px; }
           table { border-collapse: collapse; margin: 8px 0 18px; width: 100%; }
-          th, td { border: 1px solid #cbd5e1; padding: 7px; vertical-align: top; }
-          th { background: #e2e8f0; color: #0f172a; font-weight: 700; text-align: left; }
-          .subtitle, .muted, .footer { color: #64748b; }
+          th, td { border: 1px solid #DCE4DC; padding: 7px; vertical-align: top; }
+          th { background: #EEF4EF; color: #1C271F; font-weight: 700; text-align: left; }
+          .subtitle, .muted, .footer { color: #5F6E63; }
           .subtitle { margin: 0 0 22px; text-align: center; }
           .text-right { text-align: right; white-space: nowrap; }
           .strong { font-weight: 700; }
-          .empty { color: #64748b; font-style: italic; text-align: center; }
-          .footer { border-top: 1px solid #cbd5e1; margin-top: 32px; padding-top: 10px; text-align: center; }
+          .empty { color: #5F6E63; font-style: italic; text-align: center; }
+          .footer { border-top: 1px solid #DCE4DC; margin-top: 32px; padding-top: 10px; text-align: center; }
         </style>
       </head>
       <body>

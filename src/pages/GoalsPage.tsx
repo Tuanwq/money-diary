@@ -1621,7 +1621,7 @@ export function GoalsPage({
                   <Line
                     type="monotone"
                     dataKey="income"
-                    stroke="#0f172a"
+                    stroke="var(--secondary)"
                     strokeWidth={3}
                     dot
                     name="Thu nhập"
