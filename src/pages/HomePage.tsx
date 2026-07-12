@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import type { RefObject, ReactNode } from "react";
 import { AiFinanceInsight } from "../components/AiFinanceInsight";
 import { AutopilotPanel } from "../components/AutopilotPanel";
@@ -105,6 +105,7 @@ export function HomePage({
   renderBalanceCheckCard,
   navigateTo,
 }: HomePageProps) {
+  const [showMoreStats, setShowMoreStats] = useState(false);
   const missingTodayItems = [
     !todayEntry ? "ca Hub/nhật ký" : "",
     !todayExpense ? "chi tiêu" : "",
@@ -127,12 +128,57 @@ export function HomePage({
     localStorage.setItem(storageKey, "1");
   }, [missingTodayItems, shouldShowEndOfDayReminder, todayString]);
 
+  const primaryStats = [
+    {
+      title: isSelectedToday ? "Tiền thực tế hôm nay" : "Tiền thực tế ngày này",
+      value: formatMoney(selectedActualIncome),
+      target: `Làm: ${formatMoney(selectedMainIncome)} + Thưởng: ${formatMoney(
+        selectedBonusMoney
+      )} - Chi: ${formatMoney(selectedExpenseTotal)} | Nhận: ${formatMoney(
+        selectedReceivedMoney
+      )}`,
+      progress: getProgress(selectedActualIncome, goals.dailyIncome),
+    },
+    {
+      title: isSelectedToday ? "Giờ làm hôm nay" : "Giờ làm ngày này",
+      value: `${selectedHours} giờ`,
+      target: `${goals.dailyHours} giờ`,
+      progress: getProgress(selectedHours, goals.dailyHours),
+    },
+  ];
+  const detailStats = [
+    {
+      title: isSelectedToday ? "Tiền tuần này" : "Tiền tuần đang xem",
+      value: formatMoney(weekIncome),
+      target: formatMoney(goals.weeklyIncome),
+      progress: getProgress(weekIncome, goals.weeklyIncome),
+    },
+    {
+      title: isSelectedToday ? "Tiền tháng này" : "Tiền tháng đang xem",
+      value: formatMoney(monthIncome),
+      target: formatMoney(goals.monthlyIncome),
+      progress: getProgress(monthIncome, goals.monthlyIncome),
+    },
+    {
+      title: "Tiền thực tế App tính hiện có:",
+      value: formatMoney(actualMoney),
+      target: formatMoney(goals.bigGoalTarget),
+      progress: getProgress(actualMoney, goals.bigGoalTarget),
+    },
+    {
+      title: "Tổng tiền hành trình",
+      value: formatMoney(totalJourneyMoney),
+      target: formatMoney(goals.bigGoalTarget),
+      progress: getProgress(totalJourneyMoney, goals.bigGoalTarget),
+    },
+  ];
+
   return (
     <>
-      <section className="grid gap-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h2 className="text-xl font-bold">
+      <section className="grid gap-3 sm:gap-4">
+        <div className="app-card grid gap-4 rounded-2xl p-4 sm:bg-transparent sm:p-0 sm:shadow-none lg:flex lg:items-center lg:justify-between">
+          <div className="min-w-0">
+            <h2 className="text-lg font-black tracking-tight sm:text-xl">
               {isSelectedToday ? "Mục tiêu hôm nay" : "Mục tiêu ngày đang xem"}
             </h2>
 
@@ -143,11 +189,11 @@ export function HomePage({
               </strong>
             </p>
 
-            <div className="mt-3 flex flex-wrap items-end gap-2">
+            <div className="mt-3 flex snap-x items-end gap-2 overflow-x-auto pb-1 sm:flex-wrap sm:overflow-visible sm:pb-0">
               <div
                 title={`Mục tiêu chính: ${goals.bigGoalName}`}
-                className={`rounded-2xl px-4 py-3 ${
-                  isBigGoalBehind ? "bg-red-50" : "bg-slate-900 text-white"
+                className={`shrink-0 rounded-2xl px-4 py-3 ${
+                  isBigGoalBehind ? "bg-red-50" : "bg-emerald-700 text-white"
                 }`}
               >
                 <p
@@ -184,9 +230,9 @@ export function HomePage({
                   <div
                     key={goal.id}
                     title={`${goal.name} · còn ${subDaysLeft} ngày`}
-                    className={`rounded-xl px-3 py-2 ${
-                      behind ? "bg-red-50" : "bg-white"
-                    } shadow-sm`}
+                    className={`shrink-0 rounded-xl px-3 py-2 ${
+                      behind ? "bg-red-50" : "bg-emerald-50"
+                    } shadow-sm ring-1 ring-slate-100`}
                   >
                     <p
                       className={`text-xs ${
@@ -210,19 +256,22 @@ export function HomePage({
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <AiFinanceInsight
-              entries={entries}
-              expenses={expenses}
-              balanceChecks={balanceChecks}
-              goals={goals}
-              today={todayString}
-            />
+          <div className="grid w-full grid-cols-[1fr_auto_auto] gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center">
+            <div className="col-span-3 sm:col-span-1">
+              <AiFinanceInsight
+                entries={entries}
+                expenses={expenses}
+                balanceChecks={balanceChecks}
+                goals={goals}
+                today={todayString}
+              />
+            </div>
 
             <button
               type="button"
               onClick={goToPreviousDay}
-              className="rounded-xl border bg-white px-4 py-2 text-lg font-bold shadow-sm hover:bg-slate-100"
+              aria-label="Xem ngày trước"
+              className="app-secondary-button rounded-xl px-4 py-2 text-lg font-bold shadow-sm"
             >
               {"<"}
             </button>
@@ -231,10 +280,11 @@ export function HomePage({
               type="button"
               onClick={goToNextDay}
               disabled={isSelectedToday}
-              className={`rounded-xl border bg-white px-4 py-2 text-lg font-bold shadow-sm ${
+              aria-label="Xem ngày sau"
+              className={`app-secondary-button rounded-xl px-4 py-2 text-lg font-bold shadow-sm ${
                 isSelectedToday
                   ? "cursor-not-allowed opacity-40"
-                  : "hover:bg-slate-100"
+                  : ""
               }`}
             >
               {">"}
@@ -244,10 +294,10 @@ export function HomePage({
               type="button"
               onClick={goToToday}
               disabled={isSelectedToday}
-              className={`rounded-xl border bg-white px-4 py-2 text-sm font-bold shadow-sm ${
+              className={`app-secondary-button rounded-xl px-4 py-2 text-sm font-bold shadow-sm ${
                 isSelectedToday
                   ? "cursor-not-allowed opacity-40"
-                  : "hover:bg-slate-100"
+                  : ""
               }`}
             >
               Hôm nay
@@ -258,7 +308,7 @@ export function HomePage({
               value={selectedDate}
               max={todayString}
               onChange={(e) => handleSelectDate(e.target.value)}
-              className="rounded-xl border bg-white px-4 py-2 text-sm shadow-sm"
+              className="app-input col-span-3 rounded-xl border px-4 py-2 text-sm shadow-sm sm:col-span-1"
             />
           </div>
         </div>
@@ -281,55 +331,28 @@ export function HomePage({
           onBalanceCheckClick={goToTodayBalanceCheck}
         />
 
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
-          <StatCard
-            title={
-              isSelectedToday ? "Tiền thực tế hôm nay" : "Tiền thực tế ngày này"
-            }
-            value={formatMoney(selectedActualIncome)}
-            target={`Làm: ${formatMoney(
-              selectedMainIncome
-            )} + Thưởng: ${formatMoney(selectedBonusMoney)} - Chi: ${formatMoney(
-              selectedExpenseTotal
-            )} | Nhận: ${formatMoney(selectedReceivedMoney)}`}
-            progress={getProgress(selectedActualIncome, goals.dailyIncome)}
-          />
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3">
+          {primaryStats.map((stat) => (
+            <StatCard key={stat.title} {...stat} />
+          ))}
 
-          <StatCard
-            title={isSelectedToday ? "Giờ làm hôm nay" : "Giờ làm ngày này"}
-            value={`${selectedHours} giờ`}
-            target={`${goals.dailyHours} giờ`}
-            progress={getProgress(selectedHours, goals.dailyHours)}
-          />
-
-          <StatCard
-            title={isSelectedToday ? "Tiền tuần này" : "Tiền tuần đang xem"}
-            value={formatMoney(weekIncome)}
-            target={formatMoney(goals.weeklyIncome)}
-            progress={getProgress(weekIncome, goals.weeklyIncome)}
-          />
-
-          <StatCard
-            title={isSelectedToday ? "Tiền tháng này" : "Tiền tháng đang xem"}
-            value={formatMoney(monthIncome)}
-            target={formatMoney(goals.monthlyIncome)}
-            progress={getProgress(monthIncome, goals.monthlyIncome)}
-          />
-
-          <StatCard
-            title="Tiền thực tế App tính hiện có:"
-            value={formatMoney(actualMoney)}
-            target={formatMoney(goals.bigGoalTarget)}
-            progress={getProgress(actualMoney, goals.bigGoalTarget)}
-          />
-
-          <StatCard
-            title="Tổng tiền hành trình"
-            value={formatMoney(totalJourneyMoney)}
-            target={formatMoney(goals.bigGoalTarget)}
-            progress={getProgress(totalJourneyMoney, goals.bigGoalTarget)}
-          />
+          {detailStats.map((stat) => (
+            <div
+              key={stat.title}
+              className={showMoreStats ? "" : "hidden lg:block"}
+            >
+              <StatCard {...stat} />
+            </div>
+          ))}
         </div>
+
+        <button
+          type="button"
+          onClick={() => setShowMoreStats((prev) => !prev)}
+          className="app-secondary-button rounded-xl px-4 py-2 text-sm font-bold shadow-sm lg:hidden"
+        >
+          {showMoreStats ? "Thu gọn số liệu" : "Xem thêm số liệu"}
+        </button>
 
         <DataWarningsPanel
           warnings={dataWarnings}
@@ -436,14 +459,14 @@ function EndOfDayReminder({
           <button
             type="button"
             onClick={requestNotificationPermission}
-            className="rounded-xl bg-white px-3 py-2 text-sm font-bold text-amber-900 shadow-sm hover:bg-amber-100"
+            className="min-h-11 rounded-xl bg-white px-3 py-2 text-sm font-bold text-amber-900 shadow-sm hover:bg-amber-100"
           >
             Bật thông báo
           </button>
           <button
             type="button"
             onClick={onCloseDay}
-            className="rounded-xl bg-slate-900 px-3 py-2 text-sm font-bold text-white hover:bg-slate-700"
+            className="app-primary-button rounded-xl px-3 py-2 text-sm font-bold"
           >
             Chốt ngày
           </button>

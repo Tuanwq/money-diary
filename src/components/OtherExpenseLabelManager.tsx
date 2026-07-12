@@ -152,7 +152,7 @@ export function OtherExpenseLabelManager({
           onChange(event.target.value);
           setDraftLabel(event.target.value);
         }}
-        className="mt-1 w-full rounded-xl border px-3 py-2"
+        className="app-input mt-1 w-full rounded-xl border px-3 py-2"
       >
         <option value="">Chưa chọn</option>
         {displayLabels.map((label) => (
@@ -168,12 +168,12 @@ export function OtherExpenseLabelManager({
           value={draftLabel}
           onChange={(event) => setDraftLabel(event.target.value)}
           placeholder="VD: Xăng, tiền điện..."
-          className="min-w-0 rounded-xl border px-3 py-2"
+          className="app-input min-w-0 rounded-xl border px-3 py-2"
         />
         <button
           type="button"
           onClick={addLabel}
-          className="rounded-xl bg-slate-900 px-3 py-2 text-sm font-bold text-white hover:bg-slate-700"
+          className="app-primary-button rounded-xl px-3 py-2 text-sm font-bold"
         >
           Thêm
         </button>
@@ -181,7 +181,7 @@ export function OtherExpenseLabelManager({
           type="button"
           onClick={renameSelectedLabel}
           disabled={!selectValue}
-          className="rounded-xl bg-slate-100 px-3 py-2 text-sm font-bold text-slate-700 hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-50"
+          className="rounded-xl bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-800 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
         >
           Sửa
         </button>

@@ -76,6 +76,21 @@ type HubCalculatorForm = {
   target: string;
 };
 
+type HubMobileDateGroup = {
+  date: string;
+  entries: HubEntry[];
+  grossIncome: number;
+  workIncome: number;
+  orders: number;
+  joins: number;
+};
+
+type HubMobileDateChip = {
+  date: string;
+  count: number;
+  workIncome: number;
+};
+
 export type HubDiaryPayload = {
   receivedMoney: number;
   bonusMoney: number;
@@ -104,6 +119,7 @@ const HUB_TIME_FILTERS: Array<{ label: string; value: HubTimeFilter }> = [
   { label: "Tháng trước", value: "previousMonth" },
   { label: "Tùy chỉnh", value: "custom" },
 ];
+const HUB_CHANGE_LOG_PAGE_SIZE = 5;
 
 function loadJson<T>(key: string, fallback: T): T {
   const saved = localStorage.getItem(key);
@@ -498,6 +514,7 @@ export function HubPage({
   const [changeLogs, setChangeLogs] = useState<HubChangeLog[]>(() =>
     loadJson<HubChangeLog[]>(STORAGE_HUB_CHANGE_LOGS_KEY, [])
   );
+  const [hubChangeLogPage, setHubChangeLogPage] = useState(1);
   const [hubCloudStatus, setHubCloudStatus] = useState(
     "Hub đang lưu trên thiết bị"
   );
@@ -735,6 +752,77 @@ export function HubPage({
       { income: 0, orders: 0, joins: 0 }
     );
   }, [filteredHubEntries, settings]);
+
+  const mobileHubDateGroups = useMemo<HubMobileDateGroup[]>(() => {
+    const groups = new Map<string, HubMobileDateGroup>();
+
+    filteredHubEntries.forEach((entry) => {
+      const income = calculateHubIncome(entry, settings);
+      const current = groups.get(entry.date) ?? {
+        date: entry.date,
+        entries: [],
+        grossIncome: 0,
+        workIncome: 0,
+        orders: 0,
+        joins: 0,
+      };
+
+      groups.set(entry.date, {
+        ...current,
+        entries: [...current.entries, entry],
+        grossIncome: current.grossIncome + income.total,
+        workIncome: current.workIncome + income.workIncome,
+        orders: current.orders + entry.order,
+        joins: current.joins + income.totalJoinChildOrders,
+      });
+    });
+
+    return Array.from(groups.values()).sort((a, b) => b.date.localeCompare(a.date));
+  }, [filteredHubEntries, settings]);
+
+  const mobileDateChips = useMemo<HubMobileDateChip[]>(() => {
+    const groups = new Map<string, HubMobileDateChip>();
+
+    sortedEntries.forEach((entry) => {
+      if (listHubTypeFilter !== "ALL" && entry.hubType !== listHubTypeFilter) {
+        return;
+      }
+
+      const income = calculateHubIncome(entry, settings);
+      const current = groups.get(entry.date) ?? {
+        date: entry.date,
+        count: 0,
+        workIncome: 0,
+      };
+
+      groups.set(entry.date, {
+        date: entry.date,
+        count: current.count + 1,
+        workIncome: current.workIncome + income.workIncome,
+      });
+    });
+
+    return Array.from(groups.values())
+      .sort((a, b) => b.date.localeCompare(a.date))
+      .slice(0, 14);
+  }, [listHubTypeFilter, settings, sortedEntries]);
+
+  const hubChangeLogTotalPages = Math.max(
+    1,
+    Math.ceil(changeLogs.length / HUB_CHANGE_LOG_PAGE_SIZE)
+  );
+  const safeHubChangeLogPage = Math.min(
+    hubChangeLogPage,
+    hubChangeLogTotalPages
+  );
+  const paginatedHubChangeLogs = useMemo(() => {
+    const startIndex = (safeHubChangeLogPage - 1) * HUB_CHANGE_LOG_PAGE_SIZE;
+
+    return changeLogs.slice(
+      startIndex,
+      startIndex + HUB_CHANGE_LOG_PAGE_SIZE
+    );
+  }, [changeLogs, safeHubChangeLogPage]);
 
   const markedCalendarDates = useMemo(() => {
     return new Set(
@@ -1206,19 +1294,19 @@ export function HubPage({
 
   return (
     <>
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="text-2xl font-bold">Hub / Ca làm</h2>
-          <p className="text-sm text-slate-500">
-            Tính tiền ca hub theo logic Hà Nội.
-          </p>
-        </div>
-
+      <div className="rounded-3xl bg-gradient-to-br from-emerald-700 via-teal-700 to-cyan-700 p-4 text-white shadow-sm sm:p-5">
+        <p className="text-xs font-bold uppercase tracking-wide text-emerald-100">
+          Hub mobile
+        </p>
+        <h2 className="mt-1 text-2xl font-black">Hub / Ca làm</h2>
+        <p className="mt-1 text-sm text-emerald-50">
+          Tính tiền ca hub theo logic Hà Nội, nhập nhanh và xem lịch sử theo ngày.
+        </p>
       </div>
 
-      <section className="grid grid-cols-2 gap-2 rounded-2xl bg-white p-2 shadow-sm sm:grid-cols-3 lg:grid-cols-5">
+      <section className="app-card -mx-1 flex min-w-0 max-w-full gap-2 overflow-x-auto rounded-2xl p-2 sm:mx-0 lg:grid lg:grid-cols-5 lg:overflow-visible">
         <TabButton active={tab === "add"} onClick={() => setTab("add")}>
-          Thêm ca hub và nhật kí
+          Thêm ca
         </TabButton>
         <TabButton
           active={tab === "calculator"}
@@ -1230,10 +1318,10 @@ export function HubPage({
           active={tab === "dashboard"}
           onClick={() => setTab("dashboard")}
         >
-          Dashboard
+          Thống kê
         </TabButton>
         <TabButton active={tab === "list"} onClick={() => setTab("list")}>
-          Hub của tôi
+          Ca của tôi
         </TabButton>
         <TabButton
           active={tab === "settings"}
@@ -1260,7 +1348,28 @@ export function HubPage({
 
       {tab === "add" && (
         <section className="grid gap-5">
-          <div className="rounded-2xl bg-white p-5 shadow-sm">
+          <div className="app-sticky-submit rounded-2xl p-3 lg:hidden">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                  {editingHubEntryId ? "Đang cập nhật" : "Ca đang nhập"}
+                </p>
+                <p className="truncate text-lg font-black text-emerald-700">
+                  {formatMoney(previewIncome.workIncome)}
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={saveHubEntry}
+                className="app-primary-button shrink-0 rounded-xl px-4 py-2 text-sm font-bold"
+              >
+                {editingHubEntryId ? "Cập nhật" : "Lưu ca"}
+              </button>
+            </div>
+          </div>
+
+          <div className="app-card rounded-2xl p-4 sm:p-5">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <h3 className="text-xl font-bold">
                 {editingHubEntryId ? "Cập nhật ca hub" : "Thêm ca hub và nhật kí"}
@@ -1270,7 +1379,7 @@ export function HubPage({
                 <button
                   type="button"
                   onClick={cancelEditHubEntry}
-                  className="rounded-xl border bg-white px-4 py-2 text-sm font-bold hover:bg-slate-100"
+                  className="app-secondary-button rounded-xl px-4 py-2 text-sm font-bold"
                 >
                   Hủy cập nhật
                 </button>
@@ -1321,7 +1430,7 @@ export function HubPage({
                 onChange={(event) =>
                   setForm((prev) => ({ ...prev, date: event.target.value }))
                 }
-                className="w-full rounded-xl border px-3 py-2"
+                className="app-input w-full rounded-xl border px-3 py-2"
               />
             </FormBlock>
 
@@ -1331,7 +1440,7 @@ export function HubPage({
                 onChange={(event) =>
                   setForm((prev) => ({ ...prev, shiftName: event.target.value }))
                 }
-                className="w-full rounded-xl border px-3 py-2"
+                className="app-input w-full rounded-xl border px-3 py-2"
               >
                 {currentShiftOptions.map((shift) => (
                   <option key={shift} value={shift}>
@@ -1355,7 +1464,7 @@ export function HubPage({
                       }))
                     }
                     placeholder="VD: 25"
-                    className="mt-1 w-full rounded-xl border px-3 py-2"
+                    className="app-input mt-1 w-full rounded-xl border px-3 py-2"
                   />
                   <p className="mt-1 text-xs text-slate-500">
                     Còn {remainingSingleOrderCount} đơn lẻ sau khi chuyển{" "}
@@ -1443,7 +1552,7 @@ export function HubPage({
                               type: event.target.value.replace(/[^\d]/g, ""),
                             })
                           }
-                          className="mt-1 w-full rounded-xl border px-3 py-2"
+                          className="app-input mt-1 w-full rounded-xl border px-3 py-2"
                         />
                       </div>
 
@@ -1459,7 +1568,7 @@ export function HubPage({
                               quantity: formatMoneyInput(event.target.value),
                             })
                           }
-                          className="mt-1 w-full rounded-xl border px-3 py-2"
+                          className="app-input mt-1 w-full rounded-xl border px-3 py-2"
                         />
                       </div>
 
@@ -1475,7 +1584,7 @@ export function HubPage({
                               price: formatMoneyInput(event.target.value),
                             })
                           }
-                          className="mt-1 w-full rounded-xl border px-3 py-2"
+                          className="app-input mt-1 w-full rounded-xl border px-3 py-2"
                         />
                       </div>
 
@@ -1505,12 +1614,12 @@ export function HubPage({
                   }))
                 }
                 placeholder="VD: tip, hỗ trợ, phí khác..."
-                className="w-full rounded-xl border px-3 py-2"
+                className="app-input w-full rounded-xl border px-3 py-2"
               />
             </FormBlock>
           </div>
 
-          <section className="rounded-2xl bg-white p-5 shadow-sm">
+          <section className="app-card rounded-2xl p-4 sm:p-5">
             <h3 className="text-xl font-bold">
               {editingHubEntryId ? "Ghi chú ca hub" : "Nhật ký hôm nay"}
             </h3>
@@ -1534,7 +1643,7 @@ export function HubPage({
                         }))
                       }
                       placeholder="VD: 500.000"
-                      className="mt-1 w-full rounded-xl border px-3 py-2"
+                      className="app-input mt-1 w-full rounded-xl border px-3 py-2"
                     />
                   </div>
 
@@ -1550,7 +1659,7 @@ export function HubPage({
                         }))
                       }
                       placeholder="VD: 100.000"
-                      className="mt-1 w-full rounded-xl border px-3 py-2"
+                      className="app-input mt-1 w-full rounded-xl border px-3 py-2"
                     />
                   </div>
 
@@ -1564,7 +1673,7 @@ export function HubPage({
                           mood: event.target.value as Mood,
                         }))
                       }
-                      className="mt-1 w-full rounded-xl border px-3 py-2"
+                      className="app-input mt-1 w-full rounded-xl border px-3 py-2"
                     >
                       <option value="good">Vui</option>
                       <option value="normal">Bình thường</option>
@@ -1584,7 +1693,7 @@ export function HubPage({
                     onChange={(event) =>
                       setForm((prev) => ({ ...prev, diary: event.target.value }))
                     }
-                    className="mt-1 w-full rounded-xl border px-3 py-2"
+                    className="app-input mt-1 w-full rounded-xl border px-3 py-2"
                     placeholder="VD: Chạy ca tối, nhiều đơn ghép, đường đông..."
                   />
                 </div>
@@ -1599,7 +1708,7 @@ export function HubPage({
                   onChange={(event) =>
                     setForm((prev) => ({ ...prev, note: event.target.value }))
                   }
-                  className="mt-1 w-full rounded-xl border px-3 py-2"
+                  className="app-input mt-1 w-full rounded-xl border px-3 py-2"
                   placeholder="VD: mưa, app lỗi, cần tối ưu khung giờ..."
                 />
               </div>
@@ -1617,14 +1726,14 @@ export function HubPage({
               <button
                 type="button"
                 onClick={() => setShowIncomeDetails((prev) => !prev)}
-                className="rounded-xl border bg-white px-4 py-2 text-sm font-bold shadow-sm hover:bg-slate-100"
+                className="app-secondary-button rounded-xl px-4 py-2 text-sm font-bold shadow-sm"
               >
                 {showIncomeDetails ? "Thu gọn" : "Xem chi tiết"}
               </button>
             </div>
 
-            <div className="mt-4 rounded-xl bg-slate-900 p-4 text-white">
-              <p className="text-sm text-slate-300">Tổng thu nhập</p>
+            <div className="mt-4 rounded-xl bg-gradient-to-br from-emerald-700 to-cyan-700 p-4 text-white">
+              <p className="text-sm text-emerald-50">Tổng thu nhập</p>
               <p className="mt-1 text-3xl font-black">
                 {formatMoney(previewIncome.total)}
               </p>
@@ -1666,7 +1775,7 @@ export function HubPage({
             <button
               type="button"
               onClick={saveHubEntry}
-              className="mt-4 w-full rounded-xl bg-slate-900 px-5 py-3 font-bold text-white hover:bg-slate-700"
+              className="app-primary-button mt-4 w-full rounded-xl px-5 py-3 font-bold"
             >
               {editingHubEntryId ? "Cập nhật ca hub" : "Lưu ca hub và nhật kí"}
             </button>
@@ -1691,7 +1800,7 @@ export function HubPage({
                       date: event.target.value,
                     }))
                   }
-                  className="mt-1 w-full rounded-xl border px-3 py-2"
+                  className="app-input mt-1 w-full rounded-xl border px-3 py-2"
                 />
               </div>
 
@@ -1710,7 +1819,7 @@ export function HubPage({
                     }))
                   }
                   placeholder="VD: -200.000"
-                  className="mt-1 w-full rounded-xl border px-3 py-2"
+                  className="app-input mt-1 w-full rounded-xl border px-3 py-2"
                 />
               </div>
 
@@ -1727,7 +1836,7 @@ export function HubPage({
                     }))
                   }
                   placeholder="VD: -1.000.000"
-                  className="mt-1 w-full rounded-xl border px-3 py-2"
+                  className="app-input mt-1 w-full rounded-xl border px-3 py-2"
                 />
               </div>
             </div>
@@ -1916,7 +2025,7 @@ export function HubPage({
                   Chưa có lịch sử thay đổi Hub.
                 </p>
               ) : (
-                changeLogs.slice(0, 20).map((log) => (
+                paginatedHubChangeLogs.map((log) => (
                   <article
                     key={log.id}
                     className="flex flex-wrap items-center justify-between gap-3 rounded-xl border p-3"
@@ -1954,35 +2063,76 @@ export function HubPage({
                 ))
               )}
             </div>
+
+            {changeLogs.length > HUB_CHANGE_LOG_PAGE_SIZE && (
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-slate-50 p-3">
+                <p className="text-sm font-bold text-slate-600">
+                  Trang {safeHubChangeLogPage}/{hubChangeLogTotalPages} · mỗi
+                  trang {HUB_CHANGE_LOG_PAGE_SIZE} bản ghi
+                </p>
+
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setHubChangeLogPage((page) => Math.max(page - 1, 1))
+                    }
+                    disabled={safeHubChangeLogPage <= 1}
+                    className="app-secondary-button min-h-10 rounded-xl px-3 py-2 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Trước
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setHubChangeLogPage((page) =>
+                        Math.min(page + 1, hubChangeLogTotalPages)
+                      )
+                    }
+                    disabled={safeHubChangeLogPage >= hubChangeLogTotalPages}
+                    className="app-primary-button min-h-10 rounded-xl px-3 py-2 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Sau
+                  </button>
+                </div>
+              </div>
+            )}
           </section>
         </section>
       )}
 
       {tab === "list" && (
-        <section className="grid gap-5">
-          <section className="rounded-2xl bg-white p-4 shadow-sm sm:p-5">
-            <div className="flex flex-wrap items-start justify-between gap-3">
+        <section className="grid min-w-0 max-w-full gap-5 overflow-hidden">
+          <section className="app-card min-w-0 max-w-full overflow-hidden rounded-2xl p-4 sm:p-5">
+            <div className="grid gap-3 sm:flex sm:items-start sm:justify-between">
               <div className="min-w-0">
-                <h3 className="text-xl font-bold">Hub của tôi</h3>
+                <h3 className="text-xl font-black">Hub của tôi</h3>
                 <p className="text-sm text-slate-500">
-                  Lọc ca hub theo loại, thời gian hoặc chọn trực tiếp trên lịch.
+                  Mobile xem theo ngày, desktop có lịch và bảng chi tiết.
                 </p>
               </div>
 
               <button
                 type="button"
                 onClick={() => setTab("add")}
-                className="w-full rounded-xl bg-slate-900 px-4 py-2 text-sm font-bold text-white hover:bg-slate-700 sm:w-auto"
+                className="app-primary-button w-full rounded-xl px-4 py-2 text-sm font-bold sm:w-auto"
               >
                 Thêm ca mới
               </button>
             </div>
 
-            <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(280px,360px)_1fr]">
+            <div className="mt-4 grid min-w-0 max-w-full gap-4 lg:grid-cols-[minmax(280px,360px)_1fr]">
               {/* Mobile filter gọn */}
-              <div className="grid gap-4 lg:hidden">
-                <div className="rounded-2xl border bg-slate-50 p-3">
-                  <p className="text-sm font-bold text-slate-700">Chọn ngày nhanh</p>
+              <div className="grid min-w-0 max-w-full gap-4 overflow-hidden lg:hidden">
+                <div className="app-soft-card min-w-0 max-w-full rounded-2xl p-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-sm font-bold text-emerald-900">
+                      Chọn ngày nhanh
+                    </p>
+                    <span className="rounded-full bg-white px-3 py-1 text-xs font-bold text-emerald-700">
+                      {filteredHubEntries.length} ca
+                    </span>
+                  </div>
 
                   <input
                     type="date"
@@ -1998,7 +2148,7 @@ export function HubPage({
                         setListCalendarMonth(nextDate.slice(0, 7));
                       }
                     }}
-                    className="mt-2 w-full rounded-xl border bg-white px-3 py-2"
+                    className="app-input mt-2 w-full rounded-xl border bg-white px-3 py-2"
                   />
 
                   <p className="mt-3 rounded-xl bg-white p-3 text-sm font-medium text-slate-600">
@@ -2009,22 +2159,65 @@ export function HubPage({
                   </p>
                 </div>
 
+                {mobileDateChips.length > 0 && (
+                  <div>
+                    <p className="text-sm font-bold text-slate-700">
+                      Ngày có ca gần nhất
+                    </p>
+
+                    <div className="mt-2 grid min-w-0 max-w-full grid-cols-2 gap-2">
+                      {mobileDateChips.map((item) => {
+                        const active =
+                          listTimeFilter === "custom" &&
+                          listCustomFromDate === item.date &&
+                          listCustomToDate === item.date;
+
+                        return (
+                          <button
+                            key={item.date}
+                            type="button"
+                            onClick={() => selectCalendarDate(item.date)}
+                            className={`min-w-0 rounded-2xl px-3 py-2 text-left text-sm font-bold ${
+                              active
+                                ? "bg-emerald-700 text-white"
+                                : "bg-white text-slate-700 shadow-sm"
+                            }`}
+                          >
+                            <span className="block truncate">
+                              {formatDateLabel(item.date)}
+                            </span>
+                            <span
+                              className={`mt-0.5 block break-words text-xs leading-snug ${
+                                active ? "text-emerald-50" : "text-slate-500"
+                              }`}
+                            >
+                              {item.count} ca · {formatMoney(item.workIncome)}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
                 <div>
                   <p className="text-sm font-bold text-slate-700">Lọc theo loại</p>
 
-                  <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
+                  <div className="mt-2 grid min-w-0 max-w-full grid-cols-3 gap-2">
                     {(["ALL", ...HUB_TYPES] as HubTypeFilter[]).map((hubType) => (
                       <button
                         key={hubType}
                         type="button"
                         onClick={() => setListHubTypeFilter(hubType)}
-                        className={`shrink-0 rounded-xl px-3 py-2 text-sm font-bold ${
+                        className={`min-w-0 rounded-xl px-2 py-2 text-sm font-bold ${
                           listHubTypeFilter === hubType
-                            ? "bg-slate-900 text-white"
-                            : "bg-slate-100 hover:bg-slate-200"
+                            ? "bg-emerald-700 text-white"
+                            : "bg-white text-slate-700 shadow-sm hover:bg-emerald-50"
                         }`}
                       >
-                        {hubType === "ALL" ? "Tất cả" : HUB_TYPE_LABEL[hubType]}
+                        <span className="block truncate">
+                          {hubType === "ALL" ? "Tất cả" : HUB_TYPE_LABEL[hubType]}
+                        </span>
                       </button>
                     ))}
                   </div>
@@ -2033,19 +2226,19 @@ export function HubPage({
                 <div>
                   <p className="text-sm font-bold text-slate-700">Lọc theo thời gian</p>
 
-                  <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
+                  <div className="mt-2 grid min-w-0 max-w-full grid-cols-2 gap-2">
                     {HUB_TIME_FILTERS.map((filter) => (
                       <button
                         key={filter.value}
                         type="button"
                         onClick={() => selectListTimeFilter(filter.value)}
-                        className={`shrink-0 rounded-xl px-3 py-2 text-sm font-bold ${
+                        className={`min-w-0 rounded-xl px-2 py-2 text-sm font-bold ${
                           listTimeFilter === filter.value
-                            ? "bg-slate-900 text-white"
-                            : "bg-slate-100 hover:bg-slate-200"
+                            ? "bg-emerald-700 text-white"
+                            : "bg-white text-slate-700 shadow-sm hover:bg-emerald-50"
                         }`}
                       >
-                        {filter.label}
+                        <span className="block leading-snug">{filter.label}</span>
                       </button>
                     ))}
                   </div>
@@ -2174,7 +2367,7 @@ export function HubPage({
                             setListCalendarMonth(event.target.value.slice(0, 7));
                           }
                         }}
-                        className="mt-1 w-full rounded-xl border px-3 py-2"
+                        className="app-input mt-1 w-full rounded-xl border px-3 py-2"
                       />
                     </div>
 
@@ -2191,7 +2384,7 @@ export function HubPage({
                             setListCalendarMonth(event.target.value.slice(0, 7));
                           }
                         }}
-                        className="mt-1 w-full rounded-xl border px-3 py-2"
+                        className="app-input mt-1 w-full rounded-xl border px-3 py-2"
                       />
                     </div>
                   </div>
@@ -2209,7 +2402,7 @@ export function HubPage({
             </div>
           </section>
 
-          <section className="grid gap-2 sm:grid-cols-3">
+          <section className="grid min-w-0 gap-2 sm:grid-cols-3">
             <SummaryCard
               label="Số ca đang xem"
               value={`${filteredHubEntries.length} ca`}
@@ -2222,6 +2415,33 @@ export function HubPage({
               label="Tổng đơn đang xem"
               value={`${filteredHubSummary.orders} đơn`}
             />
+          </section>
+
+          <section className="grid min-w-0 max-w-full gap-3 overflow-hidden lg:hidden">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h3 className="text-xl font-black">Dòng thời gian ca Hub</h3>
+                <p className="text-sm text-slate-500">
+                  Mỗi ngày gom các ca thành card dễ bấm trên điện thoại.
+                </p>
+              </div>
+            </div>
+
+            {mobileHubDateGroups.length === 0 ? (
+              <p className="rounded-2xl bg-white p-4 text-sm font-medium text-slate-500 shadow-sm">
+                Không có ca hub nào trong bộ lọc này.
+              </p>
+            ) : (
+              mobileHubDateGroups.map((group) => (
+                <HubMobileDateGroupCard
+                  key={group.date}
+                  group={group}
+                  onDelete={deleteHubEntry}
+                  onEdit={editHubEntry}
+                  settings={settings}
+                />
+              ))
+            )}
           </section>
 
           <section className="hidden rounded-2xl bg-white p-5 shadow-sm lg:block">
@@ -2293,7 +2513,7 @@ export function HubPage({
             </div>
           </section>
 
-          <section className="rounded-2xl bg-white p-4 shadow-sm sm:p-5">
+          <section className="hidden rounded-2xl bg-white p-4 shadow-sm sm:p-5 lg:block">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <h3 className="text-xl font-bold">Kết quả lọc</h3>
               <p className="text-sm font-medium text-slate-500">
@@ -2471,15 +2691,152 @@ type ButtonProps = {
   onClick: () => void;
 };
 
+function HubMobileDateGroupCard({
+  group,
+  onDelete,
+  onEdit,
+  settings,
+}: {
+  group: HubMobileDateGroup;
+  onDelete: (id: string) => void;
+  onEdit: (entry: HubEntry) => void;
+  settings: HubSettings;
+}) {
+  return (
+    <article className="app-card min-w-0 max-w-full overflow-hidden rounded-2xl p-4">
+      <div className="flex min-w-0 items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-xs font-bold uppercase tracking-wide text-emerald-700">
+            {formatDateLabel(group.date)}
+          </p>
+          <h4 className="mt-1 text-lg font-black">{group.entries.length} ca</h4>
+        </div>
+
+        <div className="min-w-0 shrink-0 text-right">
+          <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+            Làm thật
+          </p>
+          <p className="mt-1 text-lg font-black text-emerald-700">
+            {formatMoney(group.workIncome)}
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-3 grid grid-cols-3 gap-2 text-center text-xs">
+        <div className="min-w-0 rounded-xl bg-emerald-50 p-2">
+          <p className="text-slate-500">Gross</p>
+          <p className="mt-1 break-words font-black">
+            {formatMoney(group.grossIncome)}
+          </p>
+        </div>
+        <div className="min-w-0 rounded-xl bg-cyan-50 p-2">
+          <p className="text-slate-500">Đơn</p>
+          <p className="mt-1 break-words font-black">{group.orders}</p>
+        </div>
+        <div className="min-w-0 rounded-xl bg-amber-50 p-2">
+          <p className="text-slate-500">Ghép</p>
+          <p className="mt-1 break-words font-black">{group.joins}</p>
+        </div>
+      </div>
+
+      <div className="mt-4 grid min-w-0 gap-3">
+        {group.entries.map((entry) => (
+          <HubMobileEntryCard
+            key={entry.id}
+            entry={entry}
+            income={calculateHubIncome(entry, settings)}
+            onDelete={onDelete}
+            onEdit={onEdit}
+          />
+        ))}
+      </div>
+    </article>
+  );
+}
+
+function HubMobileEntryCard({
+  entry,
+  income,
+  onDelete,
+  onEdit,
+}: {
+  entry: HubEntry;
+  income: ReturnType<typeof calculateHubIncome>;
+  onDelete: (id: string) => void;
+  onEdit: (entry: HubEntry) => void;
+}) {
+  return (
+    <article className="min-w-0 max-w-full overflow-hidden rounded-2xl border border-emerald-100 bg-white p-3">
+      <div className="flex min-w-0 items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="font-black">{HUB_TYPE_LABEL[entry.hubType]}</p>
+          <p className="mt-1 break-words text-sm text-slate-500">
+            {entry.shiftName || "Chưa nhập ca"}
+          </p>
+        </div>
+
+        <div className="min-w-0 shrink-0 text-right">
+          <p className="text-xs text-slate-500">Làm thật</p>
+          <p className="break-words font-black text-emerald-700">
+            {formatMoney(income.workIncome)}
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-3 grid min-w-0 grid-cols-2 gap-2 text-sm">
+        <MiniHubMetric label="Tổng đơn" value={`${entry.order}`} />
+        <MiniHubMetric label="Đơn ghép" value={`${income.totalJoinChildOrders}`} />
+        <MiniHubMetric label="Gross" value={formatMoney(income.total)} />
+        <MiniHubMetric
+          label="Thưởng tách"
+          value={formatMoney(income.excludedFromWorkIncome)}
+        />
+      </div>
+
+      {entry.note && (
+        <p className="mt-3 rounded-xl bg-slate-50 p-2 text-sm text-slate-600">
+          {entry.note}
+        </p>
+      )}
+
+      <div className="mt-3 grid min-w-0 grid-cols-2 gap-2">
+        <button
+          type="button"
+          onClick={() => onEdit(entry)}
+          className="app-primary-button rounded-xl px-3 py-2 text-sm font-bold"
+        >
+          Cập nhật
+        </button>
+        <button
+          type="button"
+          onClick={() => onDelete(entry.id)}
+          className="min-h-11 rounded-xl bg-red-50 px-3 py-2 text-sm font-bold text-red-600 hover:bg-red-100"
+        >
+          Xóa
+        </button>
+      </div>
+    </article>
+  );
+}
+
+function MiniHubMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-0 rounded-xl bg-slate-50 p-2">
+      <p className="text-xs text-slate-500">{label}</p>
+      <p className="mt-1 break-words font-bold">{value}</p>
+    </div>
+  );
+}
+
 function TabButton({ active, children, onClick }: ButtonProps) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`flex min-h-11 w-full items-center justify-center rounded-xl px-2 py-2 text-center text-xs font-bold leading-snug sm:text-sm lg:whitespace-nowrap lg:px-3 ${
+      className={`flex min-h-11 w-auto shrink-0 items-center justify-center rounded-xl px-3 py-2 text-center text-xs font-bold leading-snug sm:text-sm lg:w-full lg:whitespace-nowrap lg:px-3 ${
         active
-          ? "bg-slate-900 text-white"
-          : "bg-slate-50 text-slate-700 hover:bg-slate-100"
+          ? "bg-emerald-700 text-white"
+          : "bg-emerald-50 text-emerald-800 hover:bg-emerald-100"
       }`}
     >
       {children}
@@ -2493,7 +2850,7 @@ function ChoiceButton({ active, children, onClick }: ButtonProps) {
       type="button"
       onClick={onClick}
       className={`rounded-xl px-4 py-2 text-sm font-bold ${
-        active ? "bg-slate-900 text-white" : "bg-slate-100 hover:bg-slate-200"
+        active ? "bg-emerald-700 text-white" : "bg-emerald-50 text-emerald-800 hover:bg-emerald-100"
       }`}
     >
       {children}
@@ -2512,9 +2869,9 @@ function FormBlock({ title, children }: { title: string; children: ReactNode }) 
 
 function SummaryCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="min-w-0 rounded-2xl bg-white p-3 shadow-sm sm:p-4">
+    <div className="app-card min-w-0 rounded-2xl p-3 sm:p-4">
       <p className="text-sm text-slate-500">{label}</p>
-      <p className="mt-1 break-words text-xl font-black leading-tight sm:text-2xl">
+      <p className="mt-1 break-words text-xl font-black leading-tight text-emerald-800 sm:text-2xl">
         {value}
       </p>
     </div>
@@ -2709,7 +3066,7 @@ function SettingMoneyInput({ label, value, onChange }: SettingMoneyInputProps) {
         inputMode="numeric"
         value={formatMoneyInput(String(value))}
         onChange={(event) => onChange(parseMoneyInput(event.target.value))}
-        className="mt-1 w-full rounded-xl border px-3 py-2"
+        className="app-input mt-1 w-full rounded-xl border px-3 py-2"
       />
     </div>
   );

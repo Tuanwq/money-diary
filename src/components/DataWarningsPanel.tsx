@@ -25,7 +25,7 @@ export function DataWarningsPanel({
   const firstWarning = warnings[0];
 
   return (
-    <section className="rounded-2xl bg-white p-4 shadow-sm">
+    <section className="app-card rounded-2xl p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
@@ -56,7 +56,7 @@ export function DataWarningsPanel({
         <button
           type="button"
           onClick={() => setIsOpen((prev) => !prev)}
-          className="rounded-xl border bg-white px-4 py-2 text-sm font-bold shadow-sm hover:bg-slate-100"
+          className="app-secondary-button rounded-xl px-4 py-2 text-sm font-bold shadow-sm"
         >
           {isOpen ? "Thu gọn" : "Xem chi tiết"}
         </button>
@@ -87,7 +87,7 @@ export function DataWarningsPanel({
               <button
                 type="button"
                 onClick={() => onAction(warning)}
-                className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-700"
+                className="app-primary-button rounded-lg px-3 py-2 text-sm font-medium"
               >
                 {warning.actionLabel}
               </button>

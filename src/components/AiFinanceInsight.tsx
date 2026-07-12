@@ -231,7 +231,7 @@ export function AiFinanceInsight({
       <button
         type="button"
         onClick={() => setIsOpen(true)}
-        className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-slate-700"
+        className="app-primary-button w-full rounded-xl px-4 py-2 text-sm font-bold sm:w-auto"
       >
         Phân tích tài chính 
       </button>

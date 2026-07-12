@@ -2377,11 +2377,13 @@ function renderBalanceCheckCard(title = "Kiểm kê số dư hôm nay") {
 }
 
   return (
-    <div className="min-h-screen bg-slate-100 text-slate-900">
-      <header className="border-b bg-white">
-        <div className="mx-auto max-w-6xl px-4 py-6">
-          <h1 className="text-3xl font-bold">Nhật ký kiếm tiền</h1>
-          <p className="mt-1 text-slate-500">
+    <div className="app-shell-bg min-h-[100dvh] text-slate-900">
+      <header className="app-header pt-[env(safe-area-inset-top)] shadow-sm">
+        <div className="mx-auto max-w-6xl px-3 py-4 sm:px-4 sm:py-6">
+          <h1 className="text-2xl font-black tracking-tight sm:text-3xl">
+            Nhật ký kiếm tiền
+          </h1>
+          <p className="mt-1 max-w-2xl text-sm text-emerald-50 sm:text-base">
             Ghi lại mỗi ngày, theo dõi tiền kiếm được, giờ làm và tiến độ mục tiêu.
           </p>
         </div>
@@ -2400,7 +2402,7 @@ function renderBalanceCheckCard(title = "Kiểm kê số dư hôm nay") {
 
       {session && (
         <>
-        <main className="mx-auto grid max-w-6xl gap-6 px-4 py-6 pb-28">
+        <main className="mx-auto grid max-w-6xl gap-4 px-3 pb-[var(--bottom-nav-clearance)] pt-4 sm:gap-6 sm:px-4 sm:pt-6">
           <AccountBar
             email={session.user.email}
             syncStatus={syncStatus}
@@ -2703,6 +2705,7 @@ function renderBalanceCheckCard(title = "Kiểm kê số dư hôm nay") {
   )}</main>
 
     <BottomNav
+      currentPage={page}
       navigateTo={navigateTo}
       openCloseDay={() => openCloseDay()}
     />
@@ -2722,7 +2725,7 @@ function FloatingHomeButton({ onClick }: { onClick: () => void }) {
       onClick={onClick}
       title="Về trang chủ"
       aria-label="Về trang chủ"
-      className="fixed bottom-24 right-4 z-[60] flex h-14 w-14 items-center justify-center rounded-full bg-slate-900 text-white shadow-xl shadow-slate-900/25 transition hover:bg-slate-700 focus:outline-none focus:ring-4 focus:ring-slate-300 sm:bottom-8"
+      className="fixed bottom-[calc(5.75rem+env(safe-area-inset-bottom))] right-4 z-[60] flex h-14 w-14 items-center justify-center rounded-full bg-emerald-700 text-white shadow-xl shadow-emerald-900/25 transition hover:bg-emerald-800 focus:outline-none focus:ring-4 focus:ring-emerald-200 sm:bottom-8"
     >
       <svg
         aria-hidden="true"

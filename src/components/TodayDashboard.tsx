@@ -41,7 +41,7 @@ export function TodayDashboard({
   onBalanceCheckClick,
 }: TodayDashboardProps) {
   return (
-    <section className="rounded-2xl bg-white p-5 shadow-sm">
+    <section className="app-card rounded-2xl p-4 sm:p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-xl font-bold">Hôm nay cần làm gì</h2>
@@ -50,17 +50,17 @@ export function TodayDashboard({
           </p>
         </div>
 
-        <span className="rounded-full bg-slate-100 px-3 py-1 text-sm font-bold">
+        <span className="rounded-full bg-emerald-50 px-3 py-1 text-sm font-bold text-emerald-800">
           {todayChecklistDoneCount}/3 mục đã xong
         </span>
       </div>
 
-      <div className="mt-4 grid gap-3 lg:grid-cols-3">
+      <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <div
           className={`rounded-xl p-4 ${
             todayGoalPaceRemaining > 0
-              ? "bg-yellow-50 text-yellow-800"
-              : "bg-green-50 text-green-700"
+              ? "bg-amber-50 text-amber-800"
+              : "bg-emerald-50 text-emerald-700"
           }`}
         >
           <p className="text-sm opacity-80">Cần thêm để kịp mục tiêu lớn</p>
@@ -76,8 +76,8 @@ export function TodayDashboard({
         <div
           className={`rounded-xl p-4 ${
             todayDailyIncomeRemaining > 0
-              ? "bg-slate-100 text-slate-900"
-              : "bg-green-50 text-green-700"
+              ? "bg-sky-50 text-sky-900"
+              : "bg-emerald-50 text-emerald-700"
           }`}
         >
           <p className="text-sm opacity-80">Còn thiếu mục tiêu ngày</p>
@@ -92,18 +92,18 @@ export function TodayDashboard({
           </p>
         </div>
 
-        <div className="rounded-xl bg-slate-100 p-4">
-          <p className="text-sm text-slate-500">Dữ liệu hôm nay</p>
+        <div className="rounded-xl bg-cyan-50 p-4 text-cyan-900">
+          <p className="text-sm opacity-80">Dữ liệu hôm nay</p>
           <p className="mt-1 text-2xl font-black">
             {todayChecklistDoneCount}/3
           </p>
-          <p className="mt-1 text-xs text-slate-500">
+          <p className="mt-1 text-xs opacity-80">
             Nhật ký, chi tiêu và kiểm kê số dư.
           </p>
         </div>
       </div>
 
-      <div className="mt-4 grid gap-3 md:grid-cols-3">
+      <div className="mt-4 grid gap-3 lg:grid-cols-3">
         <ChecklistCard
           title="Ca hub"
           done={Boolean(todayEntry)}
@@ -161,21 +161,21 @@ function ChecklistCard({
 }: ChecklistCardProps) {
   return (
     <article
-      className={`rounded-xl border p-4 ${
-        done ? "border-green-200 bg-green-50" : "bg-white"
+      className={`rounded-xl border p-3 sm:p-4 ${
+        done ? "border-emerald-200 bg-emerald-50" : "bg-white"
       }`}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h3 className="font-bold">{title}</h3>
-          <p className="mt-1 text-sm text-slate-500">{description}</p>
+          <p className="mt-1 text-sm leading-5 text-slate-500">{description}</p>
         </div>
 
         <span
           className={`shrink-0 whitespace-nowrap rounded-full px-3 py-1 text-xs font-bold leading-5 ${
             done
-              ? "bg-green-100 text-green-700"
-              : "bg-yellow-100 text-yellow-800"
+              ? "bg-emerald-100 text-emerald-700"
+              : "bg-amber-100 text-amber-800"
           }`}
         >
           {done ? "Đã nhập" : "Còn thiếu"}
@@ -185,7 +185,7 @@ function ChecklistCard({
       <button
         type="button"
         onClick={onClick}
-        className="mt-3 inline-flex min-h-10 max-w-full items-center justify-center rounded-lg bg-slate-900 px-3 py-2 text-center text-sm font-medium leading-tight text-white hover:bg-slate-700"
+        className="app-primary-button mt-3 inline-flex max-w-full items-center justify-center rounded-lg px-3 py-2 text-center text-sm font-medium leading-tight"
       >
         {actionLabel}
       </button>

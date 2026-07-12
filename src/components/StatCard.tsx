@@ -9,10 +9,10 @@ type StatCardProps = {
 
 export function StatCard({ title, value, target, progress }: StatCardProps) {
   return (
-    <div className="rounded-2xl bg-white p-4 shadow-sm sm:p-5">
+    <div className="app-card h-full rounded-2xl p-3 sm:p-5">
       <p className="text-xs text-slate-500 sm:text-sm">{title}</p>
 
-      <h2 className="mt-2 break-words text-xl font-bold text-slate-900 sm:text-2xl">
+      <h2 className="mt-2 break-words text-lg font-black text-slate-900 sm:text-2xl">
         {value}
       </h2>
 

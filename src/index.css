@@ -1,1 +1,163 @@
 @import "tailwindcss";
+
+:root {
+  --app-bg: #eef7f2;
+  --app-bg-soft: #f7fbf8;
+  --app-card: #ffffff;
+  --app-border: #d8e7df;
+  --app-ink: #102a24;
+  --app-muted: #5f716b;
+  --app-primary: #047857;
+  --app-primary-dark: #065f46;
+  --app-primary-soft: #dcfce7;
+  --app-accent: #0e7490;
+  --app-warning-soft: #fff7d6;
+  --bottom-nav-height: 4.5rem;
+  --bottom-nav-offset: 0rem;
+  --bottom-nav-safe-space: 1.5rem;
+  --bottom-nav-clearance: calc(
+    var(--bottom-nav-height) + var(--bottom-nav-offset) +
+      var(--bottom-nav-safe-space) + env(safe-area-inset-bottom)
+  );
+}
+
+html {
+  background: var(--app-bg);
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  min-width: 320px;
+  margin: 0;
+  overflow-x: hidden;
+  overscroll-behavior-y: none;
+  background: var(--app-bg);
+  color: var(--app-ink);
+}
+
+#root {
+  min-height: 100dvh;
+  overflow-x: hidden;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button,
+a,
+input,
+select,
+textarea {
+  touch-action: manipulation;
+}
+
+@media (max-width: 640px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+
+.app-shell-bg {
+  background:
+    linear-gradient(180deg, #eef7f2 0%, #f7fbf8 42%, #edf6ff 100%);
+}
+
+.app-header {
+  background: linear-gradient(135deg, #064e3b 0%, #047857 55%, #0e7490 100%);
+  color: white;
+}
+
+.app-card {
+  background: var(--app-card);
+  border: 1px solid color-mix(in srgb, var(--app-border) 82%, transparent);
+  box-shadow: 0 12px 32px rgba(18, 78, 61, 0.08);
+}
+
+.app-soft-card {
+  background: #f0faf4;
+  border: 1px solid #d7f1df;
+}
+
+.app-input {
+  min-height: 44px;
+  border-color: var(--app-border);
+  background: #ffffff;
+  color: var(--app-ink);
+}
+
+.app-input:focus {
+  border-color: var(--app-primary);
+  box-shadow: 0 0 0 3px rgba(4, 120, 87, 0.14);
+  outline: none;
+}
+
+.app-primary-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  text-align: center;
+  background: var(--app-primary);
+  color: white;
+  box-shadow: 0 10px 20px rgba(4, 120, 87, 0.18);
+  transition:
+    background-color 160ms ease,
+    transform 160ms ease;
+}
+
+.app-primary-button:hover {
+  background: var(--app-primary-dark);
+}
+
+.app-primary-button:active {
+  transform: scale(0.99);
+}
+
+.app-secondary-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  text-align: center;
+  border: 1px solid var(--app-border);
+  background: white;
+  color: var(--app-ink);
+}
+
+.app-secondary-button:hover {
+  background: #f0faf4;
+}
+
+.app-sticky-submit {
+  position: sticky;
+  bottom: var(--bottom-nav-clearance);
+  z-index: 30;
+  margin-inline: -0.5rem;
+  border: 1px solid rgba(216, 231, 223, 0.9);
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 -10px 30px rgba(18, 78, 61, 0.12);
+  backdrop-filter: blur(14px);
+}
+
+@media (min-width: 640px) {
+  .app-sticky-submit {
+    position: static;
+    margin-inline: 0;
+    box-shadow: none;
+    backdrop-filter: none;
+  }
+}
+
+@media (min-width: 1024px) {
+  :root {
+    --bottom-nav-height: 3.75rem;
+    --bottom-nav-offset: 1.25rem;
+    --bottom-nav-safe-space: 1.5rem;
+  }
+}

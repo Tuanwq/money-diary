@@ -37,7 +37,7 @@ export function BalanceCheckCard({
   const difference = checkedMoney - appMoney;
 
   return (
-    <section className="rounded-2xl bg-white p-5 shadow-sm">
+    <section className="app-card rounded-2xl p-4 sm:p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-xl font-bold">{title}</h2>
@@ -64,7 +64,7 @@ export function BalanceCheckCard({
               value={form.date}
               max={maxDate}
               onChange={(e) => onDateChange(e.target.value)}
-              className="mt-1 w-full rounded-xl border px-3 py-2"
+              className="app-input mt-1 w-full rounded-xl border px-3 py-2"
             />
           </div>
 
@@ -76,7 +76,7 @@ export function BalanceCheckCard({
               value={form.cash}
               onChange={(e) => onCashChange(formatMoneyInput(e.target.value))}
               placeholder="VD: 500.000"
-              className="mt-1 w-full rounded-xl border px-3 py-2"
+              className="app-input mt-1 w-full rounded-xl border px-3 py-2"
             />
           </div>
 
@@ -88,18 +88,18 @@ export function BalanceCheckCard({
               value={form.bank}
               onChange={(e) => onBankChange(formatMoneyInput(e.target.value))}
               placeholder="VD: 3.000.000"
-              className="mt-1 w-full rounded-xl border px-3 py-2"
+              className="app-input mt-1 w-full rounded-xl border px-3 py-2"
             />
           </div>
         </div>
 
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          <div className="rounded-xl bg-slate-100 p-3">
+          <div className="rounded-xl bg-emerald-50 p-3">
             <p className="text-sm text-slate-500">App tính hiện có</p>
             <p className="font-bold">{formatMoney(appMoney)}</p>
           </div>
 
-          <div className="rounded-xl bg-slate-100 p-3">
+          <div className="rounded-xl bg-cyan-50 p-3">
             <p className="text-sm text-slate-500">Bạn kiểm kê</p>
             <p className="font-bold">{formatMoney(checkedMoney)}</p>
           </div>
@@ -111,7 +111,7 @@ export function BalanceCheckCard({
             <p className="font-bold">{formatMoney(difference)}</p>
           </div>
 
-          <div className="rounded-xl bg-slate-100 p-3">
+          <div className="rounded-xl bg-sky-50 p-3">
             <p className="text-sm text-slate-500">Công thức</p>
             <p className="text-sm font-bold">Mặt + TK = Hiện có</p>
           </div>
@@ -123,13 +123,13 @@ export function BalanceCheckCard({
             value={form.note}
             onChange={(e) => onNoteChange(e.target.value)}
             placeholder="VD: Có thể chưa nhập tiền ăn sáng, quên ghi khoản chuyển khoản..."
-            className="mt-1 min-h-20 w-full rounded-xl border px-3 py-2"
+            className="app-input mt-1 min-h-24 w-full rounded-xl border px-3 py-2"
           />
         </div>
 
         <button
           type="submit"
-          className="w-fit rounded-xl bg-slate-900 px-5 py-2 font-medium text-white hover:bg-slate-700"
+          className="app-primary-button w-full rounded-xl px-5 py-2 font-medium sm:w-fit"
         >
           Lưu kiểm kê
         </button>

@@ -40,14 +40,14 @@ export function OtherExpenseItemsInput({
     <div className="md:col-span-2">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <label className="text-sm font-medium">Khoản khác</label>
-        <p className="text-sm font-bold text-slate-600">
+        <p className="text-sm font-bold text-emerald-700">
           Tổng: {formatMoney(total)}
         </p>
       </div>
 
       <div className="mt-2 grid gap-3">
         {visibleItems.map((item, index) => (
-          <div key={item.id} className="rounded-2xl border bg-slate-50 p-3">
+          <div key={item.id} className="app-soft-card rounded-2xl p-3">
             <div className="flex items-center justify-between gap-2">
               <p className="text-sm font-bold text-slate-700">
                 Khoản khác {index + 1}
@@ -57,7 +57,7 @@ export function OtherExpenseItemsInput({
                 <button
                   type="button"
                   onClick={() => deleteItem(item.id)}
-                  className="rounded-lg bg-red-50 px-3 py-1 text-sm font-bold text-red-600 hover:bg-red-100"
+                  className="min-h-10 rounded-lg bg-red-50 px-3 py-1 text-sm font-bold text-red-600 hover:bg-red-100"
                 >
                   Xóa dòng
                 </button>
@@ -77,7 +77,7 @@ export function OtherExpenseItemsInput({
                     })
                   }
                   placeholder="VD: 20.000"
-                  className="mt-1 w-full rounded-xl border bg-white px-3 py-2"
+                  className="app-input mt-1 w-full rounded-xl border bg-white px-3 py-2"
                 />
               </div>
 
@@ -93,7 +93,7 @@ export function OtherExpenseItemsInput({
       <button
         type="button"
         onClick={addItem}
-        className="mt-3 rounded-xl bg-slate-900 px-4 py-2 text-sm font-bold text-white hover:bg-slate-700"
+        className="app-primary-button mt-3 rounded-xl px-4 py-2 text-sm font-bold"
       >
         Thêm khoản khác
       </button>
