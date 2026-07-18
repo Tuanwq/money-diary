@@ -500,6 +500,7 @@ export default function App() {
   const [expenseSearch, setExpenseSearch] = useState("");
   const [expenseFromDate, setExpenseFromDate] = useState("");
   const [expenseToDate, setExpenseToDate] = useState("");
+  const [expenseLabelFilter, setExpenseLabelFilter] = useState("");
 
   const [historyCurrentPage, setHistoryCurrentPage] = useState(1);
   const [expenseCurrentPage, setExpenseCurrentPage] = useState(1);
@@ -847,6 +848,14 @@ const sortedExpenses = [...expenses].sort((a, b) =>
   b.date.localeCompare(a.date)
 );
 
+const expenseLabelOptions = Array.from(
+  new Set(
+    sortedExpenses.flatMap((expense) =>
+      getOtherExpenseItems(expense).map((item) => item.label)
+    )
+  )
+).sort((a, b) => a.localeCompare(b, "vi"));
+
 const sortedBalanceChecks = [...balanceChecks].sort((a, b) =>
   b.date.localeCompare(a.date)
 );
@@ -863,6 +872,7 @@ const paginatedBalanceChecks = sortedBalanceChecks.slice(
 
 const filteredExpenses = sortedExpenses.filter((expense) => {
   const keyword = expenseSearch.trim().toLowerCase();
+  const selectedLabel = expenseLabelFilter.trim();
 
   const matchKeyword =
     !keyword ||
@@ -879,7 +889,11 @@ const filteredExpenses = sortedExpenses.filter((expense) => {
     expenseToDate
   );
 
-  return matchKeyword && matchDate;
+  const matchLabel =
+    !selectedLabel ||
+    getOtherExpenseItems(expense).some((item) => item.label === selectedLabel);
+
+  return matchKeyword && matchDate && matchLabel;
 });
 
 const expenseTotalPages = Math.max(
@@ -972,7 +986,25 @@ function updateExpenseToDate(value: string) {
   setExpenseCurrentPage(1);
 }
 
-function setExpenseQuickFilter(type: "today" | "7days" | "month" | "all") {
+function updateExpenseLabelFilter(value: string) {
+  setExpenseLabelFilter(value);
+  setExpenseCurrentPage(1);
+}
+
+function getLastMonthRange() {
+  const now = new Date();
+  const fromDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const toDate = new Date(now.getFullYear(), now.getMonth(), 0);
+
+  return {
+    fromDate: getDateString(fromDate),
+    toDate: getDateString(toDate),
+  };
+}
+
+function setExpenseQuickFilter(
+  type: "today" | "7days" | "30days" | "month" | "lastMonth" | "all"
+) {
   setExpenseCurrentPage(1);
 
   if (type === "today") {
@@ -985,15 +1017,28 @@ function setExpenseQuickFilter(type: "today" | "7days" | "month" | "all") {
     setExpenseToDate(getToday());
   }
 
+  if (type === "30days") {
+    setExpenseFromDate(getDateDaysAgo(29));
+    setExpenseToDate(getToday());
+  }
+
   if (type === "month") {
     setExpenseFromDate(getMonthStart());
     setExpenseToDate(getToday());
+  }
+
+  if (type === "lastMonth") {
+    const range = getLastMonthRange();
+
+    setExpenseFromDate(range.fromDate);
+    setExpenseToDate(range.toDate);
   }
 
   if (type === "all") {
     setExpenseFromDate("");
     setExpenseToDate("");
     setExpenseSearch("");
+    setExpenseLabelFilter("");
   }
 }
 
@@ -2683,6 +2728,9 @@ function renderBalanceCheckCard(title = "Kiểm kê số dư hôm nay") {
       setExpenseFromDate={updateExpenseFromDate}
       expenseToDate={expenseToDate}
       setExpenseToDate={updateExpenseToDate}
+      expenseLabelFilter={expenseLabelFilter}
+      setExpenseLabelFilter={updateExpenseLabelFilter}
+      expenseLabelOptions={expenseLabelOptions}
       setExpenseQuickFilter={setExpenseQuickFilter}
       filteredExpenses={filteredExpenses}
       filteredExpensesTotal={filteredExpensesTotal}
