@@ -220,48 +220,6 @@ export function HomePage({
                 </p>
               </div>
 
-              <div className="goal-section__main-progress">
-                <div className="goal-section__main-progress-header">
-                  <div className="goal-section__main-progress-copy">
-                    <p className="goal-section__main-progress-label">
-                      Tiến trình mục tiêu chính
-                    </p>
-                    <p className="goal-section__main-progress-name">
-                      {goals.bigGoalName}
-                    </p>
-                  </div>
-
-                  <div className="goal-section__main-progress-value">
-                    {mainGoalProgress}%
-                  </div>
-                </div>
-
-                <div
-                  className="goal-section__main-progress-track"
-                  aria-label={`Tiến trình mục tiêu chính ${mainGoalProgress}%`}
-                  role="progressbar"
-                  aria-valuemin={0}
-                  aria-valuemax={100}
-                  aria-valuenow={mainGoalProgress}
-                >
-                  <div
-                    className="goal-section__main-progress-fill"
-                    style={{ width: `${mainGoalProgress}%` }}
-                  />
-                </div>
-
-                <div className="goal-section__main-progress-footer">
-                  <div className="goal-section__main-progress-money">
-                    Đã có {formatMoney(actualMoney)} /{" "}
-                    {formatMoney(goals.bigGoalTarget)}
-                  </div>
-
-                  <div className="goal-section__main-progress-remaining">
-                    Còn thiếu {formatMoney(mainGoalRemaining)}
-                  </div>
-                </div>
-              </div>
-
               <div className="goal-section__cards snap-x">
                 <div
                   title={`Mục tiêu chính: ${goals.bigGoalName}`}
@@ -383,6 +341,48 @@ export function HomePage({
                 onChange={(e) => handleSelectDate(e.target.value)}
                 className="app-input goal-section__date-input col-span-3 min-w-0 rounded-xl border px-4 py-2 text-sm shadow-sm sm:col-span-1"
               />
+            </div>
+          </div>
+        </div>
+
+        <div className="goal-section__main-progress">
+          <div className="goal-section__main-progress-header">
+            <div className="goal-section__main-progress-copy">
+              <p className="goal-section__main-progress-label">
+                Tiến trình mục tiêu chính
+              </p>
+              <p className="goal-section__main-progress-name">
+                {goals.bigGoalName}
+              </p>
+            </div>
+
+            <div className="goal-section__main-progress-value">
+              {mainGoalProgress}%
+            </div>
+          </div>
+
+          <div
+            className="goal-section__main-progress-track"
+            aria-label={`Tiến trình mục tiêu chính ${mainGoalProgress}%`}
+            role="progressbar"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={mainGoalProgress}
+          >
+            <div
+              className="goal-section__main-progress-fill"
+              style={{ width: `${mainGoalProgress}%` }}
+            />
+          </div>
+
+          <div className="goal-section__main-progress-footer">
+            <div className="goal-section__main-progress-money">
+              Đã có {formatMoney(actualMoney)} /{" "}
+              {formatMoney(goals.bigGoalTarget)}
+            </div>
+
+            <div className="goal-section__main-progress-remaining">
+              Còn thiếu {formatMoney(mainGoalRemaining)}
             </div>
           </div>
         </div>

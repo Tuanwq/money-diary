@@ -400,18 +400,9 @@ textarea {
       135deg,
       var(--primary-soft) 0%,
       var(--primary-subtle) 100%
-    );
+  );
   padding: 12px;
-  transition:
-    gap 180ms ease,
-    padding 180ms ease,
-    border-radius 180ms ease;
-}
-
-.goal-section--compact .goal-section__main-progress {
-  gap: 5px;
-  border-radius: 14px;
-  padding: 8px 10px;
+  box-shadow: 0 10px 24px color-mix(in srgb, var(--primary) 10%, transparent);
 }
 
 .goal-section__main-progress-header,
@@ -485,28 +476,6 @@ textarea {
 
 .goal-section__main-progress-remaining {
   text-align: right;
-}
-
-.goal-section--compact .goal-section__main-progress-label,
-.goal-section--compact .goal-section__main-progress-money,
-.goal-section--compact .goal-section__main-progress-remaining {
-  max-height: 0;
-  opacity: 0;
-  overflow: hidden;
-}
-
-.goal-section--compact .goal-section__main-progress-name {
-  font-size: 0.8rem;
-  line-height: 1rem;
-}
-
-.goal-section--compact .goal-section__main-progress-value {
-  font-size: 1.1rem;
-  line-height: 1.3rem;
-}
-
-.goal-section--compact .goal-section__main-progress-track {
-  height: 7px;
 }
 
 .goal-section__cards {
@@ -715,10 +684,6 @@ textarea {
 
   .goal-section__title {
     gap: 4px;
-  }
-
-  .goal-section__main-progress {
-    max-width: min(100%, 680px);
   }
 
   .goal-section__cards {
