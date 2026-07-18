@@ -107,6 +107,8 @@ export function HomePage({
 }: HomePageProps) {
   const [showMoreStats, setShowMoreStats] = useState(false);
   const [isGoalNavigationCompact, setIsGoalNavigationCompact] = useState(false);
+  const mainGoalProgress = getProgress(actualMoney, goals.bigGoalTarget);
+  const mainGoalRemaining = Math.max(goals.bigGoalTarget - actualMoney, 0);
   const missingTodayItems = [
     !todayEntry ? "ca Hub/nhật ký" : "",
     !todayExpense ? "chi tiêu" : "",
@@ -197,7 +199,7 @@ export function HomePage({
 
   return (
     <>
-      <section className="grid gap-3 sm:gap-4">
+      <section className="home-page__main-stack grid gap-3 sm:gap-4">
         <div
           className={`app-card goal-section goal-navigation rounded-2xl ${
             isGoalNavigationCompact ? "goal-section--compact" : ""
@@ -218,6 +220,48 @@ export function HomePage({
                 </p>
               </div>
 
+              <div className="goal-section__main-progress">
+                <div className="goal-section__main-progress-header">
+                  <div className="goal-section__main-progress-copy">
+                    <p className="goal-section__main-progress-label">
+                      Tiến trình mục tiêu chính
+                    </p>
+                    <p className="goal-section__main-progress-name">
+                      {goals.bigGoalName}
+                    </p>
+                  </div>
+
+                  <div className="goal-section__main-progress-value">
+                    {mainGoalProgress}%
+                  </div>
+                </div>
+
+                <div
+                  className="goal-section__main-progress-track"
+                  aria-label={`Tiến trình mục tiêu chính ${mainGoalProgress}%`}
+                  role="progressbar"
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={mainGoalProgress}
+                >
+                  <div
+                    className="goal-section__main-progress-fill"
+                    style={{ width: `${mainGoalProgress}%` }}
+                  />
+                </div>
+
+                <div className="goal-section__main-progress-footer">
+                  <div className="goal-section__main-progress-money">
+                    Đã có {formatMoney(actualMoney)} /{" "}
+                    {formatMoney(goals.bigGoalTarget)}
+                  </div>
+
+                  <div className="goal-section__main-progress-remaining">
+                    Còn thiếu {formatMoney(mainGoalRemaining)}
+                  </div>
+                </div>
+              </div>
+
               <div className="goal-section__cards snap-x">
                 <div
                   title={`Mục tiêu chính: ${goals.bigGoalName}`}
@@ -233,7 +277,7 @@ export function HomePage({
                     Mục tiêu chính
                   </p>
 
-                  <div className="flex items-end gap-1">
+                  <div className="goal-section__main-card-value-row flex items-end gap-1">
                     <span
                       className={`goal-section__main-value text-3xl font-black ${
                         isBigGoalBehind ? "text-red-600" : "text-white"

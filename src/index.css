@@ -389,6 +389,126 @@ textarea {
   pointer-events: none;
 }
 
+.goal-section__main-progress {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  border: 1px solid var(--primary-border);
+  border-radius: 16px;
+  background:
+    linear-gradient(
+      135deg,
+      var(--primary-soft) 0%,
+      var(--primary-subtle) 100%
+    );
+  padding: 12px;
+  transition:
+    gap 180ms ease,
+    padding 180ms ease,
+    border-radius 180ms ease;
+}
+
+.goal-section--compact .goal-section__main-progress {
+  gap: 5px;
+  border-radius: 14px;
+  padding: 8px 10px;
+}
+
+.goal-section__main-progress-header,
+.goal-section__main-progress-footer {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.goal-section__main-progress-copy {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.goal-section__main-progress-label,
+.goal-section__main-progress-money,
+.goal-section__main-progress-remaining {
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  line-height: 1rem;
+  transition:
+    max-height 160ms ease,
+    opacity 120ms ease;
+}
+
+.goal-section__main-progress-name {
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: 0.875rem;
+  font-weight: 800;
+  line-height: 1.25rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.goal-section__main-progress-value {
+  flex: 0 0 auto;
+  color: var(--primary-text);
+  font-size: 1.45rem;
+  font-weight: 900;
+  line-height: 1.75rem;
+}
+
+.goal-section__main-progress-track {
+  height: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface) 78%, var(--primary-border));
+}
+
+.goal-section__main-progress-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(
+    90deg,
+    var(--primary-active) 0%,
+    var(--primary) 100%
+  );
+  transition: width 220ms ease;
+}
+
+.goal-section__main-progress-money,
+.goal-section__main-progress-remaining {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.goal-section__main-progress-remaining {
+  text-align: right;
+}
+
+.goal-section--compact .goal-section__main-progress-label,
+.goal-section--compact .goal-section__main-progress-money,
+.goal-section--compact .goal-section__main-progress-remaining {
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+}
+
+.goal-section--compact .goal-section__main-progress-name {
+  font-size: 0.8rem;
+  line-height: 1rem;
+}
+
+.goal-section--compact .goal-section__main-progress-value {
+  font-size: 1.1rem;
+  line-height: 1.3rem;
+}
+
+.goal-section--compact .goal-section__main-progress-track {
+  height: 7px;
+}
+
 .goal-section__cards {
   display: flex;
   align-items: flex-end;
@@ -597,6 +717,10 @@ textarea {
     gap: 4px;
   }
 
+  .goal-section__main-progress {
+    max-width: min(100%, 680px);
+  }
+
   .goal-section__cards {
     gap: 12px;
   }
@@ -658,6 +782,11 @@ textarea {
   .goal-section__heading,
   .goal-section__meta,
   .goal-section__card-label,
+  .goal-section__main-progress,
+  .goal-section__main-progress-label,
+  .goal-section__main-progress-money,
+  .goal-section__main-progress-remaining,
+  .goal-section__main-progress-fill,
   .goal-section__cards,
   .goal-section__right,
   .goal-section__main-card,
