@@ -345,7 +345,7 @@ export function HomePage({
           </div>
         </div>
 
-        <div className="goal-section__main-progress">
+        <div className="app-card goal-section__main-progress rounded-2xl">
           <div className="goal-section__main-progress-header">
             <div className="goal-section__main-progress-copy">
               <p className="goal-section__main-progress-label">

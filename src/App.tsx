@@ -516,6 +516,7 @@ export default function App() {
   deadline: getToday(),
   startDate: getToday(),
 });
+const [editingSubGoalId, setEditingSubGoalId] = useState<string | null>(null);
 
 const [mainGoalForm, setMainGoalForm] = useState({
   bigGoalName: goals.bigGoalName,
@@ -1969,7 +1970,18 @@ function completeCurrentGoal() {
   navigateTo("goals", "completed");
 }
 
-function addSubGoal() {
+function resetSubGoalForm() {
+  setSubGoalForm({
+    name: "",
+    target: "",
+    saved: "",
+    deadline: getToday(),
+    startDate: getToday(),
+  });
+  setEditingSubGoalId(null);
+}
+
+function validateSubGoalForm() {
   const name = subGoalForm.name.trim();
   const target = parseMoneyInput(subGoalForm.target);
   const saved = parseMoneyInput(subGoalForm.saved);
@@ -1986,18 +1998,28 @@ function addSubGoal() {
 
   if (!subGoalForm.startDate || !subGoalForm.deadline) {
     alert("Bạn cần nhập ngày bắt đầu và hạn mục tiêu.");
-    return;
+    return null;
   }
 
-  const now = new Date().toISOString();
-
-  const newSubGoal: SubGoal = {
-    id: crypto.randomUUID(),
+  return {
     name,
     target,
     saved,
     deadline: subGoalForm.deadline,
     startDate: subGoalForm.startDate,
+  };
+}
+
+function addSubGoal() {
+  const validatedSubGoal = validateSubGoalForm();
+
+  if (!validatedSubGoal) return;
+
+  const now = new Date().toISOString();
+
+  const newSubGoal: SubGoal = {
+    id: crypto.randomUUID(),
+    ...validatedSubGoal,
     contributions: [],
     createdAt: now,
     updatedAt: now,
@@ -2026,13 +2048,78 @@ function addSubGoal() {
     ],
   });
 
+  resetSubGoalForm();
+}
+
+function startEditSubGoal(goal: SubGoal) {
+  setEditingSubGoalId(goal.id);
   setSubGoalForm({
-    name: "",
-    target: "",
-    saved: "",
-    deadline: getToday(),
-    startDate: getToday(),
+    name: goal.name,
+    target: formatMoneyInput(String(goal.target ?? 0)),
+    saved: formatMoneyInput(String(goal.saved ?? 0)),
+    deadline: goal.deadline,
+    startDate: goal.startDate,
   });
+
+  window.scrollTo({
+    top: 0,
+    behavior: "smooth",
+  });
+}
+
+function cancelEditSubGoal() {
+  resetSubGoalForm();
+}
+
+function saveSubGoalEdit() {
+  if (!editingSubGoalId) return;
+
+  const subGoalToUpdate = (goals.subGoals ?? []).find(
+    (goal) => goal.id === editingSubGoalId
+  );
+
+  if (!subGoalToUpdate) {
+    resetSubGoalForm();
+    return;
+  }
+
+  const validatedSubGoal = validateSubGoalForm();
+
+  if (!validatedSubGoal) return;
+
+  const now = new Date().toISOString();
+  const updatedSubGoal: SubGoal = {
+    ...subGoalToUpdate,
+    ...validatedSubGoal,
+    updatedAt: now,
+  };
+  const nextGoals = {
+    ...goals,
+    subGoals: (goals.subGoals ?? []).map((goal) =>
+      goal.id === editingSubGoalId ? updatedSubGoal : goal
+    ),
+  };
+
+  markLocalChanged("Đã cập nhật mục tiêu phụ, đang lưu cloud...");
+
+  setGoals(nextGoals);
+  recordAppChange({
+    action: "update",
+    title: "Cập nhật mục tiêu phụ",
+    description: `Cập nhật mục tiêu phụ "${updatedSubGoal.name}".`,
+    date: updatedSubGoal.startDate,
+    patches: [
+      createAppChangePatch({
+        key: "goals",
+        before: goals,
+        after: nextGoals,
+        beforeSummary: describeSubGoal(subGoalToUpdate),
+        afterSummary: describeSubGoal(updatedSubGoal),
+      }),
+    ],
+  });
+
+  resetSubGoalForm();
 }
 
 function deleteSubGoal(id: string) {
@@ -2050,6 +2137,9 @@ function deleteSubGoal(id: string) {
   markLocalChanged("Đã xóa mục tiêu phụ, đang lưu cloud...");
 
   setGoals(nextGoals);
+  if (editingSubGoalId === id) {
+    resetSubGoalForm();
+  }
   recordAppChange({
     action: "delete",
     title: "Xóa mục tiêu phụ",
@@ -2202,6 +2292,9 @@ function completeSubGoal(goalId: string) {
 
   setCompletedGoals(nextCompletedGoals);
   setGoals(nextGoals);
+  if (editingSubGoalId === goalId) {
+    resetSubGoalForm();
+  }
   recordAppChange({
     action: "complete",
     title: "Hoàn thành mục tiêu phụ",
@@ -2509,6 +2602,7 @@ function renderBalanceCheckCard(title = "Kiểm kê số dư hôm nay") {
               balanceChartTitle={balanceChartTitle}
               bigGoalProgress={bigGoalProgress}
               bigGoalTimeProgress={bigGoalTimeProgress}
+              cancelEditSubGoal={cancelEditSubGoal}
               chartData={chartData}
               chartDays={chartDays}
               completeCurrentGoal={completeCurrentGoal}
@@ -2519,6 +2613,7 @@ function renderBalanceCheckCard(title = "Kiểm kê số dư hôm nay") {
               daysLeft={daysLeft}
               deleteCompletedGoal={deleteCompletedGoal}
               deleteSubGoal={deleteSubGoal}
+              editingSubGoalId={editingSubGoalId}
               forecastDays={forecastDays}
               form={form}
               goalForecast={goalForecast}
@@ -2533,6 +2628,7 @@ function renderBalanceCheckCard(title = "Kiểm kê số dư hôm nay") {
               safeChartDays={safeChartDays}
               safeForecastDays={safeForecastDays}
               saveMainGoal={saveMainGoal}
+              saveSubGoalEdit={saveSubGoalEdit}
               selectedCompletedGoal={selectedCompletedGoal}
               setBalanceChartDays={setBalanceChartDays}
               setChartDays={setChartDays}
@@ -2541,6 +2637,7 @@ function renderBalanceCheckCard(title = "Kiểm kê số dư hôm nay") {
               setGoalScreen={setGoalScreen}
               setMainGoalForm={setMainGoalForm}
               setSelectedCompletedGoalId={setSelectedCompletedGoalId}
+              startEditSubGoal={startEditSubGoal}
               setSubGoalContributionForms={setSubGoalContributionForms}
               setSubGoalForm={setSubGoalForm}
               subGoalContributionForms={subGoalContributionForms}

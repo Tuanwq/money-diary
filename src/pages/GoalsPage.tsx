@@ -16,6 +16,7 @@ import type {
   GoalScreen,
   Goals,
   Page,
+  SubGoal,
 } from "../types";
 import { getDaysLeft, getToday } from "../utils/date";
 import {
@@ -83,6 +84,7 @@ type GoalsPageProps = {
   balanceChartTitle: string;
   bigGoalProgress: number;
   bigGoalTimeProgress: number;
+  cancelEditSubGoal: () => void;
   chartData: Array<Record<string, unknown>>;
   chartDays: number;
   completeCurrentGoal: () => void;
@@ -93,6 +95,7 @@ type GoalsPageProps = {
   daysLeft: number;
   deleteCompletedGoal: (id: string) => void;
   deleteSubGoal: (id: string) => void;
+  editingSubGoalId: string | null;
   forecastDays: number;
   form: DailyEntryForm;
   goalForecast: GoalForecast;
@@ -107,6 +110,7 @@ type GoalsPageProps = {
   safeChartDays: number;
   safeForecastDays: number;
   saveMainGoal: () => void;
+  saveSubGoalEdit: () => void;
   selectedCompletedGoal: CompletedGoal | undefined;
   setBalanceChartDays: Dispatch<SetStateAction<"all" | number>>;
   setChartDays: Dispatch<SetStateAction<number>>;
@@ -115,6 +119,7 @@ type GoalsPageProps = {
   setGoalScreen: (screen: GoalScreen) => void;
   setMainGoalForm: Dispatch<SetStateAction<MainGoalForm>>;
   setSelectedCompletedGoalId: (id: string) => void;
+  startEditSubGoal: (goal: SubGoal) => void;
   setSubGoalContributionForms: Dispatch<
     SetStateAction<SubGoalContributionForms>
   >;
@@ -386,6 +391,7 @@ export function GoalsPage({
   balanceChartTitle,
   bigGoalProgress,
   bigGoalTimeProgress,
+  cancelEditSubGoal,
   chartData,
   chartDays,
   completeCurrentGoal,
@@ -396,6 +402,7 @@ export function GoalsPage({
   daysLeft,
   deleteCompletedGoal,
   deleteSubGoal,
+  editingSubGoalId,
   forecastDays,
   form,
   goalForecast,
@@ -410,6 +417,7 @@ export function GoalsPage({
   safeChartDays,
   safeForecastDays,
   saveMainGoal,
+  saveSubGoalEdit,
   selectedCompletedGoal,
   setBalanceChartDays,
   setChartDays,
@@ -418,6 +426,7 @@ export function GoalsPage({
   setGoalScreen,
   setMainGoalForm,
   setSelectedCompletedGoalId,
+  startEditSubGoal,
   setSubGoalContributionForms,
   setSubGoalForm,
   subGoalContributionForms,
@@ -508,6 +517,10 @@ export function GoalsPage({
   const hasCompletedDetailPanels = completedDetailPanelOptions.some(
     (option) => option.count > 0
   );
+  const editingSubGoal = (goals.subGoals ?? []).find(
+    (goal) => goal.id === editingSubGoalId
+  );
+  const isEditingSubGoal = Boolean(editingSubGoal);
 
   function toggleCompletedDetailPanel(panel: CompletedDetailPanelKey) {
     setCompletedDetailPanel((current) => (current === panel ? null : panel));
@@ -551,17 +564,25 @@ export function GoalsPage({
 
     <div>
 
-      <h2 className="text-xl font-bold">Mục tiêu phụ</h2>
+      <h2 className="text-xl font-bold">
+        {isEditingSubGoal ? "Chỉnh sửa mục tiêu phụ" : "Mục tiêu phụ"}
+      </h2>
 
       <p className="text-sm text-slate-500">
 
-        Chia thủ công tiền vào từng mục tiêu phụ, ví dụ: Lens, quỹ dự phòng,
-
-        trả nợ.
+        {isEditingSubGoal && editingSubGoal
+          ? `Đang chỉnh sửa "${editingSubGoal.name}". Các lần góp tiền đã ghi sẽ được giữ nguyên.`
+          : "Chia thủ công tiền vào từng mục tiêu phụ, ví dụ: Lens, quỹ dự phòng, trả nợ."}
 
       </p>
 
     </div>
+
+    {isEditingSubGoal && (
+      <span className="rounded-full bg-amber-50 px-3 py-1 text-sm font-bold text-amber-700">
+        Đang sửa
+      </span>
+    )}
 
   </div>
 
@@ -731,19 +752,25 @@ export function GoalsPage({
 
 
 
-  <button
+  <div className="mt-4 flex flex-wrap gap-2">
+    <button
+      type="button"
+      onClick={isEditingSubGoal ? saveSubGoalEdit : addSubGoal}
+      className="rounded-xl bg-slate-900 px-5 py-2 font-medium text-white hover:bg-slate-700"
+    >
+      {isEditingSubGoal ? "Lưu chỉnh sửa" : "Thêm mục tiêu phụ"}
+    </button>
 
-    type="button"
-
-    onClick={addSubGoal}
-
-    className="mt-4 rounded-xl bg-slate-900 px-5 py-2 font-medium text-white hover:bg-slate-700"
-
-  >
-
-    Thêm mục tiêu phụ
-
-  </button>
+    {isEditingSubGoal && (
+      <button
+        type="button"
+        onClick={cancelEditSubGoal}
+        className="rounded-xl border bg-white px-5 py-2 font-medium text-slate-700 hover:bg-slate-100"
+      >
+        Hủy sửa
+      </button>
+    )}
+  </div>
 
 
 
@@ -819,12 +846,18 @@ export function GoalsPage({
           note: "",
 
         };
+        const isThisSubGoalEditing = editingSubGoalId === goal.id;
 
 
 
         return (
 
-          <article key={goal.id} className="rounded-2xl border p-4">
+          <article
+            key={goal.id}
+            className={`rounded-2xl border p-4 ${
+              isThisSubGoalEditing ? "border-amber-200 bg-amber-50/40" : ""
+            }`}
+          >
 
             <div className="flex flex-wrap items-start justify-between gap-3">
 
@@ -843,6 +876,24 @@ export function GoalsPage({
 
 
               <div className="flex flex-wrap gap-2">
+
+                <button
+
+                  type="button"
+
+                  onClick={() => startEditSubGoal(goal)}
+
+                  className={`rounded-lg px-3 py-1 text-sm font-medium ${
+                    isThisSubGoalEditing
+                      ? "bg-amber-100 text-amber-700"
+                      : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                  }`}
+
+                >
+
+                  {isThisSubGoalEditing ? "Đang sửa" : "Sửa"}
+
+                </button>
 
                 <button
 
