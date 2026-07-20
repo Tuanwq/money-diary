@@ -1,9 +1,13 @@
 import { BalanceCheckCard } from "./components/BalanceCheckCard";
 import { AccountBar } from "./components/AccountBar";
+import { useBrowserRoute } from "./app/router/useBrowserRoute";
+import { DayMarkApp } from "./features/daymark/DayMarkApp";
+import { HubSelectionPage } from "./features/hub/pages/HubSelectionPage";
 import { exportWordReport } from "./features/report/exportWordReport";
 import { useAppNavigation } from "./hooks/useAppNavigation";
 import { useCloudSync } from "./hooks/useCloudSync";
 import { useMoneyDiaryData } from "./hooks/useMoneyDiaryData";
+import { useThemeMode } from "./hooks/useThemeMode";
 import { AppChangeLogPage } from "./pages/AppChangeLogPage";
 import { AuthPage } from "./pages/AuthPage";
 import { BalanceChecksPage } from "./pages/BalanceChecksPage";
@@ -432,6 +436,7 @@ function applyHubDiaryContributionChange(
 }
 
 export default function App() {
+  const { themeMode, toggleThemeMode } = useThemeMode();
   const {
     entries,
     setEntries,
@@ -460,7 +465,9 @@ export default function App() {
   const [editingExpenseDate, setEditingExpenseDate] = useState<string | null>(
   null
 );
-  const { page, goalScreen, setGoalScreen, navigateTo } = useAppNavigation();
+  const { route, navigateApp } = useBrowserRoute();
+  const { page, goalScreen, setGoalScreen, navigateTo, resetMoneyNavigation } =
+    useAppNavigation();
   const [chartDays, setChartDays] = useState(7);
   const [forecastDays, setForecastDays] = useState(14);
   const [balanceChartDays, setBalanceChartDays] = useState<"all" | number>(
@@ -493,6 +500,33 @@ export default function App() {
   const hubDiaryMigrationDoneRef = useRef(false);
   const balanceCheckDraftDirtyRef = useRef(false);
   const balanceCheckSectionRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!session) {
+      if (route.kind !== "login") {
+        navigateApp("/login", true);
+      }
+
+      return;
+    }
+
+    if (route.kind === "login" || route.kind === "unknown") {
+      navigateApp("/hub", true);
+    }
+  }, [navigateApp, route.kind, session]);
+
+  function openMoneyDiaryApp() {
+    resetMoneyNavigation();
+    navigateApp("/money");
+  }
+
+  function openDayMarkApp() {
+    navigateApp("/daymark/today");
+  }
+
+  function openAppHub() {
+    navigateApp("/hub");
+  }
 
   const [historySearch, setHistorySearch] = useState("");
   const [historyFromDate, setHistoryFromDate] = useState("");
@@ -2925,8 +2959,53 @@ function renderBalanceCheckCard(title = "Kiểm kê số dư hôm nay") {
   );
 }
 
+if (!session) {
   return (
-    <div className="app-shell-bg min-h-[100dvh] text-slate-900">
+    <div className="app-shell-bg min-h-[100dvh] text-[var(--text-primary)]">
+      <AuthPage
+        authEmail={authEmail}
+        setAuthEmail={setAuthEmail}
+        authPassword={authPassword}
+        setAuthPassword={setAuthPassword}
+        handleLogin={handleLogin}
+        handleSignUp={handleSignUp}
+        themeMode={themeMode}
+        toggleThemeMode={toggleThemeMode}
+      />
+    </div>
+  );
+}
+
+if (route.kind === "hub" || route.kind === "login" || route.kind === "unknown") {
+  return (
+    <HubSelectionPage
+      email={session.user.email}
+      onLogout={handleLogout}
+      onOpenDayMark={openDayMarkApp}
+      onOpenMoneyDiary={openMoneyDiaryApp}
+      themeMode={themeMode}
+      toggleThemeMode={toggleThemeMode}
+    />
+  );
+}
+
+if (route.kind === "daymark") {
+  return (
+    <DayMarkApp
+      currentRoute={route.dayMarkRoute}
+      email={session.user.email}
+      onLogout={handleLogout}
+      onNavigate={navigateApp}
+      onSwitchApp={openAppHub}
+      themeMode={themeMode}
+      toggleThemeMode={toggleThemeMode}
+      userId={session.user.id}
+    />
+  );
+}
+
+  return (
+    <div className="app-shell-bg min-h-[100dvh] text-[var(--text-primary)]">
       <header className="app-header pt-[env(safe-area-inset-top)] shadow-sm">
         <div className="mx-auto max-w-6xl px-3 py-4 sm:px-4 sm:py-6">
           <h1 className="text-2xl font-black tracking-tight sm:text-3xl">
@@ -2946,6 +3025,8 @@ function renderBalanceCheckCard(title = "Kiểm kê số dư hôm nay") {
           setAuthPassword={setAuthPassword}
           handleLogin={handleLogin}
           handleSignUp={handleSignUp}
+          themeMode={themeMode}
+          toggleThemeMode={toggleThemeMode}
         />
       )}
 
@@ -2958,6 +3039,9 @@ function renderBalanceCheckCard(title = "Kiểm kê số dư hôm nay") {
             onExportWord={exportToWord}
             onOpenChangeLog={() => navigateTo("changes")}
             onLogout={handleLogout}
+            onSwitchApp={openAppHub}
+            themeMode={themeMode}
+            toggleThemeMode={toggleThemeMode}
           />
 
           {page === "home" && (

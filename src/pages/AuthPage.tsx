@@ -1,3 +1,6 @@
+import { ThemeToggle } from "../components/ThemeToggle";
+import type { ThemeMode } from "../hooks/useThemeMode";
+
 type AuthPageProps = {
   authEmail: string;
   setAuthEmail: (value: string) => void;
@@ -5,6 +8,8 @@ type AuthPageProps = {
   setAuthPassword: (value: string) => void;
   handleLogin: () => void;
   handleSignUp: () => void;
+  themeMode: ThemeMode;
+  toggleThemeMode: () => void;
 };
 
 export function AuthPage({
@@ -14,10 +19,19 @@ export function AuthPage({
   setAuthPassword,
   handleLogin,
   handleSignUp,
+  themeMode,
+  toggleThemeMode,
 }: AuthPageProps) {
   return (
     <main className="mx-auto max-w-md px-4 py-8">
       <section className="rounded-2xl bg-white p-5 shadow-sm">
+        <div className="mb-4 flex justify-end">
+          <ThemeToggle
+            themeMode={themeMode}
+            toggleThemeMode={toggleThemeMode}
+          />
+        </div>
+
         <h2 className="text-2xl font-bold">Đăng nhập để đồng bộ</h2>
 
         <p className="mt-2 text-sm text-slate-500">

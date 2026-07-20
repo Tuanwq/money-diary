@@ -1,5 +1,7 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
   --color-slate-50: #F8FAF7;
   --color-slate-100: #EEF1EF;
@@ -78,9 +80,9 @@
 
 :root {
   /* Base */
-  --background: #F5F7F4;
+  --background: #FFFFFF;
   --surface: #FFFFFF;
-  --surface-subtle: #F8FAF7;
+  --surface-subtle: #F8FAFC;
   --border: #DCE4DC;
   --border-strong: #C7D2C8;
 
@@ -153,6 +155,57 @@
   );
 }
 
+.dark {
+  /* Base */
+  --background: #0F172A;
+  --surface: #111827;
+  --surface-subtle: #1E293B;
+  --border: #334155;
+  --border-strong: #475569;
+
+  /* Text */
+  --text-primary: #F8FAFC;
+  --text-secondary: #CBD5E1;
+  --text-muted: #94A3B8;
+  --text-inverse: #0F172A;
+
+  /* Primary - Soft Sage Green */
+  --primary: #7FA486;
+  --primary-hover: #93B69A;
+  --primary-active: #A9C7AE;
+  --primary-foreground: #0F172A;
+  --primary-soft: #1F3327;
+  --primary-subtle: #17251D;
+  --primary-border: #3D5B44;
+  --primary-text: #BFDCCB;
+  --primary-foreground-muted: var(--primary-text);
+
+  /* Secondary action */
+  --secondary: #E2E8F0;
+  --secondary-hover: #CBD5E1;
+  --secondary-soft: #1E293B;
+
+  /* Information */
+  --info: #93C5FD;
+  --info-soft: #172554;
+  --info-border: #1D4ED8;
+
+  /* Success */
+  --success: #86EFAC;
+  --success-soft: #14532D;
+  --success-border: #166534;
+
+  /* Warning */
+  --warning: #FCD34D;
+  --warning-soft: #451A03;
+  --warning-border: #92400E;
+
+  /* Danger */
+  --danger: #FCA5A5;
+  --danger-soft: #450A0A;
+  --danger-border: #991B1B;
+}
+
 html {
   background: var(--app-bg);
   -webkit-text-size-adjust: 100%;
@@ -192,6 +245,14 @@ textarea {
   font: inherit;
 }
 
+input,
+select,
+textarea {
+  background: var(--surface);
+  color: var(--app-ink);
+  border-color: var(--border);
+}
+
 button,
 a,
 input,
@@ -209,13 +270,64 @@ textarea {
 }
 
 .app-shell-bg {
-  background:
-    linear-gradient(
-      180deg,
-      var(--background) 0%,
-      var(--surface-subtle) 58%,
-      var(--secondary-soft) 100%
-    );
+  background: var(--background);
+}
+
+.dark .bg-white {
+  background-color: var(--surface);
+}
+
+.dark .bg-white\/90 {
+  background-color: color-mix(in srgb, var(--surface) 90%, transparent);
+}
+
+.dark .bg-white\/95 {
+  background-color: color-mix(in srgb, var(--surface) 95%, transparent);
+}
+
+.dark .bg-slate-50,
+.dark .bg-gray-50 {
+  background-color: var(--surface-subtle);
+}
+
+.dark .bg-slate-100,
+.dark .bg-gray-100 {
+  background-color: color-mix(in srgb, var(--surface-subtle) 82%, white 6%);
+}
+
+.dark .bg-slate-200,
+.dark .bg-gray-200 {
+  background-color: var(--border);
+}
+
+.dark .text-slate-950,
+.dark .text-slate-900,
+.dark .text-slate-800,
+.dark .text-gray-900,
+.dark .text-gray-800 {
+  color: var(--text-primary);
+}
+
+.dark .text-slate-700,
+.dark .text-slate-600,
+.dark .text-gray-700 {
+  color: var(--text-secondary);
+}
+
+.dark .text-slate-500,
+.dark .text-slate-400,
+.dark .text-gray-500 {
+  color: var(--text-muted);
+}
+
+.dark .border-slate-100,
+.dark .border-slate-200,
+.dark .border-slate-300,
+.dark .border-gray-100,
+.dark .border-gray-200,
+.dark .border-gray-300,
+.dark .border {
+  border-color: var(--border);
 }
 
 .app-header {
