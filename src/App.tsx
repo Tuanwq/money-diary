@@ -3042,7 +3042,6 @@ if (route.kind === "daymark") {
             onExportWord={exportToWord}
             onOpenChangeLog={() => navigateTo("changes")}
             onLogout={handleLogout}
-            onSwitchApp={openAppHub}
             themeMode={themeMode}
             toggleThemeMode={toggleThemeMode}
           />

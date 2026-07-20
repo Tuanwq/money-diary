@@ -7,7 +7,6 @@ type AccountBarProps = {
   onExportWord: () => void;
   onOpenChangeLog: () => void;
   onLogout: () => void;
-  onSwitchApp?: () => void;
   themeMode: ThemeMode;
   toggleThemeMode: () => void;
 };
@@ -18,7 +17,6 @@ export function AccountBar({
   onExportWord,
   onOpenChangeLog,
   onLogout,
-  onSwitchApp,
   themeMode,
   toggleThemeMode,
 }: AccountBarProps) {
@@ -51,17 +49,6 @@ export function AccountBar({
           <span className="sm:hidden">Lịch sử</span>
           <span className="hidden sm:inline">Lịch sử thay đổi</span>
         </button>
-
-        {onSwitchApp && (
-          <button
-            type="button"
-            onClick={onSwitchApp}
-            className="app-secondary-button rounded-xl px-3 py-2 text-sm font-medium sm:px-4"
-          >
-            <span className="sm:hidden">Đổi</span>
-            <span className="hidden sm:inline">Đổi chức năng</span>
-          </button>
-        )}
 
         <ThemeToggle
           className="col-span-2 sm:col-span-1"
