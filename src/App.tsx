@@ -485,6 +485,7 @@ export default function App() {
     handleSignUp,
     handleLogin,
     handleLogout,
+    supabaseEnvError,
   } = useCloudSync({
     entries,
     setEntries,
@@ -2969,6 +2970,7 @@ if (!session) {
         setAuthPassword={setAuthPassword}
         handleLogin={handleLogin}
         handleSignUp={handleSignUp}
+        supabaseEnvError={supabaseEnvError}
         themeMode={themeMode}
         toggleThemeMode={toggleThemeMode}
       />
@@ -3025,6 +3027,7 @@ if (route.kind === "daymark") {
           setAuthPassword={setAuthPassword}
           handleLogin={handleLogin}
           handleSignUp={handleSignUp}
+          supabaseEnvError={supabaseEnvError}
           themeMode={themeMode}
           toggleThemeMode={toggleThemeMode}
         />

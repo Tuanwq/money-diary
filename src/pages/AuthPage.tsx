@@ -8,6 +8,7 @@ type AuthPageProps = {
   setAuthPassword: (value: string) => void;
   handleLogin: () => void;
   handleSignUp: () => void;
+  supabaseEnvError?: string;
   themeMode: ThemeMode;
   toggleThemeMode: () => void;
 };
@@ -19,6 +20,7 @@ export function AuthPage({
   setAuthPassword,
   handleLogin,
   handleSignUp,
+  supabaseEnvError = "",
   themeMode,
   toggleThemeMode,
 }: AuthPageProps) {
@@ -38,6 +40,12 @@ export function AuthPage({
           Dùng cùng một tài khoản trên laptop và điện thoại để dữ liệu tự đồng
           bộ.
         </p>
+
+        {supabaseEnvError && (
+          <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 p-3 text-sm font-medium text-red-700">
+            {supabaseEnvError}
+          </div>
+        )}
 
         <form
           className="mt-5 grid gap-3"
@@ -73,6 +81,7 @@ export function AuthPage({
           <div className="mt-2 flex flex-wrap gap-2">
             <button
               type="submit"
+              disabled={Boolean(supabaseEnvError)}
               className="rounded-xl bg-slate-900 px-5 py-2 font-medium text-white hover:bg-slate-700"
             >
               Đăng nhập
@@ -81,6 +90,7 @@ export function AuthPage({
             <button
               type="button"
               onClick={handleSignUp}
+              disabled={Boolean(supabaseEnvError)}
               className="rounded-xl border bg-white px-5 py-2 font-medium hover:bg-slate-100"
             >
               Đăng ký

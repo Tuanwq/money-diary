@@ -2,7 +2,7 @@ import type { Session } from "@supabase/supabase-js";
 import type { Dispatch, SetStateAction } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { defaultGoals } from "../constants";
-import { supabase } from "../lib/supabase";
+import { supabase, supabaseEnvError } from "../lib/supabase";
 import type {
   BalanceCheckEntry,
   CompletedGoal,
@@ -41,7 +41,9 @@ export function useCloudSync({
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
   const [cloudLoaded, setCloudLoaded] = useState(false);
-  const [syncStatus, setSyncStatus] = useState("Chưa đồng bộ");
+  const [syncStatus, setSyncStatus] = useState(
+    supabaseEnvError ? "Thiếu cấu hình Supabase" : "Chưa đồng bộ"
+  );
   const localDirtyRef = useRef(false);
   const userId = session?.user?.id;
   const latestDataRef = useRef({
@@ -63,6 +65,10 @@ export function useCloudSync({
   }, [entries, expenses, balanceChecks, goals, completedGoals]);
 
   useEffect(() => {
+    if (supabaseEnvError) {
+      return;
+    }
+
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
     });
@@ -264,6 +270,11 @@ export function useCloudSync({
   }
 
   async function handleSignUp() {
+    if (supabaseEnvError) {
+      alert(supabaseEnvError);
+      return;
+    }
+
     const email = authEmail.trim();
     const password = authPassword.trim();
 
@@ -288,6 +299,11 @@ export function useCloudSync({
   }
 
   async function handleLogin() {
+    if (supabaseEnvError) {
+      alert(supabaseEnvError);
+      return;
+    }
+
     const email = authEmail.trim();
     const password = authPassword.trim();
 
@@ -307,6 +323,8 @@ export function useCloudSync({
   }
 
   async function handleLogout() {
+    if (supabaseEnvError) return;
+
     await supabase.auth.signOut();
 
     setSession(null);
@@ -321,6 +339,7 @@ export function useCloudSync({
     authPassword,
     setAuthPassword,
     syncStatus,
+    supabaseEnvError,
     setSyncStatus,
     markLocalChanged,
     handleSignUp,
