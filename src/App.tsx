@@ -35,6 +35,7 @@ import type {
   AppDataKey,
   CompletedGoal,
   DailyEntry,
+  ExpenseBudget,
   ExpenseEntry,
   GoalContribution,
   Goals,
@@ -529,6 +530,15 @@ const [mainGoalForm, setMainGoalForm] = useState({
 const [subGoalContributionForms, setSubGoalContributionForms] = useState<
   Record<string, { amount: string; note: string }>
 >({});
+const [expenseBudgetForm, setExpenseBudgetForm] = useState({
+  label: "Ăn uống",
+  monthlyLimit: "",
+});
+const [editingExpenseBudgetId, setEditingExpenseBudgetId] = useState<
+  string | null
+>(null);
+const [subGoalAllocationDateHint, setSubGoalAllocationDateHint] =
+  useState(getToday());
 
 useEffect(() => {
   if (hubDiaryMigrationDoneRef.current) return;
@@ -1531,6 +1541,37 @@ function handleCloseDaySubmit(event: React.FormEvent) {
   setEditingExpenseDate(null);
   setCloseDayForm(createCloseDayForm(getToday()));
   setSyncStatus("Đã chốt ngày");
+
+  const activeSubGoals = (goals.subGoals ?? []).filter(
+    (goal) => getSubGoalSaved(goal) < goal.target
+  );
+  const alreadyAllocatedToSubGoals = (goals.subGoals ?? []).reduce(
+    (sum, goal) =>
+      sum +
+      goal.contributions
+        .filter((contribution) => contribution.date === savedDate)
+        .reduce((total, contribution) => total + contribution.amount, 0),
+    0
+  );
+  const availableForSubGoals = Math.max(
+    income + bonusMoney + receivedMoney - expenseTotal - alreadyAllocatedToSubGoals,
+    0
+  );
+  const shouldOpenSubGoalAllocation =
+    availableForSubGoals > 0 &&
+    activeSubGoals.length > 0 &&
+    confirm(
+      `Ngày ${savedDate} còn dư ${formatMoney(
+        availableForSubGoals
+      )}. Bạn muốn chia tiền này vào mục tiêu phụ bây giờ không?`
+    );
+
+  if (shouldOpenSubGoalAllocation) {
+    setSubGoalAllocationDateHint(savedDate);
+    navigateTo("goals", "subGoals");
+    return;
+  }
+
   navigateTo("home", "menu");
 }
 
@@ -2225,6 +2266,238 @@ function addContributionToSubGoal(goalId: string) {
   }));
 }
 
+function updateSubGoalContribution(
+  goalId: string,
+  contributionId: string,
+  payload: { amount: string; date: string; note: string }
+) {
+  const targetGoal = (goals.subGoals ?? []).find((goal) => goal.id === goalId);
+  const contributionToUpdate = targetGoal?.contributions.find(
+    (item) => item.id === contributionId
+  );
+
+  if (!targetGoal || !contributionToUpdate) return;
+
+  const amount = parseMoneyInput(payload.amount);
+  const date = payload.date;
+  const note = payload.note.trim();
+
+  if (!date) {
+    alert("Bạn chưa chọn ngày góp.");
+    return;
+  }
+
+  if (amount <= 0) {
+    alert("Số tiền góp phải lớn hơn 0.");
+    return;
+  }
+
+  const now = new Date().toISOString();
+  const nextGoals = {
+    ...goals,
+    subGoals: (goals.subGoals ?? []).map((goal) => {
+      if (goal.id !== goalId) return goal;
+
+      return {
+        ...goal,
+        contributions: goal.contributions.map((item) =>
+          item.id === contributionId
+            ? {
+                ...item,
+                amount,
+                date,
+                note,
+                updatedAt: now,
+              }
+            : item
+        ),
+        updatedAt: now,
+      };
+    }),
+  };
+  const nextGoal = (nextGoals.subGoals ?? []).find((goal) => goal.id === goalId);
+
+  markLocalChanged("Đã cập nhật lần góp mục tiêu phụ, đang lưu cloud...");
+
+  setGoals(nextGoals);
+  recordAppChange({
+    action: "update",
+    title: "Cập nhật lần góp mục tiêu phụ",
+    description: `Cập nhật lần góp ${formatMoney(
+      contributionToUpdate.amount
+    )} trong "${targetGoal.name}".`,
+    date,
+    patches: [
+      createAppChangePatch({
+        key: "goals",
+        before: goals,
+        after: nextGoals,
+        beforeSummary: describeSubGoal(targetGoal),
+        afterSummary: describeSubGoal(nextGoal),
+      }),
+    ],
+  });
+}
+
+function deleteSubGoalContribution(goalId: string, contributionId: string) {
+  const targetGoal = (goals.subGoals ?? []).find((goal) => goal.id === goalId);
+  const contributionToDelete = targetGoal?.contributions.find(
+    (item) => item.id === contributionId
+  );
+
+  if (!targetGoal || !contributionToDelete) return;
+
+  const confirmed = confirm(
+    `Xóa lần góp ${formatMoney(contributionToDelete.amount)} khỏi "${targetGoal.name}"?`
+  );
+
+  if (!confirmed) return;
+
+  const now = new Date().toISOString();
+  const nextGoals = {
+    ...goals,
+    subGoals: (goals.subGoals ?? []).map((goal) => {
+      if (goal.id !== goalId) return goal;
+
+      return {
+        ...goal,
+        contributions: goal.contributions.filter(
+          (item) => item.id !== contributionId
+        ),
+        updatedAt: now,
+      };
+    }),
+  };
+  const nextGoal = (nextGoals.subGoals ?? []).find((goal) => goal.id === goalId);
+
+  markLocalChanged("Đã xóa lần góp mục tiêu phụ, đang lưu cloud...");
+
+  setGoals(nextGoals);
+  recordAppChange({
+    action: "delete",
+    title: "Xóa lần góp mục tiêu phụ",
+    description: `Xóa lần góp ${formatMoney(
+      contributionToDelete.amount
+    )} khỏi "${targetGoal.name}".`,
+    date: contributionToDelete.date,
+    patches: [
+      createAppChangePatch({
+        key: "goals",
+        before: goals,
+        after: nextGoals,
+        beforeSummary: describeSubGoal(targetGoal),
+        afterSummary: describeSubGoal(nextGoal),
+      }),
+    ],
+  });
+}
+
+function getSubGoalAllocationAvailable(date: string) {
+  const entry = entries.find((item) => item.date === date);
+  const expense = expenses.find((item) => item.date === date);
+  const income = entry ? getTotalEntryMoney(entry) : 0;
+  const expenseTotal = expense ? getExpenseTotal(expense) : 0;
+  const alreadyAllocated = (goals.subGoals ?? []).reduce((sum, goal) => {
+    return (
+      sum +
+      goal.contributions
+        .filter((item) => item.date === date)
+        .reduce((total, item) => total + item.amount, 0)
+    );
+  }, 0);
+
+  return Math.max(income - expenseTotal - alreadyAllocated, 0);
+}
+
+function applySubGoalAllocation({
+  allocations,
+  date,
+}: {
+  allocations: Array<{ amount: number; goalId: string }>;
+  date: string;
+}) {
+  if (!date) {
+    alert("Bạn chưa chọn ngày để chia tiền.");
+    return false;
+  }
+
+  const validAllocations = allocations.filter(
+    (item) => item.amount > 0 && (goals.subGoals ?? []).some((goal) => goal.id === item.goalId)
+  );
+  const totalAllocation = validAllocations.reduce(
+    (sum, item) => sum + item.amount,
+    0
+  );
+
+  if (validAllocations.length === 0 || totalAllocation <= 0) {
+    alert("Bạn chưa nhập số tiền cần chia vào mục tiêu phụ.");
+    return false;
+  }
+
+  const availableMoney = getSubGoalAllocationAvailable(date);
+
+  if (totalAllocation > availableMoney) {
+    alert(
+      `Số tiền chia đang vượt tiền dư của ngày ${date}: ${formatMoney(
+        availableMoney
+      )}.`
+    );
+    return false;
+  }
+
+  const now = new Date().toISOString();
+  const allocationMap = new Map(
+    validAllocations.map((item) => [item.goalId, item.amount])
+  );
+  const nextGoals = {
+    ...goals,
+    subGoals: (goals.subGoals ?? []).map((goal) => {
+      const amount = allocationMap.get(goal.id) ?? 0;
+
+      if (amount <= 0) return goal;
+
+      return {
+        ...goal,
+        contributions: [
+          ...goal.contributions,
+          {
+            id: crypto.randomUUID(),
+            amount,
+            date,
+            note: "Tự chia tiền dư trong ngày",
+            createdAt: now,
+            updatedAt: now,
+          },
+        ],
+        updatedAt: now,
+      };
+    }),
+  };
+
+  markLocalChanged("Đã tự chia tiền vào mục tiêu phụ, đang lưu cloud...");
+
+  setGoals(nextGoals);
+  recordAppChange({
+    action: "update",
+    title: "Tự chia tiền vào mục tiêu phụ",
+    description: `Chia ${formatMoney(totalAllocation)} từ ngày ${date} vào ${
+      validAllocations.length
+    } mục tiêu phụ.`,
+    date,
+    patches: [
+      createAppChangePatch({
+        key: "goals",
+        before: goals,
+        after: nextGoals,
+        beforeSummary: describeMainGoal(goals),
+        afterSummary: describeMainGoal(nextGoals),
+      }),
+    ],
+  });
+
+  return true;
+}
+
 function completeSubGoal(goalId: string) {
   const goal = (goals.subGoals ?? []).find((item) => item.id === goalId);
 
@@ -2446,6 +2719,144 @@ function saveMainGoal() {
   alert("Đã lưu mục tiêu lớn.");
 }
 
+function resetExpenseBudgetForm() {
+  setExpenseBudgetForm({
+    label: "Ăn uống",
+    monthlyLimit: "",
+  });
+  setEditingExpenseBudgetId(null);
+}
+
+function startEditExpenseBudget(budget: ExpenseBudget) {
+  setEditingExpenseBudgetId(budget.id);
+  setExpenseBudgetForm({
+    label: budget.label,
+    monthlyLimit: formatMoneyInput(String(budget.monthlyLimit ?? 0)),
+  });
+}
+
+function cancelEditExpenseBudget() {
+  resetExpenseBudgetForm();
+}
+
+function saveExpenseBudget() {
+  const label = expenseBudgetForm.label.trim();
+  const monthlyLimit = parseMoneyInput(expenseBudgetForm.monthlyLimit);
+
+  if (!label) {
+    alert("Bạn chưa chọn hoặc nhập nhãn ngân sách.");
+    return;
+  }
+
+  if (monthlyLimit <= 0) {
+    alert("Ngân sách tháng phải lớn hơn 0.");
+    return;
+  }
+
+  const now = new Date().toISOString();
+  const currentBudgets = goals.expenseBudgets ?? [];
+  const existingBudget = editingExpenseBudgetId
+    ? currentBudgets.find((item) => item.id === editingExpenseBudgetId)
+    : null;
+  const normalizedLabel = label.toLocaleLowerCase("vi");
+  const duplicatedBudget = currentBudgets.find((item) => {
+    if (item.id === editingExpenseBudgetId) return false;
+
+    return item.label.trim().toLocaleLowerCase("vi") === normalizedLabel;
+  });
+
+  if (duplicatedBudget) {
+    alert("Nhãn này đã có ngân sách. Bạn hãy sửa ngân sách cũ thay vì thêm trùng.");
+    return;
+  }
+
+  const nextBudget: ExpenseBudget = existingBudget
+    ? {
+        ...existingBudget,
+        label,
+        monthlyLimit,
+        updatedAt: now,
+      }
+    : {
+        id: crypto.randomUUID(),
+        label,
+        monthlyLimit,
+        createdAt: now,
+        updatedAt: now,
+      };
+  const nextGoals = {
+    ...goals,
+    expenseBudgets: existingBudget
+      ? currentBudgets.map((item) =>
+          item.id === existingBudget.id ? nextBudget : item
+        )
+      : [nextBudget, ...currentBudgets],
+  };
+
+  markLocalChanged("Đã lưu ngân sách chi tiêu, đang lưu cloud...");
+
+  setGoals(nextGoals);
+  recordAppChange({
+    action: existingBudget ? "update" : "create",
+    title: existingBudget
+      ? "Cập nhật ngân sách chi tiêu"
+      : "Thêm ngân sách chi tiêu",
+    description: `${label}: ${formatMoney(monthlyLimit)}/tháng.`,
+    patches: [
+      createAppChangePatch({
+        key: "goals",
+        before: goals,
+        after: nextGoals,
+        beforeSummary: `${currentBudgets.length} ngân sách chi tiêu.`,
+        afterSummary: `${nextGoals.expenseBudgets.length} ngân sách chi tiêu.`,
+      }),
+    ],
+  });
+
+  resetExpenseBudgetForm();
+}
+
+function deleteExpenseBudget(id: string) {
+  const currentBudgets = goals.expenseBudgets ?? [];
+  const budgetToDelete = currentBudgets.find((item) => item.id === id);
+
+  if (!budgetToDelete) return;
+
+  const confirmed = confirm(
+    `Xóa ngân sách "${budgetToDelete.label}" ${formatMoney(
+      budgetToDelete.monthlyLimit
+    )}/tháng?`
+  );
+
+  if (!confirmed) return;
+
+  const nextGoals = {
+    ...goals,
+    expenseBudgets: currentBudgets.filter((item) => item.id !== id),
+  };
+
+  markLocalChanged("Đã xóa ngân sách chi tiêu, đang lưu cloud...");
+
+  setGoals(nextGoals);
+  if (editingExpenseBudgetId === id) {
+    resetExpenseBudgetForm();
+  }
+  recordAppChange({
+    action: "delete",
+    title: "Xóa ngân sách chi tiêu",
+    description: `Xóa ngân sách "${budgetToDelete.label}".`,
+    patches: [
+      createAppChangePatch({
+        key: "goals",
+        before: goals,
+        after: nextGoals,
+        beforeSummary: `${currentBudgets.length} ngân sách chi tiêu.`,
+        afterSummary: `${nextGoals.expenseBudgets.length} ngân sách chi tiêu.`,
+      }),
+    ],
+  });
+}
+
 function exportToWord() {
   exportWordReport({
     entries,
@@ -2598,6 +3009,7 @@ function renderBalanceCheckCard(title = "Kiểm kê số dư hôm nay") {
             <GoalsPage
               addContributionToSubGoal={addContributionToSubGoal}
               addSubGoal={addSubGoal}
+              applySubGoalAllocation={applySubGoalAllocation}
               balanceChartDays={balanceChartDays}
               balanceChartTitle={balanceChartTitle}
               bigGoalProgress={bigGoalProgress}
@@ -2612,6 +3024,7 @@ function renderBalanceCheckCard(title = "Kiểm kê số dư hôm nay") {
               currentGoalStartDate={currentGoalStartDate}
               daysLeft={daysLeft}
               deleteCompletedGoal={deleteCompletedGoal}
+              deleteSubGoalContribution={deleteSubGoalContribution}
               deleteSubGoal={deleteSubGoal}
               editingSubGoalId={editingSubGoalId}
               forecastDays={forecastDays}
@@ -2619,6 +3032,7 @@ function renderBalanceCheckCard(title = "Kiểm kê số dư hôm nay") {
               goalForecast={goalForecast}
               goals={goals}
               goalScreen={goalScreen}
+              getSubGoalAllocationAvailable={getSubGoalAllocationAvailable}
               incomePerHour={incomePerHour}
               isBigGoalBehind={isBigGoalBehind}
               mainGoalForm={mainGoalForm}
@@ -2640,10 +3054,12 @@ function renderBalanceCheckCard(title = "Kiểm kê số dư hôm nay") {
               startEditSubGoal={startEditSubGoal}
               setSubGoalContributionForms={setSubGoalContributionForms}
               setSubGoalForm={setSubGoalForm}
+              subGoalAllocationDateHint={subGoalAllocationDateHint}
               subGoalContributionForms={subGoalContributionForms}
               subGoalForm={subGoalForm}
               todayString={todayString}
               totalSavedForBigGoal={totalSavedForBigGoal}
+              updateSubGoalContribution={updateSubGoalContribution}
               updateGoal={updateGoal}
               visibleBalanceMovementData={visibleBalanceMovementData}
             />
@@ -2828,6 +3244,14 @@ function renderBalanceCheckCard(title = "Kiểm kê số dư hôm nay") {
       expenseLabelFilter={expenseLabelFilter}
       setExpenseLabelFilter={updateExpenseLabelFilter}
       expenseLabelOptions={expenseLabelOptions}
+      expenseBudgetForm={expenseBudgetForm}
+      setExpenseBudgetForm={setExpenseBudgetForm}
+      editingExpenseBudgetId={editingExpenseBudgetId}
+      expenseBudgets={goals.expenseBudgets ?? []}
+      saveExpenseBudget={saveExpenseBudget}
+      startEditExpenseBudget={startEditExpenseBudget}
+      cancelEditExpenseBudget={cancelEditExpenseBudget}
+      deleteExpenseBudget={deleteExpenseBudget}
       setExpenseQuickFilter={setExpenseQuickFilter}
       filteredExpenses={filteredExpenses}
       filteredExpensesTotal={filteredExpensesTotal}

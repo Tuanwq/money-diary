@@ -1,13 +1,13 @@
 import type { Dispatch, SetStateAction } from "react";
 import { ITEMS_PER_PAGE } from "../constants";
-import type { ExpenseEntry, GoalScreen, Page } from "../types";
+import type { ExpenseBudget, ExpenseEntry, GoalScreen, Page } from "../types";
 import {
   buildOtherExpenseBreakdown,
   getExpenseTotal,
   getOtherExpenseItems,
 } from "../utils/entries";
-import { formatDateShort } from "../utils/date";
-import { formatMoney } from "../utils/money";
+import { formatDateShort, getMonthStart, getToday } from "../utils/date";
+import { formatMoney, formatMoneyInput } from "../utils/money";
 
 type ExpenseQuickFilter =
   | "today"
@@ -16,6 +16,11 @@ type ExpenseQuickFilter =
   | "month"
   | "lastMonth"
   | "all";
+
+type ExpenseBudgetForm = {
+  label: string;
+  monthlyLimit: string;
+};
 
 type ExpensesPageProps = {
   expenseSearch: string;
@@ -27,6 +32,14 @@ type ExpensesPageProps = {
   expenseLabelFilter: string;
   setExpenseLabelFilter: (value: string) => void;
   expenseLabelOptions: string[];
+  expenseBudgetForm: ExpenseBudgetForm;
+  setExpenseBudgetForm: Dispatch<SetStateAction<ExpenseBudgetForm>>;
+  editingExpenseBudgetId: string | null;
+  expenseBudgets: ExpenseBudget[];
+  saveExpenseBudget: () => void;
+  startEditExpenseBudget: (budget: ExpenseBudget) => void;
+  cancelEditExpenseBudget: () => void;
+  deleteExpenseBudget: (id: string) => void;
   setExpenseQuickFilter: (type: ExpenseQuickFilter) => void;
   filteredExpenses: ExpenseEntry[];
   filteredExpensesTotal: number;
@@ -53,6 +66,12 @@ type DailyOtherBreakdownItem = {
   count: number;
 };
 
+type ExpenseBudgetRow = ExpenseBudget & {
+  percent: number;
+  remaining: number;
+  spent: number;
+};
+
 export function ExpensesPage({
   expenseSearch,
   setExpenseSearch,
@@ -63,6 +82,14 @@ export function ExpensesPage({
   expenseLabelFilter,
   setExpenseLabelFilter,
   expenseLabelOptions,
+  expenseBudgetForm,
+  setExpenseBudgetForm,
+  editingExpenseBudgetId,
+  expenseBudgets,
+  saveExpenseBudget,
+  startEditExpenseBudget,
+  cancelEditExpenseBudget,
+  deleteExpenseBudget,
   setExpenseQuickFilter,
   filteredExpenses,
   filteredExpensesTotal,
@@ -89,6 +116,11 @@ export function ExpensesPage({
     0
   );
   const rangeLabel = buildRangeLabel(expenseFromDate, expenseToDate);
+  const budgetLabelOptions = [
+    "Ăn uống",
+    ...expenseLabelOptions.filter((label) => label !== "Ăn uống"),
+  ];
+  const budgetRows = buildExpenseBudgetRows(expenseBudgets, expenses);
 
   return (
     <>
@@ -259,6 +291,98 @@ export function ExpensesPage({
             </div>
           )}
         </article>
+      </section>
+
+      <section className="app-card rounded-2xl p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h3 className="text-lg font-black">Ngân sách theo nhãn</h3>
+            <p className="text-sm text-slate-500">
+              Đặt hạn mức tháng cho ăn uống, xăng, điện hoặc từng nhãn khoản khác.
+            </p>
+          </div>
+
+          <span className="rounded-full bg-slate-100 px-3 py-1 text-sm font-bold text-slate-700">
+            {formatDateShort(getMonthStart())} - {formatDateShort(getToday())}
+          </span>
+        </div>
+
+        <div className="mt-4 grid gap-3 lg:grid-cols-[1fr_180px_auto]">
+          <div>
+            <label className="text-sm font-medium">Nhãn ngân sách</label>
+            <input
+              list="expense-budget-label-options"
+              value={expenseBudgetForm.label}
+              onChange={(event) =>
+                setExpenseBudgetForm((prev) => ({
+                  ...prev,
+                  label: event.target.value,
+                }))
+              }
+              placeholder="VD: Xăng, Ăn uống, Tiền điện"
+              className="app-input mt-1 w-full rounded-xl border px-3 py-2"
+            />
+            <datalist id="expense-budget-label-options">
+              {budgetLabelOptions.map((label) => (
+                <option key={label} value={label} />
+              ))}
+            </datalist>
+          </div>
+
+          <div>
+            <label className="text-sm font-medium">Hạn mức tháng</label>
+            <input
+              type="text"
+              inputMode="numeric"
+              value={expenseBudgetForm.monthlyLimit}
+              onChange={(event) =>
+                setExpenseBudgetForm((prev) => ({
+                  ...prev,
+                  monthlyLimit: formatMoneyInput(event.target.value),
+                }))
+              }
+              placeholder="VD: 500.000"
+              className="app-input mt-1 w-full rounded-xl border px-3 py-2"
+            />
+          </div>
+
+          <div className="flex items-end gap-2">
+            <button
+              type="button"
+              onClick={saveExpenseBudget}
+              className="w-full rounded-xl bg-slate-900 px-5 py-2 font-medium text-white hover:bg-slate-700 lg:w-auto"
+            >
+              {editingExpenseBudgetId ? "Lưu sửa" : "Thêm"}
+            </button>
+
+            {editingExpenseBudgetId && (
+              <button
+                type="button"
+                onClick={cancelEditExpenseBudget}
+                className="w-full rounded-xl border bg-white px-5 py-2 font-medium text-slate-700 hover:bg-slate-100 lg:w-auto"
+              >
+                Hủy
+              </button>
+            )}
+          </div>
+        </div>
+
+        {budgetRows.length === 0 ? (
+          <p className="mt-4 rounded-xl bg-slate-50 p-3 text-sm text-slate-500">
+            Chưa có ngân sách nào. Thêm hạn mức để app cảnh báo khi gần vượt hoặc đã vượt.
+          </p>
+        ) : (
+          <div className="mt-4 grid gap-3 lg:grid-cols-2">
+            {budgetRows.map((budget) => (
+              <ExpenseBudgetCard
+                key={budget.id}
+                budget={budget}
+                onEdit={() => startEditExpenseBudget(budget)}
+                onDelete={() => deleteExpenseBudget(budget.id)}
+              />
+            ))}
+          </div>
+        )}
       </section>
 
       <section className="app-card rounded-2xl p-5">
@@ -537,6 +661,95 @@ function OtherExpenseLabelRow({
   );
 }
 
+function ExpenseBudgetCard({
+  budget,
+  onEdit,
+  onDelete,
+}: {
+  budget: ExpenseBudgetRow;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const isOverBudget = budget.remaining < 0;
+  const isNearLimit = !isOverBudget && budget.percent >= 80;
+  const badgeClassName = isOverBudget
+    ? "bg-red-50 text-red-700"
+    : isNearLimit
+      ? "bg-amber-50 text-amber-700"
+      : "bg-emerald-50 text-emerald-800";
+  const progressClassName = isOverBudget
+    ? "bg-red-500"
+    : isNearLimit
+      ? "bg-amber-500"
+      : "bg-emerald-700";
+
+  return (
+    <article className="rounded-2xl border border-slate-200 p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h4 className="break-words text-base font-black">{budget.label}</h4>
+          <p className="text-sm text-slate-500">
+            Hạn mức tháng {formatMoney(budget.monthlyLimit)}
+          </p>
+        </div>
+
+        <span className={`rounded-full px-3 py-1 text-xs font-bold ${badgeClassName}`}>
+          {isOverBudget
+            ? `Vượt ${formatMoney(Math.abs(budget.remaining))}`
+            : `Còn ${formatMoney(budget.remaining)}`}
+        </span>
+      </div>
+
+      <div className="mt-3 grid grid-cols-3 gap-2 text-sm">
+        <div className="rounded-xl bg-slate-50 p-3">
+          <p className="text-xs text-slate-500">Đã chi</p>
+          <p className="font-bold">{formatMoney(budget.spent)}</p>
+        </div>
+        <div className="rounded-xl bg-slate-50 p-3">
+          <p className="text-xs text-slate-500">Hạn mức</p>
+          <p className="font-bold">{formatMoney(budget.monthlyLimit)}</p>
+        </div>
+        <div className="rounded-xl bg-slate-50 p-3">
+          <p className="text-xs text-slate-500">Tỷ lệ</p>
+          <p className="font-bold">{budget.percent}%</p>
+        </div>
+      </div>
+
+      <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100">
+        <div
+          className={`h-full rounded-full ${progressClassName}`}
+          style={{ width: `${Math.min(budget.percent, 100)}%` }}
+        />
+      </div>
+
+      <p className="mt-2 text-sm text-slate-500">
+        {isOverBudget
+          ? "Ngân sách này đã vượt hạn mức, nên kiểm tra lại các khoản chi cùng nhãn."
+          : isNearLimit
+            ? "Ngân sách này sắp chạm hạn mức, nên giảm chi trong phần còn lại của tháng."
+            : "Ngân sách này vẫn còn dư trong tháng hiện tại."}
+      </p>
+
+      <div className="mt-3 flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={onEdit}
+          className="rounded-lg bg-slate-100 px-3 py-1 text-sm font-medium text-slate-700 hover:bg-slate-200"
+        >
+          Sửa
+        </button>
+        <button
+          type="button"
+          onClick={onDelete}
+          className="rounded-lg bg-red-50 px-3 py-1 text-sm font-medium text-red-600 hover:bg-red-100"
+        >
+          Xóa
+        </button>
+      </div>
+    </article>
+  );
+}
+
 function MiniRatioRow({
   label,
   value,
@@ -637,6 +850,46 @@ function expenseLabelSummary(items: ReturnType<typeof getOtherExpenseItems>) {
   const labels = [...new Set(items.map((item) => item.label))];
 
   return labels.join(", ");
+}
+
+function buildExpenseBudgetRows(
+  budgets: ExpenseBudget[],
+  expenses: ExpenseEntry[]
+): ExpenseBudgetRow[] {
+  return budgets.map((budget) => {
+    const spent = getMonthlySpentByBudgetLabel(budget.label, expenses);
+    const remaining = budget.monthlyLimit - spent;
+
+    return {
+      ...budget,
+      percent: getPercent(spent, budget.monthlyLimit),
+      remaining,
+      spent,
+    };
+  });
+}
+
+function getMonthlySpentByBudgetLabel(
+  label: string,
+  expenses: ExpenseEntry[]
+) {
+  const normalizedLabel = label.trim();
+  const monthStart = getMonthStart();
+  const today = getToday();
+
+  return expenses
+    .filter((expense) => expense.date >= monthStart && expense.date <= today)
+    .reduce((sum, expense) => {
+      if (normalizedLabel === "Ăn uống") {
+        return sum + expense.breakfast + expense.lunch + expense.dinner;
+      }
+
+      const otherTotal = getOtherExpenseItems(expense)
+        .filter((item) => item.label === normalizedLabel)
+        .reduce((itemSum, item) => itemSum + item.amount, 0);
+
+      return sum + otherTotal;
+    }, 0);
 }
 
 function getPercent(value: number, total: number) {

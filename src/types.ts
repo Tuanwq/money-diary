@@ -35,6 +35,14 @@ export type OtherExpenseItem = {
   amount: number;
 };
 
+export type ExpenseBudget = {
+  id: string;
+  label: string;
+  monthlyLimit: number;
+  createdAt: string;
+  updatedAt?: string;
+};
+
 export type BalanceCheckEntry = {
   id: string;
   date: string;
@@ -63,6 +71,7 @@ export type Goals = {
   bigGoalStartDate: string;
 
   subGoals: SubGoal[];
+  expenseBudgets?: ExpenseBudget[];
 };
 
 export type Page =

@@ -13,6 +13,7 @@ import { ProgressBar } from "../components/ProgressBar";
 import type {
   BalanceSnapshot,
   CompletedGoal,
+  GoalContribution,
   GoalScreen,
   Goals,
   Page,
@@ -32,7 +33,7 @@ import {
   getSubGoalSaved,
   isGoalBehind,
 } from "../utils/goals";
-import { formatMoney, formatMoneyInput } from "../utils/money";
+import { formatMoney, formatMoneyInput, parseMoneyInput } from "../utils/money";
 import type { GoalForecast } from "../utils/forecast";
 import type { DailyEntryForm } from "./EntryPage";
 import { GoalMilestonesPage } from "./GoalMilestonesPage";
@@ -58,6 +59,23 @@ type SubGoalContributionForms = Record<
   { amount: string; note: string }
 >;
 
+type SubGoalAllocationMode = "smart" | "equal";
+
+type SubGoalPriorityItem = {
+  dailyNeed: number;
+  goal: SubGoal;
+  progress: number;
+  reason: string;
+  remaining: number;
+  score: number;
+};
+
+type SubGoalAllocationRow = {
+  amount: number;
+  goal: SubGoal;
+  remaining: number;
+};
+
 const COMPLETED_DETAIL_PAGE_SIZE = 7;
 
 type CompletedDetailPageKey =
@@ -80,6 +98,10 @@ const initialCompletedDetailPages: Record<CompletedDetailPageKey, number> = {
 type GoalsPageProps = {
   addContributionToSubGoal: (goalId: string) => void;
   addSubGoal: () => void;
+  applySubGoalAllocation: (input: {
+    allocations: Array<{ amount: number; goalId: string }>;
+    date: string;
+  }) => boolean;
   balanceChartDays: "all" | number;
   balanceChartTitle: string;
   bigGoalProgress: number;
@@ -94,6 +116,7 @@ type GoalsPageProps = {
   currentGoalStartDate: string;
   daysLeft: number;
   deleteCompletedGoal: (id: string) => void;
+  deleteSubGoalContribution: (goalId: string, contributionId: string) => void;
   deleteSubGoal: (id: string) => void;
   editingSubGoalId: string | null;
   forecastDays: number;
@@ -101,6 +124,7 @@ type GoalsPageProps = {
   goalForecast: GoalForecast;
   goals: Goals;
   goalScreen: GoalScreen;
+  getSubGoalAllocationAvailable: (date: string) => number;
   incomePerHour: number;
   isBigGoalBehind: boolean;
   mainGoalForm: MainGoalForm;
@@ -120,6 +144,7 @@ type GoalsPageProps = {
   setMainGoalForm: Dispatch<SetStateAction<MainGoalForm>>;
   setSelectedCompletedGoalId: (id: string) => void;
   startEditSubGoal: (goal: SubGoal) => void;
+  subGoalAllocationDateHint: string;
   setSubGoalContributionForms: Dispatch<
     SetStateAction<SubGoalContributionForms>
   >;
@@ -128,6 +153,11 @@ type GoalsPageProps = {
   subGoalForm: SubGoalForm;
   todayString: string;
   totalSavedForBigGoal: number;
+  updateSubGoalContribution: (
+    goalId: string,
+    contributionId: string,
+    payload: { amount: string; date: string; note: string }
+  ) => void;
   updateGoal: (key: keyof Goals, value: string) => void;
   visibleBalanceMovementData: BalanceSnapshot[];
 };
@@ -179,6 +209,139 @@ function getDeadlineGapText(gap: number | null) {
 function getDeadlineGapClass(gap: number | null) {
   if (gap === null) return "bg-slate-100 text-slate-700";
   return gap >= 0 ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700";
+}
+
+function buildSubGoalPriorityItems(goals: SubGoal[]): SubGoalPriorityItem[] {
+  return goals
+    .map((goal) => {
+      const currentSaved = getSubGoalSaved(goal);
+      const remaining = Math.max(goal.target - currentSaved, 0);
+      const progress = getProgress(currentSaved, goal.target);
+      const dailyNeed = getDailyNeedForGoal(goal.target, currentSaved, goal.deadline);
+      const daysLeft = getDaysLeft(goal.deadline);
+      const behind = isGoalBehind(goal);
+      const deadlineScore = daysLeft <= 3 ? 45 : daysLeft <= 7 ? 35 : daysLeft <= 14 ? 24 : 12;
+      const behindScore = behind ? 40 : 12;
+      const progressScore = Math.max(100 - progress, 0) / 3;
+      const score = Math.round(deadlineScore + behindScore + progressScore);
+      const reason = behind
+        ? `Đang chậm tiến độ, còn ${daysLeft} ngày.`
+        : `Còn ${daysLeft} ngày, cần giữ nhịp ${formatMoney(dailyNeed)}/ngày.`;
+
+      return {
+        dailyNeed,
+        goal,
+        progress,
+        reason,
+        remaining,
+        score,
+      };
+    })
+    .filter((item) => item.remaining > 0)
+    .sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+
+      return a.goal.deadline.localeCompare(b.goal.deadline);
+    });
+}
+
+function buildSubGoalAllocationRows({
+  amount,
+  mode,
+  priorityItems,
+}: {
+  amount: number;
+  mode: SubGoalAllocationMode;
+  priorityItems: SubGoalPriorityItem[];
+}): SubGoalAllocationRow[] {
+  if (amount <= 0 || priorityItems.length === 0) {
+    return priorityItems.map((item) => ({
+      amount: 0,
+      goal: item.goal,
+      remaining: item.remaining,
+    }));
+  }
+
+  if (mode === "equal") {
+    return allocateSubGoalsEqually(priorityItems, amount);
+  }
+
+  return allocateSubGoalsByPriority(priorityItems, amount);
+}
+
+function allocateSubGoalsByPriority(
+  priorityItems: SubGoalPriorityItem[],
+  amount: number
+): SubGoalAllocationRow[] {
+  let remainingMoney = amount;
+  const allocations = new Map<string, number>();
+
+  for (const item of priorityItems) {
+    if (remainingMoney <= 0) break;
+
+    const recommendedAmount = Math.max(item.dailyNeed, 0);
+    const amountForGoal = Math.min(
+      remainingMoney,
+      item.remaining,
+      recommendedAmount > 0 ? recommendedAmount : item.remaining
+    );
+
+    allocations.set(item.goal.id, amountForGoal);
+    remainingMoney -= amountForGoal;
+  }
+
+  for (const item of priorityItems) {
+    if (remainingMoney <= 0) break;
+
+    const alreadyAllocated = allocations.get(item.goal.id) ?? 0;
+    const amountForGoal = Math.min(
+      remainingMoney,
+      Math.max(item.remaining - alreadyAllocated, 0)
+    );
+
+    allocations.set(item.goal.id, alreadyAllocated + amountForGoal);
+    remainingMoney -= amountForGoal;
+  }
+
+  return priorityItems.map((item) => ({
+    amount: allocations.get(item.goal.id) ?? 0,
+    goal: item.goal,
+    remaining: item.remaining,
+  }));
+}
+
+function allocateSubGoalsEqually(
+  priorityItems: SubGoalPriorityItem[],
+  amount: number
+): SubGoalAllocationRow[] {
+  let remainingMoney = amount;
+  const allocations = new Map<string, number>();
+  let remainingItems = priorityItems.filter((item) => item.remaining > 0);
+
+  while (remainingMoney > 0 && remainingItems.length > 0) {
+    const splitAmount = Math.floor(remainingMoney / remainingItems.length);
+    const minimumAmount = splitAmount > 0 ? splitAmount : remainingMoney;
+
+    remainingItems = remainingItems.filter((item) => {
+      const currentAmount = allocations.get(item.goal.id) ?? 0;
+      const amountForGoal = Math.min(
+        minimumAmount,
+        Math.max(item.remaining - currentAmount, 0),
+        remainingMoney
+      );
+
+      allocations.set(item.goal.id, currentAmount + amountForGoal);
+      remainingMoney -= amountForGoal;
+
+      return currentAmount + amountForGoal < item.remaining;
+    });
+  }
+
+  return priorityItems.map((item) => ({
+    amount: allocations.get(item.goal.id) ?? 0,
+    goal: item.goal,
+    remaining: item.remaining,
+  }));
 }
 
 function getPageCount(totalItems: number) {
@@ -387,6 +550,7 @@ function ForecastPaceCard({
 export function GoalsPage({
   addContributionToSubGoal,
   addSubGoal,
+  applySubGoalAllocation,
   balanceChartDays,
   balanceChartTitle,
   bigGoalProgress,
@@ -401,6 +565,7 @@ export function GoalsPage({
   currentGoalStartDate,
   daysLeft,
   deleteCompletedGoal,
+  deleteSubGoalContribution,
   deleteSubGoal,
   editingSubGoalId,
   forecastDays,
@@ -408,6 +573,7 @@ export function GoalsPage({
   goalForecast,
   goals,
   goalScreen,
+  getSubGoalAllocationAvailable,
   incomePerHour,
   isBigGoalBehind,
   mainGoalForm,
@@ -427,12 +593,14 @@ export function GoalsPage({
   setMainGoalForm,
   setSelectedCompletedGoalId,
   startEditSubGoal,
+  subGoalAllocationDateHint,
   setSubGoalContributionForms,
   setSubGoalForm,
   subGoalContributionForms,
   subGoalForm,
   todayString,
   totalSavedForBigGoal,
+  updateSubGoalContribution,
   updateGoal,
   visibleBalanceMovementData,
 }: GoalsPageProps) {
@@ -441,6 +609,21 @@ export function GoalsPage({
   );
   const [completedDetailPanel, setCompletedDetailPanel] =
     useState<CompletedDetailPanelKey | null>(null);
+  const [allocationDate, setAllocationDate] = useState(subGoalAllocationDateHint);
+  const [allocationMode, setAllocationMode] =
+    useState<SubGoalAllocationMode>("smart");
+  const [allocationAmount, setAllocationAmount] = useState("");
+  const [allocationOverrides, setAllocationOverrides] = useState<
+    Record<string, string>
+  >({});
+  const [editingContributionKey, setEditingContributionKey] = useState<
+    string | null
+  >(null);
+  const [editingContributionForm, setEditingContributionForm] = useState({
+    amount: "",
+    date: todayString,
+    note: "",
+  });
 
   function setCompletedDetailPage(
     key: CompletedDetailPageKey,
@@ -521,9 +704,70 @@ export function GoalsPage({
     (goal) => goal.id === editingSubGoalId
   );
   const isEditingSubGoal = Boolean(editingSubGoal);
+  const subGoalPriorityItems = buildSubGoalPriorityItems(goals.subGoals ?? []);
+  const allocationAvailableMoney = getSubGoalAllocationAvailable(allocationDate);
+  const allocationInputMoney = parseMoneyInput(allocationAmount);
+  const allocationMoney =
+    allocationInputMoney > 0 ? allocationInputMoney : allocationAvailableMoney;
+  const suggestedAllocationRows = buildSubGoalAllocationRows({
+    amount: allocationMoney,
+    mode: allocationMode,
+    priorityItems: subGoalPriorityItems,
+  });
+  const allocationRows = suggestedAllocationRows.map((row) => {
+    const overrideValue = allocationOverrides[row.goal.id];
+
+    return {
+      ...row,
+      inputValue:
+        overrideValue ?? (row.amount > 0 ? formatMoneyInput(String(row.amount)) : ""),
+    };
+  });
 
   function toggleCompletedDetailPanel(panel: CompletedDetailPanelKey) {
     setCompletedDetailPanel((current) => (current === panel ? null : panel));
+  }
+
+  function getContributionEditKey(goalId: string, contributionId: string) {
+    return `${goalId}:${contributionId}`;
+  }
+
+  function startEditContribution(goalId: string, contribution: GoalContribution) {
+    setEditingContributionKey(getContributionEditKey(goalId, contribution.id));
+    setEditingContributionForm({
+      amount: formatMoneyInput(String(contribution.amount ?? 0)),
+      date: contribution.date,
+      note: contribution.note ?? "",
+    });
+  }
+
+  function cancelEditContribution() {
+    setEditingContributionKey(null);
+    setEditingContributionForm({
+      amount: "",
+      date: todayString,
+      note: "",
+    });
+  }
+
+  function saveEditingContribution(goalId: string, contributionId: string) {
+    updateSubGoalContribution(goalId, contributionId, editingContributionForm);
+    cancelEditContribution();
+  }
+
+  function applyCurrentSubGoalAllocation() {
+    const success = applySubGoalAllocation({
+      date: allocationDate,
+      allocations: allocationRows.map((row) => ({
+        goalId: row.goal.id,
+        amount: parseMoneyInput(row.inputValue),
+      })),
+    });
+
+    if (!success) return;
+
+    setAllocationAmount("");
+    setAllocationOverrides({});
   }
 
   return (
@@ -770,6 +1014,171 @@ export function GoalsPage({
         Hủy sửa
       </button>
     )}
+  </div>
+
+
+  <div className="mt-5 grid gap-4 xl:grid-cols-[1fr_1.2fr]">
+    <section className="rounded-2xl border bg-slate-50 p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 className="font-black">Ưu tiên mục tiêu thông minh</h3>
+          <p className="text-sm text-slate-500">
+            App xếp theo deadline, tiến độ chậm và số tiền cần mỗi ngày.
+          </p>
+        </div>
+
+        {subGoalPriorityItems[0] && (
+          <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-800">
+            Nên ưu tiên: {subGoalPriorityItems[0].goal.name}
+          </span>
+        )}
+      </div>
+
+      {subGoalPriorityItems.length === 0 ? (
+        <p className="mt-3 rounded-xl bg-white p-3 text-sm text-slate-500">
+          Chưa có mục tiêu phụ để gợi ý ưu tiên.
+        </p>
+      ) : (
+        <div className="mt-3 grid gap-2">
+          {subGoalPriorityItems.slice(0, 4).map((item, index) => (
+            <div
+              key={item.goal.id}
+              className="rounded-xl bg-white p-3 ring-1 ring-slate-100"
+            >
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="font-bold">
+                    {index + 1}. {item.goal.name}
+                  </p>
+                  <p className="text-xs text-slate-500">{item.reason}</p>
+                </div>
+                <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-bold text-slate-700">
+                  Cần {formatMoney(item.dailyNeed)}/ngày
+                </span>
+              </div>
+
+              <div className="mt-2 grid grid-cols-3 gap-2 text-xs">
+                <div className="rounded-lg bg-slate-100 px-2 py-1">
+                  <p className="text-slate-500">Tiến độ</p>
+                  <p className="font-bold">{item.progress}%</p>
+                </div>
+                <div className="rounded-lg bg-slate-100 px-2 py-1">
+                  <p className="text-slate-500">Còn thiếu</p>
+                  <p className="font-bold">{formatMoney(item.remaining)}</p>
+                </div>
+                <div className="rounded-lg bg-slate-100 px-2 py-1">
+                  <p className="text-slate-500">Điểm ưu tiên</p>
+                  <p className="font-bold">{item.score}</p>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+
+    <section className="rounded-2xl border bg-slate-50 p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 className="font-black">Tự chia tiền từ ngày</h3>
+          <p className="text-sm text-slate-500">
+            Lấy tiền thực tế trong ngày trừ chi tiêu và phần đã góp ngày đó.
+          </p>
+        </div>
+
+        <span className="rounded-full bg-white px-3 py-1 text-xs font-bold text-slate-700">
+          Dư: {formatMoney(allocationAvailableMoney)}
+        </span>
+      </div>
+
+      <div className="mt-3 grid gap-3 md:grid-cols-3">
+        <div>
+          <label className="text-sm font-medium">Ngày cần chia</label>
+          <input
+            type="date"
+            value={allocationDate}
+            max={todayString}
+            onChange={(event) => {
+              setAllocationDate(event.target.value);
+              setAllocationOverrides({});
+            }}
+            className="mt-1 w-full rounded-xl border px-3 py-2"
+          />
+        </div>
+
+        <div>
+          <label className="text-sm font-medium">Số tiền chia</label>
+          <input
+            type="text"
+            inputMode="numeric"
+            value={allocationAmount}
+            onChange={(event) => {
+              setAllocationAmount(formatMoneyInput(event.target.value));
+              setAllocationOverrides({});
+            }}
+            placeholder={formatMoneyInput(String(allocationAvailableMoney))}
+            className="mt-1 w-full rounded-xl border px-3 py-2"
+          />
+        </div>
+
+        <div>
+          <label className="text-sm font-medium">Cách chia</label>
+          <select
+            value={allocationMode}
+            onChange={(event) => {
+              setAllocationMode(event.target.value as SubGoalAllocationMode);
+              setAllocationOverrides({});
+            }}
+            className="mt-1 w-full rounded-xl border px-3 py-2"
+          >
+            <option value="smart">Theo ưu tiên</option>
+            <option value="equal">Chia đều</option>
+          </select>
+        </div>
+      </div>
+
+      {allocationRows.length === 0 ? (
+        <p className="mt-3 rounded-xl bg-white p-3 text-sm text-slate-500">
+          Chưa có mục tiêu phụ đang cần tiền để chia.
+        </p>
+      ) : (
+        <div className="mt-3 grid gap-2">
+          {allocationRows.map((row) => (
+            <div
+              key={row.goal.id}
+              className="grid gap-2 rounded-xl bg-white p-3 sm:grid-cols-[1fr_180px]"
+            >
+              <div className="min-w-0">
+                <p className="font-bold">{row.goal.name}</p>
+                <p className="text-xs text-slate-500">
+                  Còn thiếu {formatMoney(row.remaining)}
+                </p>
+              </div>
+              <input
+                type="text"
+                inputMode="numeric"
+                value={row.inputValue}
+                onChange={(event) =>
+                  setAllocationOverrides((prev) => ({
+                    ...prev,
+                    [row.goal.id]: formatMoneyInput(event.target.value),
+                  }))
+                }
+                className="w-full rounded-xl border px-3 py-2 text-sm"
+              />
+            </div>
+          ))}
+        </div>
+      )}
+
+      <button
+        type="button"
+        onClick={applyCurrentSubGoalAllocation}
+        className="mt-3 w-full rounded-xl bg-slate-900 px-5 py-2 font-medium text-white hover:bg-slate-700"
+      >
+        Áp dụng chia tiền vào mục tiêu phụ
+      </button>
+    </section>
   </div>
 
 
@@ -1083,27 +1492,118 @@ export function GoalsPage({
             {sortedContributions.length > 0 && (
               <div className="mt-4 rounded-xl border p-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <h4 className="font-bold">Lịch sử góp gần đây</h4>
+                  <h4 className="font-bold">Lịch sử góp tiền</h4>
                   <span className="text-sm text-slate-500">
                     {sortedContributions.length} bản ghi
                   </span>
                 </div>
 
-                <div className="mt-3 grid gap-2">
-                  {sortedContributions.slice(0, 5).map((item) => (
-                    <div
-                      key={item.id}
-                      className="flex flex-wrap items-start justify-between gap-3 rounded-lg bg-slate-100 p-3 text-sm"
-                    >
-                      <div>
-                        <p className="font-bold">{item.date}</p>
-                        {item.note && (
-                          <p className="mt-1 text-slate-500">{item.note}</p>
+                <div className="mt-3 grid max-h-96 gap-2 overflow-y-auto pr-1">
+                  {sortedContributions.map((item) => {
+                    const editKey = getContributionEditKey(goal.id, item.id);
+                    const isEditingContribution =
+                      editingContributionKey === editKey;
+
+                    return (
+                      <div
+                        key={item.id}
+                        className="rounded-lg bg-slate-100 p-3 text-sm"
+                      >
+                        {isEditingContribution ? (
+                          <div className="grid gap-2 md:grid-cols-[150px_160px_1fr]">
+                            <input
+                              type="date"
+                              value={editingContributionForm.date}
+                              max={todayString}
+                              onChange={(event) =>
+                                setEditingContributionForm((prev) => ({
+                                  ...prev,
+                                  date: event.target.value,
+                                }))
+                              }
+                              className="rounded-lg border bg-white px-3 py-2"
+                            />
+                            <input
+                              type="text"
+                              inputMode="numeric"
+                              value={editingContributionForm.amount}
+                              onChange={(event) =>
+                                setEditingContributionForm((prev) => ({
+                                  ...prev,
+                                  amount: formatMoneyInput(event.target.value),
+                                }))
+                              }
+                              className="rounded-lg border bg-white px-3 py-2"
+                            />
+                            <input
+                              value={editingContributionForm.note}
+                              onChange={(event) =>
+                                setEditingContributionForm((prev) => ({
+                                  ...prev,
+                                  note: event.target.value,
+                                }))
+                              }
+                              placeholder="Ghi chú"
+                              className="rounded-lg border bg-white px-3 py-2"
+                            />
+                            <div className="flex flex-wrap gap-2 md:col-span-3">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  saveEditingContribution(goal.id, item.id)
+                                }
+                                className="rounded-lg bg-slate-900 px-3 py-1 font-bold text-white hover:bg-slate-700"
+                              >
+                                Lưu
+                              </button>
+                              <button
+                                type="button"
+                                onClick={cancelEditContribution}
+                                className="rounded-lg bg-white px-3 py-1 font-bold text-slate-700 hover:bg-slate-200"
+                              >
+                                Hủy
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div>
+                              <p className="font-bold">{item.date}</p>
+                              {item.note && (
+                                <p className="mt-1 text-slate-500">
+                                  {item.note}
+                                </p>
+                              )}
+                            </div>
+
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="font-bold">
+                                {formatMoney(item.amount)}
+                              </p>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  startEditContribution(goal.id, item)
+                                }
+                                className="rounded-lg bg-white px-3 py-1 font-bold text-slate-700 hover:bg-slate-200"
+                              >
+                                Sửa
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  deleteSubGoalContribution(goal.id, item.id)
+                                }
+                                className="rounded-lg bg-red-50 px-3 py-1 font-bold text-red-600 hover:bg-red-100"
+                              >
+                                Xóa
+                              </button>
+                            </div>
+                          </div>
                         )}
                       </div>
-                      <p className="font-bold">{formatMoney(item.amount)}</p>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}

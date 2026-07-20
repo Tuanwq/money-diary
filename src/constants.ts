@@ -36,6 +36,7 @@ export const defaultGoals: Goals = {
   bigGoalStartDate: getToday(),
 
   subGoals: [],
+  expenseBudgets: [],
 };
 
 export const moodLabels: Record<Mood, string> = {
