@@ -36,4 +36,17 @@ assert.equal(
   "/money/goals/completed/detail/done-456"
 );
 
+assert.equal(getMoneyStateFromPath("/money/history").page, "history");
+assert.equal(getMoneyStateFromPath("/money/history/journal").page, "history");
+assert.equal(getMoneyStateFromPath("/money/history/expenses").page, "expenses");
+assert.equal(
+  getMoneyStateFromPath("/money/history/balance-checks").page,
+  "balanceChecks"
+);
+assert.equal(getMoneyStateFromPath("/money/expenses").page, "expenses");
+assert.equal(
+  getMoneyStateFromPath("/money/balance-checks").page,
+  "balanceChecks"
+);
+
 console.log("Goal navigation tests passed.");

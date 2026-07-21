@@ -69,7 +69,7 @@ export function NotesPage({ userId }: NotesPageProps) {
               className="daymark-section"
             >
               <p className="text-sm font-bold text-[var(--dm-muted)]">{task.task_date}</p>
-              <h2 className="mt-1 font-black">{task.title}</h2>
+              <h2 className="mt-1 font-bold">{task.title}</h2>
               <p className="mt-2 text-sm text-[var(--dm-muted)]">
                 {task.note}
               </p>

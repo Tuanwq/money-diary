@@ -1,3 +1,4 @@
+import { useMemo, useState } from "react";
 import type { AppChangeLog, AppDataKey, GoalScreen, Page } from "../types";
 import { formatDateShort } from "../utils/date";
 
@@ -23,6 +24,8 @@ const ACTION_LABELS: Record<AppChangeLog["action"], string> = {
   restore: "Khôi phục",
 };
 
+const CHANGE_LOG_PAGE_SIZE = 5;
+
 function formatTimestamp(value: string) {
   return new Date(value).toLocaleString("vi-VN", {
     dateStyle: "short",
@@ -35,14 +38,43 @@ export function AppChangeLogPage({
   navigateTo,
   restoreChangeLog,
 }: AppChangeLogPageProps) {
+  const [currentPage, setCurrentPage] = useState(1);
+  const totalPages = Math.max(
+    1,
+    Math.ceil(changeLogs.length / CHANGE_LOG_PAGE_SIZE)
+  );
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+  const paginatedChangeLogs = useMemo(() => {
+    const startIndex = (safeCurrentPage - 1) * CHANGE_LOG_PAGE_SIZE;
+
+    return changeLogs.slice(startIndex, startIndex + CHANGE_LOG_PAGE_SIZE);
+  }, [changeLogs, safeCurrentPage]);
+  const firstVisibleRecord =
+    changeLogs.length === 0
+      ? 0
+      : (safeCurrentPage - 1) * CHANGE_LOG_PAGE_SIZE + 1;
+  const lastVisibleRecord = Math.min(
+    safeCurrentPage * CHANGE_LOG_PAGE_SIZE,
+    changeLogs.length
+  );
+
+  function goToPage(page: number) {
+    setCurrentPage(Math.min(Math.max(page, 1), totalPages));
+    window.requestAnimationFrame(() => {
+      document
+        .getElementById("app-change-log-list")
+        ?.scrollIntoView({ block: "start" });
+    });
+  }
+
   return (
     <section className="grid gap-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-sm font-bold uppercase tracking-wide text-slate-500">
+          <p className="text-sm font-bold tracking-wide text-slate-500">
             Undo toàn app
           </p>
-          <h2 className="text-2xl font-black">Lịch sử thay đổi dữ liệu</h2>
+          <h2 className="text-2xl font-bold">Lịch sử thay đổi dữ liệu</h2>
           <p className="mt-1 text-sm text-slate-500">
             Theo dõi đã sửa gì, trước đó là gì và khôi phục khi nhập nhầm.
           </p>
@@ -68,8 +100,8 @@ export function AppChangeLogPage({
           Chưa có lịch sử thay đổi nào.
         </div>
       ) : (
-        <div className="grid gap-3">
-          {changeLogs.map((log) => (
+        <div id="app-change-log-list" className="grid scroll-mt-4 gap-3">
+          {paginatedChangeLogs.map((log) => (
             <article
               key={log.id}
               className="rounded-2xl bg-white p-4 shadow-sm sm:p-5"
@@ -92,7 +124,7 @@ export function AppChangeLogPage({
                     )}
                   </div>
 
-                  <h3 className="mt-3 break-words text-lg font-black">
+                  <h3 className="mt-3 break-words text-lg font-bold">
                     {log.title}
                   </h3>
                   <p className="mt-1 break-words text-sm text-slate-500">
@@ -125,7 +157,7 @@ export function AppChangeLogPage({
                     key={`${log.id}-${patch.key}-${index}`}
                     className="rounded-2xl border p-3"
                   >
-                    <p className="text-sm font-black">
+                    <p className="text-sm font-bold">
                       {DATA_LABELS[patch.key]}
                     </p>
 
@@ -144,6 +176,37 @@ export function AppChangeLogPage({
               </div>
             </article>
           ))}
+
+          {totalPages > 1 && (
+            <nav
+              className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-white p-3 shadow-sm"
+              aria-label="Phân trang lịch sử thay đổi dữ liệu"
+            >
+              <p className="text-sm font-bold text-slate-600">
+                Trang {safeCurrentPage}/{totalPages} · bản ghi {firstVisibleRecord}
+                –{lastVisibleRecord} trên {changeLogs.length}
+              </p>
+
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => goToPage(safeCurrentPage - 1)}
+                  disabled={safeCurrentPage <= 1}
+                  className="app-secondary-button min-h-11 rounded-xl px-4 py-2 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Trước
+                </button>
+                <button
+                  type="button"
+                  onClick={() => goToPage(safeCurrentPage + 1)}
+                  disabled={safeCurrentPage >= totalPages}
+                  className="app-primary-button min-h-11 rounded-xl px-4 py-2 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Sau
+                </button>
+              </div>
+            </nav>
+          )}
         </div>
       )}
     </section>
@@ -153,7 +216,7 @@ export function AppChangeLogPage({
 function ChangeSnapshot({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-xl bg-slate-100 p-3">
-      <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+      <p className="text-xs font-bold tracking-wide text-slate-500">
         {label}
       </p>
       <p className="mt-1 whitespace-pre-line break-words text-sm font-bold">

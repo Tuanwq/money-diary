@@ -1,149 +1,132 @@
-import type { Dispatch, SetStateAction } from "react";
+import { ClipboardCheck } from "lucide-react";
+import { useMemo, useState } from "react";
+import { ITEMS_PER_PAGE } from "../constants";
+import { DeleteHistoryRecordDialog } from "../features/history/components/DeleteHistoryRecordDialog";
+import { HistoryErrorState, HistoryLoadingState } from "../features/history/components/HistoryAsyncState";
+import { HistoryDetailDrawer } from "../features/history/components/HistoryDetailDrawer";
+import { HistoryFilterToolbar, type ActiveHistoryFilter } from "../features/history/components/HistoryFilterToolbar";
+import { HistoryLayout } from "../features/history/components/HistoryLayout";
+import { HistoryPagination } from "../features/history/components/HistoryPagination";
+import { HistorySummaryStrip } from "../features/history/components/HistorySummaryStrip";
+import { BalanceDetails, BalanceHistoryCard } from "../features/history/components/balance/BalanceHistoryCard";
+import { formatSignedDifference } from "../features/history/historySelectors";
 import type { BalanceCheckEntry, GoalScreen, Page } from "../types";
-import { getBalanceStatus, getBalanceStatusClass } from "../utils/balance";
+import { getBalanceStatus } from "../utils/balance";
+import { formatReportDate, getDateDaysAgo, getMonthStart, getToday, isDateInRange } from "../utils/date";
 import { formatMoney } from "../utils/money";
 
+type BalanceQuickFilter = "today" | "7days" | "30days" | "month" | "lastMonth" | "all";
+
 type BalanceChecksPageProps = {
-  paginatedBalanceChecks: BalanceCheckEntry[];
-  balanceCheckCurrentPage: number;
-  balanceCheckTotalPages: number;
-  setBalanceCheckCurrentPage: Dispatch<SetStateAction<number>>;
-  editBalanceCheck: (item: BalanceCheckEntry) => void;
+  balanceChecks: BalanceCheckEntry[];
+  cloudLoadError?: string | null;
   deleteBalanceCheck: (id: string) => void;
+  editBalanceCheck: (item: BalanceCheckEntry) => void;
+  isCloudLoading?: boolean;
   navigateTo: (nextPage: Page, nextGoalScreen?: GoalScreen) => void;
+  onRetry?: () => void;
 };
 
-export function BalanceChecksPage({
-  paginatedBalanceChecks,
-  balanceCheckCurrentPage,
-  balanceCheckTotalPages,
-  setBalanceCheckCurrentPage,
-  editBalanceCheck,
-  deleteBalanceCheck,
-}: BalanceChecksPageProps) {
+const quickFilters = [
+  { label: "Hôm nay", value: "today" as const },
+  { label: "7 ngày", value: "7days" as const },
+  { label: "30 ngày", value: "30days" as const },
+  { label: "Tháng này", value: "month" as const },
+  { label: "Tháng trước", value: "lastMonth" as const },
+];
+
+export function BalanceChecksPage({ balanceChecks, cloudLoadError, deleteBalanceCheck, editBalanceCheck, isCloudLoading, navigateTo, onRetry }: BalanceChecksPageProps) {
+  const [search, setSearch] = useState("");
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [selectedCheck, setSelectedCheck] = useState<BalanceCheckEntry | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<BalanceCheckEntry | null>(null);
+  const sortedChecks = useMemo(() => [...balanceChecks].sort((a, b) => b.date.localeCompare(a.date)), [balanceChecks]);
+  const filteredChecks = useMemo(() => {
+    const keyword = search.trim().toLowerCase();
+    return sortedChecks.filter((item) => {
+      const matchesKeyword = !keyword || item.date.includes(keyword) || item.note.toLowerCase().includes(keyword) || getBalanceStatus(item.difference).toLowerCase().includes(keyword);
+      return matchesKeyword && isDateInRange(item.date, fromDate, toDate);
+    });
+  }, [fromDate, search, sortedChecks, toDate]);
+  const totalPages = Math.max(1, Math.ceil(filteredChecks.length / ITEMS_PER_PAGE));
+  const safePage = Math.min(currentPage, totalPages);
+  const paginatedChecks = filteredChecks.slice((safePage - 1) * ITEMS_PER_PAGE, safePage * ITEMS_PER_PAGE);
+  const latest = filteredChecks[0];
+  const matchedCount = filteredChecks.filter((item) => item.difference === 0).length;
+  const activeFilters: ActiveHistoryFilter[] = [];
+  const isInitialLoading = Boolean(isCloudLoading && balanceChecks.length === 0);
+  const hasInitialError = Boolean(cloudLoadError && balanceChecks.length === 0);
+
+  if (fromDate || toDate) activeFilters.push({ id: "date", label: buildDateFilterLabel(fromDate, toDate), onRemove: () => { setFromDate(""); setToDate(""); setCurrentPage(1); } });
+
+  function setQuickFilter(filter: BalanceQuickFilter) {
+    setCurrentPage(1);
+    if (filter === "today") { setFromDate(getToday()); setToDate(getToday()); }
+    if (filter === "7days") { setFromDate(getDateDaysAgo(6)); setToDate(getToday()); }
+    if (filter === "30days") { setFromDate(getDateDaysAgo(29)); setToDate(getToday()); }
+    if (filter === "month") { setFromDate(getMonthStart()); setToDate(getToday()); }
+    if (filter === "lastMonth") {
+      const now = new Date();
+      const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const end = new Date(now.getFullYear(), now.getMonth(), 0);
+      setFromDate(toLocalDateString(start));
+      setToDate(toLocalDateString(end));
+    }
+    if (filter === "all") { setFromDate(""); setToDate(""); setSearch(""); }
+  }
+
   return (
-    <>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="text-2xl font-bold">Lịch sử kiểm kê số dư</h2>
-          <p className="text-sm text-slate-500">
-            Theo dõi tiền mặt, tiền tài khoản và phần hao hụt/dư tiền mỗi ngày.
-          </p>
-        </div>
+    <HistoryLayout currentPage="balanceChecks" navigateTo={navigateTo}>
+      <HistoryFilterToolbar
+        activeFilters={activeFilters}
+        filterCount={activeFilters.length}
+        fromDate={fromDate}
+        onFromDateChange={(value) => { setFromDate(value); setCurrentPage(1); }}
+        onQuickFilter={setQuickFilter}
+        onReset={() => setQuickFilter("all")}
+        onSearchChange={(value) => { setSearch(value); setCurrentPage(1); }}
+        onToDateChange={(value) => { setToDate(value); setCurrentPage(1); }}
+        placeholder="Tìm theo ngày hoặc trạng thái số dư..."
+        quickFilters={quickFilters}
+        search={search}
+        toDate={toDate}
+      />
 
-      </div>
+      {!hasInitialError && <HistorySummaryStrip isLoading={isInitialLoading} items={[
+        { label: "Số lần kiểm kê", value: String(filteredChecks.length) },
+        { label: "Số dư thực tế gần nhất", value: latest ? formatMoney(latest.actualMoney) : "0 đ", detail: latest ? formatReportDate(latest.date) : "Chưa có" },
+        { label: "Chênh lệch gần nhất", value: latest ? formatSignedDifference(latest.difference) : "0 đ", detail: latest ? getBalanceStatus(latest.difference) : "Chưa có" },
+        { label: "Số ngày khớp số dư", value: String(matchedCount) },
+      ]} />}
 
-      <section className="grid gap-4">
-        {paginatedBalanceChecks.length === 0 ? (
-          <div className="rounded-2xl bg-white p-5 text-slate-500 shadow-sm">
-            Chưa có bản ghi kiểm kê nào.
-          </div>
+      <section className="history-record-section" aria-labelledby="balance-history-title">
+        <div className="history-section-heading"><div><h2 id="balance-history-title">Lịch sử kiểm kê số dư</h2><p>Theo dõi số dư thực tế và chênh lệch so với ứng dụng.</p></div></div>
+        {isInitialLoading ? <HistoryLoadingState /> : hasInitialError ? <HistoryErrorState message="Không tải được lịch sử kiểm kê" onRetry={onRetry} /> : filteredChecks.length === 0 ? (
+          <div className="history-empty-state"><ClipboardCheck aria-hidden="true" size={24} /><h3>Chưa có lần kiểm kê nào trong khoảng thời gian này.</h3><p>Hãy thay đổi bộ lọc để xem dữ liệu khác.</p></div>
         ) : (
-          paginatedBalanceChecks.map((item) => (
-            <article
-              key={item.id}
-              className="rounded-2xl bg-white p-5 shadow-sm"
-            >
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <h3 className="font-bold">{item.date}</h3>
-                  <p className="text-sm text-slate-500">
-                    {getBalanceStatus(item.difference)}:{" "}
-                    {formatMoney(item.difference)}
-                  </p>
-                </div>
-
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => editBalanceCheck(item)}
-                    className="rounded-lg bg-slate-100 px-3 py-1 text-sm font-medium text-slate-700 hover:bg-slate-200"
-                  >
-                    Sửa
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => deleteBalanceCheck(item.id)}
-                    className="rounded-lg bg-red-50 px-3 py-1 text-sm font-medium text-red-600 hover:bg-red-100"
-                  >
-                    Xóa
-                  </button>
-                </div>
-              </div>
-
-              <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-5">
-                <BalanceValue label="Tiền mặt" value={formatMoney(item.cash)} />
-                <BalanceValue label="Tài khoản" value={formatMoney(item.bank)} />
-                <BalanceValue
-                  label="App tính"
-                  value={formatMoney(item.appMoney)}
-                />
-                <BalanceValue
-                  label="Thực tế"
-                  value={formatMoney(item.actualMoney)}
-                />
-
-                <div
-                  className={`rounded-xl p-3 ${getBalanceStatusClass(
-                    item.difference
-                  )}`}
-                >
-                  <p className="text-sm opacity-80">Chênh lệch</p>
-                  <p className="font-bold">{formatMoney(item.difference)}</p>
-                </div>
-              </div>
-
-              {item.note && (
-                <p className="mt-3 rounded-xl bg-slate-100 p-3 text-sm text-slate-700">
-                  {item.note}
-                </p>
-              )}
-            </article>
-          ))
+          <div className="balance-history-list">
+            {paginatedChecks.map((item) => <BalanceHistoryCard key={item.id} item={item} onView={() => setSelectedCheck(item)} onEdit={() => editBalanceCheck(item)} onDelete={() => setPendingDelete(item)} />)}
+          </div>
         )}
+        <HistoryPagination currentPage={safePage} totalPages={totalPages} onPageChange={setCurrentPage} />
       </section>
 
-      {balanceCheckTotalPages > 1 && (
-        <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
-          <button
-            type="button"
-            onClick={() =>
-              setBalanceCheckCurrentPage((prev) => Math.max(prev - 1, 1))
-            }
-            disabled={balanceCheckCurrentPage === 1}
-            className="rounded-xl border bg-white px-4 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            Trước
-          </button>
+      <HistoryDetailDrawer isOpen={Boolean(selectedCheck)} title="Chi tiết kiểm kê" subtitle={selectedCheck ? formatReportDate(selectedCheck.date) : undefined} onClose={() => setSelectedCheck(null)} onEdit={selectedCheck ? () => editBalanceCheck(selectedCheck) : undefined}>
+        {selectedCheck && <BalanceDetails item={selectedCheck} />}
+      </HistoryDetailDrawer>
 
-          <span className="rounded-xl bg-slate-100 px-4 py-2 text-sm font-medium">
-            Trang {balanceCheckCurrentPage} / {balanceCheckTotalPages}
-          </span>
-
-          <button
-            type="button"
-            onClick={() =>
-              setBalanceCheckCurrentPage((prev) =>
-                Math.min(prev + 1, balanceCheckTotalPages)
-              )
-            }
-            disabled={balanceCheckCurrentPage === balanceCheckTotalPages}
-            className="rounded-xl border bg-white px-4 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            Sau
-          </button>
-        </div>
-      )}
-    </>
+      <DeleteHistoryRecordDialog isOpen={Boolean(pendingDelete)} title="Xóa kiểm kê số dư?" description={`Bạn sắp xóa kiểm kê ngày ${pendingDelete ? formatReportDate(pendingDelete.date) : ""}. Thao tác này có thể được xem lại trong lịch sử thay đổi dữ liệu.`} onCancel={() => setPendingDelete(null)} onConfirm={() => {
+        if (!pendingDelete) return;
+        deleteBalanceCheck(pendingDelete.id);
+        if (paginatedChecks.length === 1 && safePage > 1) setCurrentPage(safePage - 1);
+        setPendingDelete(null);
+        setSelectedCheck(null);
+      }} />
+    </HistoryLayout>
   );
 }
 
-function BalanceValue({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-xl bg-slate-100 p-3">
-      <p className="text-sm text-slate-500">{label}</p>
-      <p className="font-bold">{value}</p>
-    </div>
-  );
-}
+function buildDateFilterLabel(fromDate: string, toDate: string) { if (fromDate && toDate) return `${formatReportDate(fromDate)} – ${formatReportDate(toDate)}`; if (fromDate) return `Từ ${formatReportDate(fromDate)}`; return `Đến ${formatReportDate(toDate)}`; }
+function toLocalDateString(date: Date) { const year = date.getFullYear(); const month = String(date.getMonth() + 1).padStart(2, "0"); const day = String(date.getDate()).padStart(2, "0"); return `${year}-${month}-${day}`; }

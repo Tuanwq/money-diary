@@ -2,13 +2,13 @@ import { useEffect, useState } from "react";
 import type { AppHistoryState, GoalScreen, Page } from "../types";
 
 const moneyPagePaths: Record<Page, string> = {
-  balanceChecks: "/money/balance-checks",
+  balanceChecks: "/money/history/balance-checks",
   changes: "/money/changes",
   closeDay: "/money/close-day",
   entry: "/money/entry",
-  expenses: "/money/expenses",
+  expenses: "/money/history/expenses",
   goals: "/money/goals",
-  history: "/money/history",
+  history: "/money/history/journal",
   home: "/money",
   hub: "/money/hub",
 };
@@ -73,7 +73,14 @@ export function getMoneyStateFromPath(pathname: string): AppHistoryState {
       goalId: goalId ? decodeURIComponent(goalId) : undefined,
     };
   }
-  if (segment === "history") return { page: "history", goalScreen: "menu" };
+  if (segment === "history") {
+    if (goalSegment === "expenses") return { page: "expenses", goalScreen: "menu" };
+    if (goalSegment === "balance-checks") {
+      return { page: "balanceChecks", goalScreen: "menu" };
+    }
+
+    return { page: "history", goalScreen: "menu" };
+  }
   if (segment === "hub") return { page: "hub", goalScreen: "menu" };
 
   return { page: "home", goalScreen: "menu" };

@@ -15,7 +15,7 @@ export function NextTaskCard({ onFocus, task }: NextTaskCardProps) {
         <CheckCircle2 aria-hidden="true" size={24} />
         <div>
           <p className="daymark-muted-label">Việc tiếp theo</p>
-          <h2 className="mt-1 text-xl font-black">Hôm nay đã gọn rồi</h2>
+          <h2 className="mt-1 text-xl font-bold">Hôm nay đã gọn rồi</h2>
           <p className="mt-1 text-sm text-[var(--dm-muted)]">
             Không còn nhiệm vụ đang chờ. Bạn có thể nghỉ hoặc thêm lịch mới.
           </p>
@@ -28,7 +28,7 @@ export function NextTaskCard({ onFocus, task }: NextTaskCardProps) {
     <section className="daymark-next-task">
       <div className="min-w-0">
         <p className="daymark-muted-label">Việc tiếp theo</p>
-        <h2 className="mt-1 break-words text-xl font-black">{task.title}</h2>
+        <h2 className="mt-1 break-words text-xl font-bold">{task.title}</h2>
         <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-[var(--dm-muted)]">
           <span>
             {task.start_time.slice(0, 5)} - {task.end_time.slice(0, 5)}

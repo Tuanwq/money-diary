@@ -1,6 +1,7 @@
-import { CalendarRange, Goal } from "lucide-react";
+import { Goal } from "lucide-react";
 import { useMemo } from "react";
 import type { Goals } from "../../../../types";
+import { formatReportDate, getToday } from "../../../../utils/date";
 import { buildDailyGoalOptions } from "../../utils/dashboardSelectors";
 import { GoalDeadlineOption } from "./GoalDeadlineOption";
 
@@ -19,12 +20,16 @@ export function GoalDeadlineOptions({
     () => buildDailyGoalOptions(goals, selectedDate),
     [goals, selectedDate]
   );
+  const selectedDateLabel =
+    selectedDate === getToday() ? "Hôm nay" : formatReportDate(selectedDate);
 
   return (
     <div className="money-goal-deadlines" aria-labelledby="goal-deadlines-title">
       <div className="money-goal-deadlines-heading">
-        <CalendarRange aria-hidden="true" size={16} />
-        <h3 id="goal-deadlines-title">Thời hạn đang theo dõi</h3>
+        <h3 id="goal-deadlines-title">Mục tiêu hôm nay</h3>
+        <p>
+          Ngày: <strong>{selectedDateLabel}</strong>
+        </p>
       </div>
 
       {options.length === 0 ? (

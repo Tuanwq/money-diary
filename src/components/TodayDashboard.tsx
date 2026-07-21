@@ -64,7 +64,7 @@ export function TodayDashboard({
           }`}
         >
           <p className="text-sm opacity-80">Cần thêm để kịp mục tiêu lớn</p>
-          <p className="mt-1 text-2xl font-black">
+          <p className="mt-1 text-2xl font-bold">
             {formatMoney(todayGoalPaceRemaining)}
           </p>
           <p className="mt-1 text-xs">
@@ -81,7 +81,7 @@ export function TodayDashboard({
           }`}
         >
           <p className="text-sm opacity-80">Còn thiếu mục tiêu ngày</p>
-          <p className="mt-1 text-2xl font-black">
+          <p className="mt-1 text-2xl font-bold">
             {formatMoney(todayDailyIncomeRemaining)}
           </p>
           <p className="mt-1 text-xs">
@@ -94,7 +94,7 @@ export function TodayDashboard({
 
         <div className="rounded-xl bg-cyan-50 p-4 text-cyan-900">
           <p className="text-sm opacity-80">Dữ liệu hôm nay</p>
-          <p className="mt-1 text-2xl font-black">
+          <p className="mt-1 text-2xl font-bold">
             {todayChecklistDoneCount}/3
           </p>
           <p className="mt-1 text-xs opacity-80">

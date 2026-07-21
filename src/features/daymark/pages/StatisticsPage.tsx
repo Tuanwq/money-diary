@@ -70,7 +70,7 @@ export function StatisticsPage({ userId }: StatisticsPageProps) {
       </div>
 
       <section className="daymark-section">
-        <h2 className="text-xl font-black">Thời gian theo loại</h2>
+        <h2 className="text-xl font-bold">Thời gian theo loại</h2>
 
         {tasks.length === 0 ? (
           <p className="mt-4 rounded-2xl bg-slate-50 p-4 text-sm text-slate-500 dark:bg-slate-800 dark:text-slate-400">
@@ -119,7 +119,7 @@ function MetricTile({ label, value }: { label: string; value: string }) {
   return (
     <article className="daymark-side-panel">
       <p className="text-sm font-bold text-[var(--dm-muted)]">{label}</p>
-      <p className="mt-1 text-3xl font-black">{value}</p>
+      <p className="mt-1 text-3xl font-bold">{value}</p>
     </article>
   );
 }

@@ -380,7 +380,7 @@ export function PomodoroPage({ onNavigate, userId }: PomodoroPageProps) {
 
         {settingsOpen && (
         <section className="min-w-0 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-5">
-          <h2 className="text-xl font-black">Cài đặt nhanh</h2>
+          <h2 className="text-xl font-bold">Cài đặt nhanh</h2>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
             Áp dụng cho phiên tập trung tiếp theo. Thời lượng hợp lệ từ 1 đến 180 phút.
           </p>
@@ -395,7 +395,7 @@ export function PomodoroPage({ onNavigate, userId }: PomodoroPageProps) {
                   timer.updateFocusMinutes(minutes);
                   setCustomMinutes(String(minutes));
                 }}
-                className={`rounded-2xl border px-4 py-3 text-sm font-black transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                className={`rounded-2xl border px-4 py-3 text-sm font-bold transition disabled:cursor-not-allowed disabled:opacity-50 ${
                   timer.state.settings.focusMinutes === minutes
                     ? "border-emerald-200 bg-emerald-50 text-emerald-800"
                     : "border-slate-200 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800"
@@ -517,7 +517,7 @@ function TaskFocusPanel({
         <p className="text-sm text-slate-500 dark:text-slate-400">
           Nhiệm vụ tập trung
         </p>
-        <h2 className="mt-1 min-w-0 break-words text-2xl font-black">
+        <h2 className="mt-1 min-w-0 break-words text-2xl font-bold">
           {selectedTask?.title ?? "Phiên tập trung tự do"}
         </h2>
         <div className="mt-3 grid gap-2 text-sm text-slate-600 dark:text-slate-300">
@@ -626,10 +626,10 @@ function PomodoroClock({
       >
         <div className="grid h-full w-full place-items-center rounded-full bg-white text-center dark:bg-slate-900">
           <div>
-            <p className="text-sm font-black uppercase tracking-[0.2em] text-emerald-700 dark:text-emerald-300">
+            <p className="text-sm font-bold tracking-[0.2em] text-emerald-700 dark:text-emerald-300">
               {modeLabel}
             </p>
-            <p className="mt-3 text-6xl font-black tabular-nums">
+            <p className="mt-3 text-6xl font-bold tabular-nums">
               {formatPomodoroClock(remainingSeconds)}
             </p>
             <p className="mt-3 text-sm font-bold text-slate-500 dark:text-slate-400">
@@ -671,7 +671,7 @@ function TimerControls({
         <button
           type="button"
           onClick={onStart}
-          className="rounded-2xl bg-emerald-700 px-6 py-3 font-black text-white transition hover:bg-emerald-800"
+          className="rounded-2xl bg-emerald-700 px-6 py-3 font-bold text-white transition hover:bg-emerald-800"
         >
           Bắt đầu
         </button>
@@ -680,7 +680,7 @@ function TimerControls({
       <button
         type="button"
         onClick={onFocusView}
-        className="rounded-2xl border border-emerald-200 bg-emerald-50 px-6 py-3 font-black text-emerald-800 transition hover:bg-emerald-100"
+        className="rounded-2xl border border-emerald-200 bg-emerald-50 px-6 py-3 font-bold text-emerald-800 transition hover:bg-emerald-100"
       >
         {focusViewLabel}
       </button>
@@ -689,7 +689,7 @@ function TimerControls({
         <button
           type="button"
           onClick={onPause}
-          className="rounded-2xl bg-slate-900 px-6 py-3 font-black text-white transition hover:bg-slate-700"
+          className="rounded-2xl bg-slate-900 px-6 py-3 font-bold text-white transition hover:bg-slate-700"
         >
           Tạm dừng
         </button>
@@ -699,7 +699,7 @@ function TimerControls({
         <button
           type="button"
           onClick={onResume}
-          className="rounded-2xl bg-emerald-700 px-6 py-3 font-black text-white transition hover:bg-emerald-800"
+          className="rounded-2xl bg-emerald-700 px-6 py-3 font-bold text-white transition hover:bg-emerald-800"
         >
           Tiếp tục
         </button>
@@ -709,7 +709,7 @@ function TimerControls({
         <button
           type="button"
           onClick={onEnd}
-          className="rounded-2xl border border-slate-200 px-6 py-3 font-black transition hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800"
+          className="rounded-2xl border border-slate-200 px-6 py-3 font-bold transition hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800"
         >
           Kết thúc phiên
         </button>
@@ -719,7 +719,7 @@ function TimerControls({
         <button
           type="button"
           onClick={onSkipBreak}
-          className="rounded-2xl border border-blue-200 bg-blue-50 px-6 py-3 font-black text-blue-700 transition hover:bg-blue-100"
+          className="rounded-2xl border border-blue-200 bg-blue-50 px-6 py-3 font-bold text-blue-700 transition hover:bg-blue-100"
         >
           Bỏ qua phiên nghỉ
         </button>
@@ -728,7 +728,7 @@ function TimerControls({
       <button
         type="button"
         onClick={onReset}
-        className="rounded-2xl border border-red-200 bg-red-50 px-6 py-3 font-black text-red-700 transition hover:bg-red-100"
+        className="rounded-2xl border border-red-200 bg-red-50 px-6 py-3 font-bold text-red-700 transition hover:bg-red-100"
       >
         Đặt lại
       </button>
@@ -775,17 +775,17 @@ function FocusFullscreen({
       <div className="grid w-full max-w-4xl justify-items-center gap-6 text-center">
         <div className="flex w-full items-center justify-between gap-3">
           <div className="min-w-0 text-left">
-            <p className="text-xs font-black uppercase tracking-[0.24em] text-emerald-700">
+            <p className="text-xs font-bold tracking-[0.24em] text-emerald-700">
               Đang tập trung
             </p>
-            <h2 className="mt-1 truncate text-xl font-black sm:text-2xl">
+            <h2 className="mt-1 truncate text-xl font-bold sm:text-2xl">
               {selectedTask?.title ?? "Phiên tập trung tự do"}
             </h2>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="shrink-0 rounded-2xl border border-slate-200 px-4 py-2 text-sm font-black transition hover:bg-slate-50"
+            className="shrink-0 rounded-2xl border border-slate-200 px-4 py-2 text-sm font-bold transition hover:bg-slate-50"
           >
             Thu nhỏ
           </button>
@@ -799,10 +799,10 @@ function FocusFullscreen({
         >
           <div className="grid h-full w-full place-items-center rounded-full bg-white text-center">
             <div>
-              <p className="text-sm font-black uppercase tracking-[0.28em] text-emerald-700">
+              <p className="text-sm font-bold tracking-[0.28em] text-emerald-700">
                 {modeLabel}
               </p>
-              <p className="mt-5 text-[clamp(4rem,16vw,10rem)] font-black leading-none tabular-nums">
+              <p className="mt-5 text-[clamp(4rem,16vw,10rem)] font-bold leading-none tabular-nums">
                 {formatPomodoroClock(remainingSeconds)}
               </p>
               <p className="mt-5 text-sm font-bold text-slate-500">

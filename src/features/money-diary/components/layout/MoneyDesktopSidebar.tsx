@@ -1,14 +1,12 @@
 import {
   BookOpenText,
   ChartNoAxesCombined,
-  ClipboardCheck,
   FileText,
   Goal,
   History,
   House,
   LogOut,
   PackagePlus,
-  ReceiptText,
   RefreshCcw,
   Settings,
 } from "lucide-react";
@@ -69,7 +67,7 @@ export function MoneyDesktopSidebar({
       onClick: () => navigateTo("goals", "menu"),
     },
     {
-      active: currentPage === "closeDay",
+      active: currentPage === "closeDay" || currentPage === "entry",
       icon: BookOpenText,
       label: "Ghi chép",
       onClick: () => navigateTo("closeDay"),
@@ -81,22 +79,10 @@ export function MoneyDesktopSidebar({
       onClick: () => navigateTo("hub"),
     },
     {
-      active: currentPage === "expenses" || currentPage === "entry",
-      icon: ReceiptText,
-      label: "Chi tiêu",
-      onClick: () => navigateTo("expenses"),
-    },
-    {
-      active: currentPage === "history",
+      active: ["balanceChecks", "expenses", "history"].includes(currentPage),
       icon: History,
       label: "Lịch sử",
       onClick: () => navigateTo("history"),
-    },
-    {
-      active: currentPage === "balanceChecks",
-      icon: ClipboardCheck,
-      label: "Kiểm kê",
-      onClick: () => navigateTo("balanceChecks"),
     },
     {
       active: false,

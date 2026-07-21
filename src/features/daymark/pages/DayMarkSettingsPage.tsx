@@ -18,7 +18,7 @@ export function DayMarkSettingsPage() {
 
   return (
     <section className="grid gap-4 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-5">
-      <h1 className="text-2xl font-black">Cài đặt DayMark</h1>
+      <h1 className="text-2xl font-bold">Cài đặt DayMark</h1>
       <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
         Thiết lập cách DayMark đánh giá tiến độ và chuỗi hoàn thành.
       </p>
@@ -26,7 +26,7 @@ export function DayMarkSettingsPage() {
       <section className="rounded-3xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h2 className="text-xl font-black">Điều kiện duy trì streak</h2>
+            <h2 className="text-xl font-bold">Điều kiện duy trì streak</h2>
             <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
               Hoàn thành ít nhất {requiredCompletionRate}% nhiệm vụ trong ngày để duy trì chuỗi.
             </p>
@@ -39,7 +39,7 @@ export function DayMarkSettingsPage() {
             <p className="text-xs font-bold text-slate-500 dark:text-slate-400">
               Đang dùng
             </p>
-            <p className="text-2xl font-black text-emerald-700 dark:text-emerald-300">
+            <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-300">
               {requiredCompletionRate}%
             </p>
           </div>
@@ -55,7 +55,7 @@ export function DayMarkSettingsPage() {
                   updateRequiredCompletionRate(rate);
                   setCustomRate(String(rate));
                 }}
-                className={`rounded-2xl border px-4 py-3 text-sm font-black transition ${
+                className={`rounded-2xl border px-4 py-3 text-sm font-bold transition ${
                   requiredCompletionRate === rate
                     ? "border-emerald-200 bg-emerald-700 text-white"
                     : "border-slate-200 bg-white hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:hover:bg-slate-800"

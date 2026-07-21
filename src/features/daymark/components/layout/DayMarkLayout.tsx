@@ -189,7 +189,7 @@ function DayMarkBrand({
 }) {
   return (
     <div className="min-w-0">
-      <p className="text-sm font-black uppercase tracking-[0.22em] text-[var(--dm-primary)]">
+      <p className="text-sm font-bold tracking-[0.22em] text-[var(--dm-primary)]">
         DayMark
       </p>
       {!compact && (

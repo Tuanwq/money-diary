@@ -257,10 +257,10 @@ export function AiFinanceInsight({
           <div className="mx-auto flex max-h-[92vh] max-w-4xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
             <header className="flex flex-wrap items-start justify-between gap-3 border-b px-4 py-4 sm:px-5">
               <div className="min-w-0">
-                <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                <p className="text-xs font-bold tracking-wide text-slate-500">
                   {view === "analysis" ? analysis.rangeLabel : "AI và tự động hóa"}
                 </p>
-                <h2 className="mt-1 text-xl font-black text-slate-900">
+                <h2 className="mt-1 text-xl font-bold text-slate-900">
                   {view === "analysis" ? analysis.title : "Trung tâm AI tài chính"}
                 </h2>
                 <p className="mt-1 text-sm text-slate-500">
@@ -339,7 +339,7 @@ export function AiFinanceInsight({
                         <p className="text-xs font-medium text-slate-500">
                           {metric.label}
                         </p>
-                        <p className="mt-1 break-words text-lg font-black text-slate-900">
+                        <p className="mt-1 break-words text-lg font-bold text-slate-900">
                           {metric.value}
                         </p>
                         <p className="mt-1 text-xs leading-5 text-slate-500">

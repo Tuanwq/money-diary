@@ -12,7 +12,7 @@ export function StatCard({ title, value, target, progress }: StatCardProps) {
     <div className="app-card h-full rounded-2xl p-3 sm:p-5">
       <p className="text-xs text-slate-500 sm:text-sm">{title}</p>
 
-      <h2 className="mt-2 break-words text-lg font-black text-slate-900 sm:text-2xl">
+      <h2 className="mt-2 break-words text-lg font-bold text-slate-900 sm:text-2xl">
         {value}
       </h2>
 

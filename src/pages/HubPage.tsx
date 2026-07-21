@@ -1335,10 +1335,10 @@ export function HubPage({
   return (
     <>
       <div className="rounded-3xl bg-gradient-to-br from-emerald-700 via-teal-700 to-cyan-700 p-4 text-white shadow-sm sm:p-5">
-        <p className="text-xs font-bold uppercase tracking-wide text-emerald-100">
+        <p className="text-xs font-bold tracking-wide text-emerald-100">
           Hub mobile
         </p>
-        <h2 className="mt-1 text-2xl font-black">Hub / Ca làm</h2>
+        <h2 className="mt-1 text-2xl font-bold">Hub / Ca làm</h2>
         <p className="mt-1 text-sm text-emerald-50">
           Tính tiền ca hub theo logic Hà Nội, nhập nhanh và xem lịch sử theo ngày.
         </p>
@@ -1391,10 +1391,10 @@ export function HubPage({
           <div className="app-sticky-submit rounded-2xl p-3 lg:hidden">
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
-                <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                <p className="text-xs font-bold tracking-wide text-slate-500">
                   {editingHubEntryId ? "Đang cập nhật" : "Ca đang nhập"}
                 </p>
-                <p className="truncate text-lg font-black text-emerald-700">
+                <p className="truncate text-lg font-bold text-emerald-700">
                   {formatMoney(previewIncome.workIncome)}
                 </p>
               </div>
@@ -1774,7 +1774,7 @@ export function HubPage({
 
             <div className="mt-4 rounded-xl bg-gradient-to-br from-emerald-700 to-cyan-700 p-4 text-white">
               <p className="text-sm text-emerald-50">Tổng thu nhập</p>
-              <p className="mt-1 text-3xl font-black">
+              <p className="mt-1 text-3xl font-bold">
                 {formatMoney(previewIncome.total)}
               </p>
             </div>
@@ -1956,7 +1956,7 @@ export function HubPage({
                         </p>
                       </div>
 
-                      <p className="text-lg font-black">
+                      <p className="text-lg font-bold">
                         {formatMoney(income.total)}
                       </p>
                     </div>
@@ -2032,7 +2032,7 @@ export function HubPage({
                         {item.shifts} ca · {item.orders} đơn · {item.hours} giờ
                       </p>
                     </div>
-                    <p className="text-lg font-black text-red-700">
+                    <p className="text-lg font-bold text-red-700">
                       {formatMoney(item.incomePerHour)}/giờ
                     </p>
                   </div>
@@ -2146,7 +2146,7 @@ export function HubPage({
           <section className="app-card min-w-0 max-w-full overflow-hidden rounded-2xl p-4 sm:p-5">
             <div className="grid gap-3 sm:flex sm:items-start sm:justify-between">
               <div className="min-w-0">
-                <h3 className="text-xl font-black">Hub của tôi</h3>
+                <h3 className="text-xl font-bold">Hub của tôi</h3>
                 <p className="text-sm text-slate-500">
                   Mobile xem theo ngày, desktop có lịch và bảng chi tiết.
                 </p>
@@ -2291,19 +2291,19 @@ export function HubPage({
                   <button
                     type="button"
                     onClick={() => changeCalendarMonth(-1)}
-                    className="h-9 w-9 rounded-full bg-white text-lg font-black shadow-sm hover:bg-slate-100"
+                    className="h-9 w-9 rounded-full bg-white text-lg font-bold shadow-sm hover:bg-slate-100"
                   >
                     ‹
                   </button>
 
-                  <h4 className="text-center font-black capitalize">
+                  <h4 className="text-center font-bold">
                     {formatMonthLabel(listCalendarMonth)}
                   </h4>
 
                   <button
                     type="button"
                     onClick={() => changeCalendarMonth(1)}
-                    className="h-9 w-9 rounded-full bg-white text-lg font-black shadow-sm hover:bg-slate-100"
+                    className="h-9 w-9 rounded-full bg-white text-lg font-bold shadow-sm hover:bg-slate-100"
                   >
                     ›
                   </button>
@@ -2613,7 +2613,7 @@ function SummaryCard({ label, value }: { label: string; value: string }) {
   return (
     <div className="app-card min-w-0 rounded-2xl p-3 sm:p-4">
       <p className="text-sm text-slate-500">{label}</p>
-      <p className="mt-1 break-words text-xl font-black leading-tight text-emerald-800 sm:text-2xl">
+      <p className="mt-1 break-words text-xl font-bold leading-tight text-emerald-800 sm:text-2xl">
         {value}
       </p>
     </div>
@@ -2630,7 +2630,7 @@ function HubPeriodSummary({
   return (
     <article className="rounded-2xl border bg-slate-50 p-4">
       <p className="text-sm font-bold text-slate-500">{title}</p>
-      <p className="mt-2 text-2xl font-black text-slate-900">
+      <p className="mt-2 text-2xl font-bold text-slate-900">
         {formatMoney(summary.workIncome)}
       </p>
       <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
@@ -2687,7 +2687,7 @@ function PerformancePanel({
                   </p>
                 </div>
                 <div className="text-right">
-                  <p className="text-lg font-black">
+                  <p className="text-lg font-bold">
                     {primaryMetric === "workIncome"
                       ? formatMoney(item.workIncome)
                       : `${formatMoney(item.incomePerHour)}/giờ`}
@@ -2724,7 +2724,7 @@ function HubReportPanel({ report }: { report: HubReport }) {
 
       <div className="mt-4 rounded-xl bg-slate-900 p-4 text-white">
         <p className="text-sm text-slate-300">Tiền làm được</p>
-        <p className="mt-1 text-3xl font-black">
+        <p className="mt-1 text-3xl font-bold">
           {formatMoney(report.summary.workIncome)}
         </p>
         <p className="mt-2 text-sm text-slate-300">{changeText}</p>

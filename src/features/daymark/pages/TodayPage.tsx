@@ -477,7 +477,7 @@ function ScheduleModal({
             </p>
             <h2
               id="daymark-schedule-modal-title"
-              className="text-xl font-black"
+              className="text-xl font-bold"
             >
               {editing ? "Sửa nhiệm vụ" : "Thêm lịch"}
             </h2>
@@ -502,7 +502,7 @@ function SideMetric({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-3xl bg-[var(--dm-soft)] p-4">
       <p className="text-sm font-bold text-[var(--dm-muted)]">{label}</p>
-      <p className="mt-1 text-xl font-black">{value}</p>
+      <p className="mt-1 text-xl font-bold">{value}</p>
     </div>
   );
 }
@@ -524,7 +524,7 @@ function TaskFormCard({
 }) {
   return (
     <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-5">
-      <h2 className="text-xl font-black">
+      <h2 className="text-xl font-bold">
         {editing ? "Sửa nhiệm vụ" : "Thêm nhiệm vụ"}
       </h2>
 
@@ -689,7 +689,7 @@ function ImportScheduleCard({
 }) {
   return (
     <section className="flex h-full flex-col rounded-3xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-5">
-      <h2 className="text-xl font-black">Nhập lịch từ văn bản</h2>
+      <h2 className="text-xl font-bold">Nhập lịch từ văn bản</h2>
       <textarea
         value={importText}
         onChange={(event) => onImportTextChange(event.target.value)}

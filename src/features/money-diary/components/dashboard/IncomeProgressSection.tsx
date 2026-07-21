@@ -1,4 +1,15 @@
 import { useState } from "react";
+import {
+  ArrowRight,
+  Banknote,
+  CalendarDays,
+  CalendarRange,
+  ChevronUp,
+  Clock3,
+  Route,
+  WalletCards,
+} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import type { DailyEntry, Goals } from "../../../../types";
 import { getProgress } from "../../../../utils/goals";
 import { formatMoney } from "../../../../utils/money";
@@ -26,6 +37,18 @@ type IncomeProgressSectionProps = {
   weekIncome: number;
 };
 
+type IncomeMetric = {
+  detail?: string;
+  emptyMessage?: string;
+  icon: LucideIcon;
+  id: string;
+  label: string;
+  progress: number;
+  scope: string;
+  target: string;
+  value: string;
+};
+
 export function IncomeProgressSection({
   actualMoney,
   error,
@@ -45,14 +68,15 @@ export function IncomeProgressSection({
   weekIncome,
 }: IncomeProgressSectionProps) {
   const [isExpanded, setIsExpanded] = useState(false);
-  const metrics = [
+  const metrics: IncomeMetric[] = [
     {
-      detail: `Mục tiêu: Làm: ${formatMoney(selectedMainIncome)} + Thưởng: ${formatMoney(
+      detail: `Làm ${formatMoney(selectedMainIncome)} · Thưởng ${formatMoney(
         selectedBonusMoney
-      )} - Chi: ${formatMoney(selectedExpenseTotal)} | Nhận: ${formatMoney(
+      )} · Chi ${formatMoney(selectedExpenseTotal)} · Nhận ${formatMoney(
         selectedReceivedMoney
       )}`,
       emptyMessage: selectedEntry ? undefined : "Chưa có thu nhập ngày này",
+      icon: Banknote,
       id: "day-income",
       label: isSelectedToday ? "Tiền thực tế hôm nay" : "Tiền thực tế ngày này",
       progress: getProgress(selectedActualIncome, goals.dailyIncome),
@@ -64,11 +88,8 @@ export function IncomeProgressSection({
       value: formatMoney(selectedActualIncome),
     },
     {
-      detail:
-        goals.dailyHours > 0
-          ? `Mục tiêu: ${formatWorkDuration(goals.dailyHours)}`
-          : "Chưa đặt mục tiêu giờ",
       emptyMessage: selectedEntry?.workHours ? undefined : "Chưa có giờ làm ngày này",
+      icon: Clock3,
       id: "day-hours",
       label: isSelectedToday ? "Giờ làm hôm nay" : "Giờ làm ngày này",
       progress: getProgress(selectedHours, goals.dailyHours),
@@ -80,11 +101,8 @@ export function IncomeProgressSection({
       value: formatWorkDuration(selectedHours),
     },
     {
-      detail:
-        goals.weeklyIncome > 0
-          ? `Mục tiêu: ${formatMoney(goals.weeklyIncome)}`
-          : "Chưa đặt mục tiêu tuần",
       emptyMessage: weekIncome > 0 ? undefined : "Chưa có thu nhập trong tuần",
+      icon: CalendarDays,
       id: "week-income",
       label: isSelectedToday ? "Tiền tuần này" : "Tiền tuần đang xem",
       progress: getProgress(weekIncome, goals.weeklyIncome),
@@ -96,11 +114,8 @@ export function IncomeProgressSection({
       value: formatMoney(weekIncome),
     },
     {
-      detail:
-        goals.monthlyIncome > 0
-          ? `Mục tiêu: ${formatMoney(goals.monthlyIncome)}`
-          : "Chưa đặt mục tiêu tháng",
       emptyMessage: monthIncome > 0 ? undefined : "Chưa có thu nhập trong tháng",
+      icon: CalendarRange,
       id: "month-income",
       label: isSelectedToday ? "Tiền tháng này" : "Tiền tháng đang xem",
       progress: getProgress(monthIncome, goals.monthlyIncome),
@@ -112,12 +127,9 @@ export function IncomeProgressSection({
       value: formatMoney(monthIncome),
     },
     {
-      detail:
-        goals.bigGoalTarget > 0
-          ? `Mục tiêu: ${formatMoney(goals.bigGoalTarget)}`
-          : "Chưa đặt mục tiêu tổng",
+      icon: WalletCards,
       id: "current-balance",
-      label: "Tiền thực tế App tính hiện có:",
+      label: "Số dư hiện tại",
       progress: getProgress(actualMoney, goals.bigGoalTarget),
       scope: "Số liệu tích lũy theo logic hiện có.",
       target:
@@ -127,10 +139,7 @@ export function IncomeProgressSection({
       value: formatMoney(actualMoney),
     },
     {
-      detail:
-        goals.bigGoalTarget > 0
-          ? `Mục tiêu: ${formatMoney(goals.bigGoalTarget)}`
-          : "Chưa đặt mục tiêu tổng",
+      icon: Route,
       id: "journey-income",
       label: "Tổng tiền hành trình",
       progress: getProgress(totalJourneyMoney, goals.bigGoalTarget),
@@ -144,7 +153,7 @@ export function IncomeProgressSection({
   ];
 
   return (
-    <section className="money-card money-income-progress-section" aria-labelledby="income-progress-title">
+    <section className="money-income-progress-section" aria-labelledby="income-progress-title">
       <div className="money-section-heading money-section-heading-inline">
         <div>
           <h2 id="income-progress-title">Thu nhập và tiến độ</h2>
@@ -153,12 +162,17 @@ export function IncomeProgressSection({
         {!isLoading && !error && (
           <button
             type="button"
-            className="money-text-action"
+            className="money-text-action money-income-progress-toggle"
             aria-expanded={isExpanded}
             aria-controls="money-income-progress-details"
             onClick={() => setIsExpanded((current) => !current)}
           >
             {isExpanded ? "Thu gọn" : "Xem chi tiết"}
+            {isExpanded ? (
+              <ChevronUp aria-hidden="true" size={16} />
+            ) : (
+              <ArrowRight aria-hidden="true" size={16} />
+            )}
           </button>
         )}
       </div>
@@ -178,10 +192,12 @@ export function IncomeProgressSection({
                 key={metric.id}
                 detail={metric.detail}
                 emptyMessage={metric.emptyMessage}
+                icon={metric.icon}
                 id={metric.id}
                 label={metric.label}
                 progress={metric.progress}
                 scope={metric.scope}
+                target={metric.target}
                 value={metric.value}
               />
             ))}

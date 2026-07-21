@@ -1041,7 +1041,7 @@ export function GoalsPage({
     <section className="rounded-2xl border bg-slate-50 p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h3 className="font-black">Ưu tiên mục tiêu thông minh</h3>
+          <h3 className="font-bold">Ưu tiên mục tiêu thông minh</h3>
           <p className="text-sm text-slate-500">
             App xếp theo deadline, tiến độ chậm và số tiền cần mỗi ngày.
           </p>
@@ -1100,7 +1100,7 @@ export function GoalsPage({
     <section className="rounded-2xl border bg-slate-50 p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h3 className="font-black">Tự chia tiền từ ngày</h3>
+          <h3 className="font-bold">Tự chia tiền từ ngày</h3>
           <p className="text-sm text-slate-500">
             Lấy tiền thực tế trong ngày trừ chi tiêu và phần đã góp ngày đó.
           </p>
@@ -2571,7 +2571,7 @@ export function GoalsPage({
               <p className="text-sm text-slate-300">
                 Tốc độ cần để kịp deadline
               </p>
-              <p className="mt-1 text-2xl font-black">
+              <p className="mt-1 text-2xl font-bold">
                 {goalForecast.requiredAveragePerDay === null
                   ? "Chưa có"
                   : formatMoney(goalForecast.requiredAveragePerDay)}
@@ -2587,7 +2587,7 @@ export function GoalsPage({
               )}`}
             >
               <p className="text-sm opacity-80">Tốc độ 7 ngày so với deadline</p>
-              <p className="mt-1 text-2xl font-black">
+              <p className="mt-1 text-2xl font-bold">
                 {getDeadlineGapText(goalForecast.dailyGapToDeadline)}
               </p>
               <p className="mt-1 text-xs opacity-80">
@@ -2597,7 +2597,7 @@ export function GoalsPage({
 
             <div className="rounded-xl bg-slate-100 p-4">
               <p className="text-sm text-slate-500">Tốc độ thực tế đã cân bằng</p>
-              <p className="mt-1 text-2xl font-black">
+              <p className="mt-1 text-2xl font-bold">
                 {formatMoney(goalForecast.realisticAveragePerDay)}
               </p>
               <p className="mt-1 text-xs text-slate-500">
@@ -3155,7 +3155,7 @@ export function GoalsPage({
                     <p className="text-slate-500">
                       {item.note || "Không có ghi chú"}
                     </p>
-                    <p className="font-black text-green-700">
+                    <p className="font-bold text-green-700">
                       {formatMoney(item.amount)}
                     </p>
                   </div>
@@ -3204,7 +3204,7 @@ export function GoalsPage({
                         {formatMoney(expense.lunch)} · Tối{" "}
                         {formatMoney(expense.dinner)} · Khác {otherText}
                       </p>
-                      <p className="font-black text-red-600">
+                      <p className="font-bold text-red-600">
                         {formatMoney(total)}
                       </p>
                     </div>

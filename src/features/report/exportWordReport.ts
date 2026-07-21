@@ -466,8 +466,8 @@ export function exportWordReport({
         <meta charset="utf-8" />
         <title>Báo cáo Money Diary</title>
         <style>
-          body { color: #1C271F; font-family: Arial, sans-serif; font-size: 12px; line-height: 1.45; }
-          h1 { font-size: 24px; margin: 0 0 6px; text-align: center; text-transform: uppercase; }
+          body { color: #1C271F; font-family: "Be Vietnam Pro", Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 12px; font-weight: 400; line-height: 1.45; }
+          h1 { font-size: 24px; font-weight: 700; margin: 0 0 6px; text-align: center; }
           h2 { border-bottom: 2px solid #557A5B; font-size: 18px; margin: 28px 0 10px; padding-bottom: 5px; }
           h3 { font-size: 15px; margin: 22px 0 6px; }
           h4 { color: #5F6E63; font-size: 13px; margin: 16px 0 6px; }

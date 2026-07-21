@@ -38,7 +38,7 @@ export function ProgressSummary({
 
       <div className="min-w-0">
         <p className="daymark-muted-label">Tiến độ hôm nay</p>
-        <h2 className="mt-1 text-2xl font-black">
+        <h2 className="mt-1 text-2xl font-bold">
           {completedCount}/{totalTasks} nhiệm vụ
         </h2>
         <p className="mt-1 text-sm text-[var(--dm-muted)]">
@@ -56,7 +56,7 @@ export function ProgressSummary({
           size={20}
         />
         <div>
-          <p className="text-sm font-black">{currentStreak} ngày</p>
+          <p className="text-sm font-bold">{currentStreak} ngày</p>
           <p className="text-xs text-[var(--dm-muted)]">Kỷ lục {longestStreak}</p>
         </div>
       </div>

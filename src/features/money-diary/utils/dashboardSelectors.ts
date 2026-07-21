@@ -1,11 +1,13 @@
 import type { Goals } from "../../../types";
 import { getDaysLeftFromDate } from "../../../utils/date";
+import { getSubGoalSaved, isGoalBehind } from "../../../utils/goals";
 
 export type DailyGoalOption = {
   daysLeft: number;
   id: string;
   kind: "main" | "sub";
   name: string;
+  status: "behind" | "onTrack";
 };
 
 export function buildDailyGoalOptions(
@@ -26,14 +28,19 @@ export function buildDailyGoalOptions(
       id: "main",
       kind: "main",
       name: goals.bigGoalName || "Mục tiêu chính",
+      status: "onTrack",
     });
   }
 
   for (const goal of goals.subGoals ?? []) {
+    const currentSaved = getSubGoalSaved(goal);
+    const isCompleted = currentSaved >= goal.target;
+    const isOverdue = selectedDate > goal.deadline && !isCompleted;
+
     if (
       goal.target <= 0 ||
       selectedDate < goal.startDate ||
-      selectedDate > goal.deadline
+      (selectedDate > goal.deadline && isCompleted)
     ) {
       continue;
     }
@@ -43,6 +50,7 @@ export function buildDailyGoalOptions(
       id: goal.id,
       kind: "sub",
       name: goal.name,
+      status: isOverdue || isGoalBehind(goal) ? "behind" : "onTrack",
     });
   }
 

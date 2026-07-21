@@ -63,10 +63,10 @@ export function CloseDayPage({
       <div className="rounded-3xl bg-gradient-to-br from-emerald-700 via-teal-700 to-cyan-700 p-4 text-white shadow-sm sm:p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <p className="text-xs font-bold uppercase tracking-wide text-emerald-100">
+            <p className="text-xs font-bold tracking-wide text-emerald-100">
               Mobile-first
             </p>
-            <h2 className="mt-1 text-2xl font-black">Chốt ngày</h2>
+            <h2 className="mt-1 text-2xl font-bold">Chốt ngày</h2>
             <p className="mt-1 text-sm text-emerald-50">
               Nhập nhanh thu nhập, chi tiêu, ghi chú và tâm trạng cuối ngày.
             </p>
@@ -258,10 +258,10 @@ export function CloseDayPage({
 
         <div className="app-sticky-submit rounded-2xl p-3 sm:flex sm:items-center sm:justify-between">
           <div className="mb-3 sm:mb-0">
-            <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+            <p className="text-xs font-bold tracking-wide text-slate-500">
               Tạm tính ròng
             </p>
-            <p className={`text-xl font-black ${netMoneyTone}`}>
+            <p className={`text-xl font-bold ${netMoneyTone}`}>
               {formatMoney(netMoney)}
             </p>
           </div>
@@ -287,7 +287,7 @@ function SectionHeading({
 }) {
   return (
     <div>
-      <h3 className="text-lg font-black text-slate-900">{title}</h3>
+      <h3 className="text-lg font-bold text-slate-900">{title}</h3>
       <p className="mt-1 text-sm text-slate-500">{description}</p>
     </div>
   );
@@ -304,12 +304,12 @@ function SummaryTile({
 }) {
   return (
     <div className="rounded-2xl bg-white/12 p-3 ring-1 ring-white/20">
-      <p className="text-xs font-bold uppercase tracking-wide text-emerald-100">
+      <p className="text-xs font-bold tracking-wide text-emerald-100">
         {label}
       </p>
       <p
         className={`mt-1 break-words ${
-          strong ? "text-xl font-black" : "text-sm font-bold"
+          strong ? "text-xl font-bold" : "text-sm font-bold"
         }`}
       >
         {value}

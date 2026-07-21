@@ -454,8 +454,6 @@ export default function App() {
   const [appChangeLogs, setAppChangeLogs] = useState<AppChangeLog[]>(() =>
     loadLocalJson<AppChangeLog[]>(STORAGE_APP_CHANGE_LOGS_KEY, [])
   );
-  const [balanceCheckCurrentPage, setBalanceCheckCurrentPage] = useState(1);
-
   const [balanceCheckForm, setBalanceCheckForm] = useState({
     date: getToday(),
     cash: "",
@@ -888,11 +886,6 @@ const filteredEntriesTotalMoney = filteredEntries.reduce(
   0
 );
 
-const filteredEntriesNormalMoney = filteredEntries.reduce(
-  (sum, entry) => sum + getNormalIncome(entry),
-  0
-);
-
 const filteredEntriesHours = filteredEntries.reduce(
   (sum, entry) => sum + entry.workHours,
   0
@@ -917,16 +910,6 @@ const expenseLabelOptions = Array.from(
 
 const sortedBalanceChecks = [...balanceChecks].sort((a, b) =>
   b.date.localeCompare(a.date)
-);
-
-const balanceCheckTotalPages = Math.max(
-  1,
-  Math.ceil(sortedBalanceChecks.length / ITEMS_PER_PAGE)
-);
-
-const paginatedBalanceChecks = sortedBalanceChecks.slice(
-  (balanceCheckCurrentPage - 1) * ITEMS_PER_PAGE,
-  balanceCheckCurrentPage * ITEMS_PER_PAGE
 );
 
 const filteredExpenses = sortedExpenses.filter((expense) => {
@@ -1005,7 +988,9 @@ function updateHistoryToDate(value: string) {
   setHistoryCurrentPage(1);
 }
 
-function setHistoryQuickFilter(type: "today" | "7days" | "month" | "all") {
+function setHistoryQuickFilter(
+  type: "today" | "7days" | "30days" | "month" | "lastMonth" | "all"
+) {
   setHistoryCurrentPage(1);
 
   if (type === "today") {
@@ -1018,9 +1003,20 @@ function setHistoryQuickFilter(type: "today" | "7days" | "month" | "all") {
     setHistoryToDate(getToday());
   }
 
+  if (type === "30days") {
+    setHistoryFromDate(getDateDaysAgo(29));
+    setHistoryToDate(getToday());
+  }
+
   if (type === "month") {
     setHistoryFromDate(getMonthStart());
     setHistoryToDate(getToday());
+  }
+
+  if (type === "lastMonth") {
+    const range = getLastMonthRange();
+    setHistoryFromDate(range.fromDate);
+    setHistoryToDate(range.toDate);
   }
 
   if (type === "all") {
@@ -1706,9 +1702,6 @@ function deleteBalanceCheck(id: string) {
   const checkToDelete = balanceChecks.find((item) => item.id === id);
   if (!checkToDelete) return;
 
-  const confirmed = confirm("Bạn có chắc muốn xóa kiểm kê số dư này không?");
-  if (!confirmed) return;
-
   const nextBalanceChecks = balanceChecks.filter((item) => item.id !== id);
 
   markLocalChanged("Đã xóa kiểm kê số dư, đang lưu cloud...");
@@ -1864,9 +1857,6 @@ function deleteExpense(id: string) {
   const expenseToDelete = expenses.find((expense) => expense.id === id);
   if (!expenseToDelete) return;
 
-  const confirmed = confirm("Bạn có chắc muốn xóa chi tiêu này không?");
-  if (!confirmed) return;
-
   const nextExpenses = expenses.filter((expense) => expense.id !== id);
 
   markLocalChanged("Đã xóa chi tiêu, đang lưu cloud...");
@@ -1892,9 +1882,6 @@ function deleteExpense(id: string) {
 function deleteEntry(id: string) {
   const entryToDelete = entries.find((entry) => entry.id === id);
   if (!entryToDelete) return;
-
-  const confirmed = confirm("Bạn có chắc muốn xóa nhật ký này không?");
-  if (!confirmed) return;
 
   const nextEntries = entries.filter((entry) => entry.id !== id);
 
@@ -3253,9 +3240,11 @@ if (route.kind === "daymark") {
       sortedEntries={sortedEntries}
       paginatedEntries={paginatedEntries}
       filteredEntriesTotalMoney={filteredEntriesTotalMoney}
-      filteredEntriesNormalMoney={filteredEntriesNormalMoney}
       filteredEntriesHours={filteredEntriesHours}
       filteredEntriesOrders={filteredEntriesOrders}
+      cloudLoadError={cloudLoadError}
+      isCloudLoading={isCloudLoading}
+      onRetry={() => void retryCloudLoad()}
       editEntry={editEntry}
       deleteEntry={deleteEntry}
       historyCurrentPage={historyCurrentPage}
@@ -3266,10 +3255,10 @@ if (route.kind === "daymark") {
   )}
   {page === "balanceChecks" && (
     <BalanceChecksPage
-      paginatedBalanceChecks={paginatedBalanceChecks}
-      balanceCheckCurrentPage={balanceCheckCurrentPage}
-      balanceCheckTotalPages={balanceCheckTotalPages}
-      setBalanceCheckCurrentPage={setBalanceCheckCurrentPage}
+      balanceChecks={sortedBalanceChecks}
+      cloudLoadError={cloudLoadError}
+      isCloudLoading={isCloudLoading}
+      onRetry={() => void retryCloudLoad()}
       editBalanceCheck={editBalanceCheck}
       deleteBalanceCheck={deleteBalanceCheck}
       navigateTo={navigateTo}
@@ -3299,6 +3288,9 @@ if (route.kind === "daymark") {
       filteredExpensesTotal={filteredExpensesTotal}
       expenses={expenses}
       paginatedExpenses={paginatedExpenses}
+      cloudLoadError={cloudLoadError}
+      isCloudLoading={isCloudLoading}
+      onRetry={() => void retryCloudLoad()}
       editExpense={editExpense}
       deleteExpense={deleteExpense}
       expenseCurrentPage={expenseCurrentPage}

@@ -18,7 +18,7 @@ export function TodayTargetCard({
 
   return (
     <section
-      className={`money-card money-today-target-card ${achieved ? "is-achieved" : ""}`}
+      className={`money-card money-today-target-card ${achieved ? "is-achieved" : "is-warning"}`}
       aria-labelledby="today-target-title"
     >
       <div className="money-today-target-icon" aria-hidden="true">
@@ -29,8 +29,8 @@ export function TodayTargetCard({
         <h2 id="today-target-title">
           {achieved ? "Bạn đã đạt nhịp hôm nay" : formatMoney(needed)}
         </h2>
+        <p>Nhịp cần hôm nay: {formatMoney(target)}</p>
         <p>
-          <p>Nhịp cần hôm nay: {formatMoney(target)}</p>
           {achieved
             ? `Đã kiếm được ${formatMoney(earned)} ròng trong ngày.`
             : `Đã có ${formatMoney(earned)} trên nhịp cần ${formatMoney(target)}.`}

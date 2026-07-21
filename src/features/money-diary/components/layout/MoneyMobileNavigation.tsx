@@ -46,13 +46,13 @@ export function MoneyMobileNavigation({
       primary: true,
     },
     {
-      active: currentPage === "history",
+      active: ["balanceChecks", "expenses", "history"].includes(currentPage),
       icon: History,
       label: "Lịch sử",
       onClick: () => navigateTo("history"),
     },
     {
-      active: ["balanceChecks", "changes", "expenses"].includes(currentPage),
+      active: currentPage === "changes",
       icon: CircleEllipsis,
       label: "Thêm",
       onClick: onOpenMore,

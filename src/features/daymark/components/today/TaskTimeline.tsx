@@ -93,7 +93,7 @@ function TaskTimelineItem({
       <div className="daymark-task-surface">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <h3 className="break-words text-base font-black">
+            <h3 className="break-words text-base font-bold">
               {task.title}
             </h3>
             {task.priority === "high" && (

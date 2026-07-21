@@ -39,7 +39,7 @@ export function CalendarPage({ onNavigate, userId }: CalendarPageProps) {
     <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-black">Lịch DayMark</h1>
+          <h1 className="text-2xl font-bold">Lịch DayMark</h1>
           <p className="text-sm text-slate-500 dark:text-slate-400">
             Tổng quan nhiệm vụ thật đã lưu trong tháng.
           </p>
@@ -105,7 +105,7 @@ export function CalendarPage({ onNavigate, userId }: CalendarPageProps) {
               )} ${day.date === getToday() ? "ring-2 ring-emerald-300" : ""}`}
             >
               <div className="flex items-center justify-between gap-2">
-                <p className="font-black">{Number(day.date.slice(8, 10))}</p>
+                <p className="font-bold">{Number(day.date.slice(8, 10))}</p>
                 {stats.status !== "empty" && (
                   <span aria-hidden="true" className="text-xs">
                     {getCalendarDayIcon(stats.status)}

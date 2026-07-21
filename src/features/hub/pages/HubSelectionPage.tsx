@@ -34,7 +34,7 @@ export function HubSelectionPage({
             <p className="text-sm font-medium text-slate-500 dark:text-slate-400">
               Chọn chức năng
             </p>
-            <h1 className="mt-1 text-2xl font-black tracking-tight sm:text-3xl">
+            <h1 className="mt-1 text-2xl font-bold tracking-tight sm:text-3xl">
               Money Diary Hub
             </h1>
             <p className="mt-1 truncate text-sm text-slate-500 dark:text-slate-400">
@@ -99,7 +99,7 @@ function HubFeatureCard({
         {icon}
       </span>
 
-      <span className="mt-8 block text-2xl font-black tracking-tight">
+      <span className="mt-8 block text-2xl font-bold tracking-tight">
         {title}
       </span>
       <span className="mt-3 block max-w-sm text-base leading-7 text-slate-500 dark:text-slate-400">
