@@ -1,7 +1,9 @@
 import { useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
+import { MoreHorizontal, Pencil, Plus } from "lucide-react";
 import {
   CartesianGrid,
+  Legend,
   Line,
   LineChart,
   ResponsiveContainer,
@@ -19,7 +21,7 @@ import type {
   Page,
   SubGoal,
 } from "../types";
-import { getDaysLeft, getToday } from "../utils/date";
+import { formatReportDate, getDaysLeft, getToday } from "../utils/date";
 import {
   getExpenseTotal,
   getOtherExpenseItems,
@@ -37,6 +39,9 @@ import { formatMoney, formatMoneyInput, parseMoneyInput } from "../utils/money";
 import type { GoalForecast } from "../utils/forecast";
 import type { DailyEntryForm } from "./EntryPage";
 import { GoalMilestonesPage } from "./GoalMilestonesPage";
+import { GoalsLayout } from "../features/goals/components/layout/GoalsLayout";
+import { GoalSheet } from "../features/goals/components/layout/GoalSheet";
+import { GoalsOverview } from "../features/goals/components/overview/GoalsOverview";
 
 type SubGoalForm = {
   name: string;
@@ -123,12 +128,17 @@ type GoalsPageProps = {
   form: DailyEntryForm;
   goalForecast: GoalForecast;
   goals: Goals;
+  goalId?: string;
   goalScreen: GoalScreen;
   getSubGoalAllocationAvailable: (date: string) => number;
   incomePerHour: number;
   isBigGoalBehind: boolean;
   mainGoalForm: MainGoalForm;
-  navigateTo: (nextPage: Page, nextGoalScreen?: GoalScreen) => void;
+  navigateTo: (
+    nextPage: Page,
+    nextGoalScreen?: GoalScreen,
+    goalId?: string
+  ) => void;
   needPerDay: number;
   remainingBigGoal: number;
   safeChartDays: number;
@@ -140,7 +150,6 @@ type GoalsPageProps = {
   setChartDays: Dispatch<SetStateAction<number>>;
   setForecastDays: Dispatch<SetStateAction<number>>;
   setForm: Dispatch<SetStateAction<DailyEntryForm>>;
-  setGoalScreen: (screen: GoalScreen) => void;
   setMainGoalForm: Dispatch<SetStateAction<MainGoalForm>>;
   setSelectedCompletedGoalId: (id: string) => void;
   startEditSubGoal: (goal: SubGoal) => void;
@@ -572,6 +581,7 @@ export function GoalsPage({
   form,
   goalForecast,
   goals,
+  goalId,
   goalScreen,
   getSubGoalAllocationAvailable,
   incomePerHour,
@@ -589,7 +599,6 @@ export function GoalsPage({
   setChartDays,
   setForecastDays,
   setForm,
-  setGoalScreen,
   setMainGoalForm,
   setSelectedCompletedGoalId,
   startEditSubGoal,
@@ -604,6 +613,13 @@ export function GoalsPage({
   updateGoal,
   visibleBalanceMovementData,
 }: GoalsPageProps) {
+  const [isMainGoalSheetOpen, setIsMainGoalSheetOpen] = useState(false);
+  const [isSubGoalSheetOpen, setIsSubGoalSheetOpen] = useState(false);
+  const [movementCurrentPage, setMovementCurrentPage] = useState(1);
+  const activeSubGoalId = goalScreen === "subGoals" ? (goalId ?? null) : null;
+  const [currentGoalTab, setCurrentGoalTab] = useState<
+    "overview" | "forecast" | "scenarios"
+  >("overview");
   const [completedDetailPages, setCompletedDetailPages] = useState(
     initialCompletedDetailPages
   );
@@ -723,6 +739,21 @@ export function GoalsPage({
         overrideValue ?? (row.amount > 0 ? formatMoneyInput(String(row.amount)) : ""),
     };
   });
+  const sortedVisibleBalanceMovements = [...visibleBalanceMovementData].reverse();
+  const movementPageCount = getPageCount(sortedVisibleBalanceMovements.length);
+  const safeMovementCurrentPage = Math.min(
+    Math.max(movementCurrentPage, 1),
+    movementPageCount
+  );
+  const paginatedBalanceMovements = getPaginatedItems(
+    sortedVisibleBalanceMovements,
+    safeMovementCurrentPage
+  );
+
+  function changeBalanceChartDays(value: "all" | number) {
+    setBalanceChartDays(value);
+    setMovementCurrentPage(1);
+  }
 
   function toggleCompletedDetailPanel(panel: CompletedDetailPanelKey) {
     setCompletedDetailPanel((current) => (current === panel ? null : panel));
@@ -770,69 +801,57 @@ export function GoalsPage({
     setAllocationOverrides({});
   }
 
+  function openNewSubGoalSheet() {
+    cancelEditSubGoal();
+    setIsSubGoalSheetOpen(true);
+  }
+
+  function openSubGoalEditSheet(goal: SubGoal) {
+    startEditSubGoal(goal);
+    setIsSubGoalSheetOpen(true);
+  }
+
+  function closeSubGoalSheet() {
+    setIsSubGoalSheetOpen(false);
+    cancelEditSubGoal();
+  }
+
   return (
-
-  <>
-    <div className="flex items-center justify-between">
-      <div>
-        <h2 className="text-2xl font-bold">Các mục tiêu</h2>
-        <p className="text-sm text-slate-500">
-          Quản lý mục tiêu hiện tại và xem lại các mục tiêu đã hoàn thành.
-        </p>
-      </div>
-
-    </div>
+    <GoalsLayout activeScreen={goalScreen} navigateTo={navigateTo}>
 
     {goalScreen === "subGoals" && (
   <>
-    <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="goals-page-toolbar">
       <div>
-        <h2 className="text-2xl font-bold">Mục tiêu phụ</h2>
-        <p className="text-sm text-slate-500">
-          Quản lý các mục tiêu phụ và góp tiền thủ công vào từng mục tiêu.
+        <strong>{goals.subGoals?.length ?? 0} mục tiêu đang hoạt động</strong>
+        <p>
+          Chọn một mục tiêu để xem tiến độ, góp tiền và lịch sử chi tiết.
         </p>
       </div>
 
       <button
         type="button"
-        onClick={() => navigateTo("goals", "menu")}
-        className="rounded-xl border bg-white px-4 py-2 font-medium shadow-sm hover:bg-slate-100"
+        onClick={openNewSubGoalSheet}
+        className="goals-button goals-button--primary"
       >
-        Quay lại
+        <Plus aria-hidden="true" size={18} />
+        Thêm mục tiêu
       </button>
     </div>
 
           <section className="rounded-2xl bg-white p-5 shadow-sm">
 
-  <div className="flex flex-wrap items-center justify-between gap-3">
-
-    <div>
-
-      <h2 className="text-xl font-bold">
-        {isEditingSubGoal ? "Chỉnh sửa mục tiêu phụ" : "Mục tiêu phụ"}
-      </h2>
-
-      <p className="text-sm text-slate-500">
-
-        {isEditingSubGoal && editingSubGoal
-          ? `Đang chỉnh sửa "${editingSubGoal.name}". Các lần góp tiền đã ghi sẽ được giữ nguyên.`
-          : "Chia thủ công tiền vào từng mục tiêu phụ, ví dụ: Lens, quỹ dự phòng, trả nợ."}
-
-      </p>
-
-    </div>
-
-    {isEditingSubGoal && (
-      <span className="rounded-full bg-amber-50 px-3 py-1 text-sm font-bold text-amber-700">
-        Đang sửa
-      </span>
-    )}
-
-  </div>
-
-
-
-  <div className="mt-4 grid gap-3 md:grid-cols-2 lg:grid-cols-5">
+  <GoalSheet
+    isOpen={isSubGoalSheetOpen}
+    onClose={closeSubGoalSheet}
+    title={isEditingSubGoal ? "Chỉnh sửa mục tiêu phụ" : "Thêm mục tiêu phụ"}
+    description={
+      isEditingSubGoal && editingSubGoal
+        ? `Đang chỉnh sửa “${editingSubGoal.name}”. Lịch sử góp tiền hiện có được giữ nguyên.`
+        : "Nhập thông tin cho khoản tài chính bạn muốn theo dõi riêng."
+    }
+  >
+  <div className="goal-sub-form-grid">
 
     <div>
 
@@ -1015,6 +1034,7 @@ export function GoalsPage({
       </button>
     )}
   </div>
+  </GoalSheet>
 
 
   <div className="mt-5 grid gap-4 xl:grid-cols-[1fr_1.2fr]">
@@ -1284,13 +1304,21 @@ export function GoalsPage({
 
 
 
-              <div className="flex flex-wrap gap-2">
+              <div className="goal-card-actions">
+                <span className={`goal-status${behind ? " is-warning" : " is-good"}`}>
+                  {behind ? "Chậm tiến độ" : "Đúng tiến độ"}
+                </span>
+                <details className="goal-card-menu">
+                  <summary aria-label={`Mở thao tác cho ${goal.name}`}>
+                    <MoreHorizontal aria-hidden="true" size={20} />
+                  </summary>
+                  <div className="goal-card-menu__content">
 
                 <button
 
                   type="button"
 
-                  onClick={() => startEditSubGoal(goal)}
+                  onClick={() => openSubGoalEditSheet(goal)}
 
                   className={`rounded-lg px-3 py-1 text-sm font-medium ${
                     isThisSubGoalEditing
@@ -1300,7 +1328,8 @@ export function GoalsPage({
 
                 >
 
-                  {isThisSubGoalEditing ? "Đang sửa" : "Sửa"}
+                  <Pencil aria-hidden="true" size={16} />
+                  {isThisSubGoalEditing ? "Đang sửa" : "Chỉnh sửa"}
 
                 </button>
 
@@ -1326,14 +1355,15 @@ export function GoalsPage({
 
                   onClick={() => deleteSubGoal(goal.id)}
 
-                  className="rounded-lg bg-red-50 px-3 py-1 text-sm font-medium text-red-600 hover:bg-red-100"
+                className="is-danger rounded-lg bg-red-50 px-3 py-1 text-sm font-medium text-red-600 hover:bg-red-100"
 
                 >
 
                   Xóa
 
                 </button>
-
+                  </div>
+                </details>
               </div>
 
             </div>
@@ -1411,6 +1441,48 @@ export function GoalsPage({
               </div>
 
             </div>
+
+            <div className="goal-card-progress">
+              <ProgressBar value={progress} />
+              <div>
+                <span>{formatMoney(currentSaved)} / {formatMoney(goal.target)}</span>
+                <strong>{progress}%</strong>
+              </div>
+            </div>
+
+            {lastContribution && (
+              <p className="goal-card-last-contribution">
+                Lần góp gần nhất: <strong>{formatMoney(lastContribution.amount)}</strong>
+                {" · "}{lastContribution.date}
+              </p>
+            )}
+
+            <div className="goal-card-footer-actions">
+              <button
+                type="button"
+                className="goals-button goals-button--primary"
+                onClick={() => navigateTo("goals", "subGoals", goal.id)}
+              >
+                Góp tiền
+              </button>
+              <button
+                type="button"
+                className="goals-button goals-button--secondary"
+                aria-expanded={activeSubGoalId === goal.id}
+                onClick={() =>
+                  navigateTo(
+                    "goals",
+                    "subGoals",
+                    activeSubGoalId === goal.id ? undefined : goal.id
+                  )
+                }
+              >
+                {activeSubGoalId === goal.id ? "Thu gọn" : "Xem chi tiết"}
+              </button>
+            </div>
+
+            {activeSubGoalId === goal.id && (
+              <div className="goal-card-details">
 
             <div className="mt-3 grid grid-cols-2 gap-3 lg:grid-cols-4">
               <div className="rounded-xl bg-slate-100 p-3">
@@ -1766,6 +1838,9 @@ export function GoalsPage({
 
             )}
 
+              </div>
+            )}
+
           </article>
 
         );
@@ -1782,24 +1857,11 @@ export function GoalsPage({
 
     {goalScreen === "balance" && (
       <>
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h2 className="text-2xl font-bold">Biến động tiền</h2>
-            <p className="text-sm text-slate-500">
-              Tính từ ngày bắt đầu mục tiêu: {currentGoalStartDate}
-            </p>
-          </div>
+        <p className="goals-page-context">
+          Dữ liệu được tính từ ngày bắt đầu mục tiêu: {formatReportDate(currentGoalStartDate)}.
+        </p>
 
-          <button
-            type="button"
-            onClick={() => navigateTo("goals", "menu")}
-            className="rounded-xl border bg-white px-4 py-2 font-medium shadow-sm hover:bg-slate-100"
-          >
-            Quay lại
-          </button>
-        </div>
-
-        <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <section className="goals-movement-summary">
           <div className="rounded-2xl bg-white p-4 shadow-sm">
             <p className="text-sm text-slate-500">Mục tiêu</p>
             <p className="mt-1 font-bold">{goals.bigGoalName}</p>
@@ -1846,7 +1908,7 @@ export function GoalsPage({
             <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
-                onClick={() => setBalanceChartDays("all")}
+                onClick={() => changeBalanceChartDays("all")}
                 className={`rounded-full px-3 py-1 text-sm font-medium ${
                   balanceChartDays === "all"
                     ? "bg-slate-900 text-white"
@@ -1858,7 +1920,7 @@ export function GoalsPage({
 
               <button
                 type="button"
-                onClick={() => setBalanceChartDays(7)}
+                onClick={() => changeBalanceChartDays(7)}
                 className={`rounded-full px-3 py-1 text-sm font-medium ${
                   balanceChartDays === 7
                     ? "bg-slate-900 text-white"
@@ -1870,7 +1932,7 @@ export function GoalsPage({
 
               <button
                 type="button"
-                onClick={() => setBalanceChartDays(14)}
+                onClick={() => changeBalanceChartDays(14)}
                 className={`rounded-full px-3 py-1 text-sm font-medium ${
                   balanceChartDays === 14
                     ? "bg-slate-900 text-white"
@@ -1882,7 +1944,7 @@ export function GoalsPage({
 
               <button
                 type="button"
-                onClick={() => setBalanceChartDays(30)}
+                onClick={() => changeBalanceChartDays(30)}
                 className={`rounded-full px-3 py-1 text-sm font-medium ${
                   balanceChartDays === 30
                     ? "bg-slate-900 text-white"
@@ -1900,13 +1962,13 @@ export function GoalsPage({
                   const onlyDigits = e.target.value.replace(/[^\d]/g, "");
 
                   if (!onlyDigits) {
-                    setBalanceChartDays("all");
+                    changeBalanceChartDays("all");
                     return;
                   }
 
                   const value = Number(onlyDigits);
 
-                  setBalanceChartDays(Math.min(Math.max(value, 1), 365));
+                  changeBalanceChartDays(Math.min(Math.max(value, 1), 365));
                 }}
                 className="w-24 rounded-xl border px-3 py-1 text-sm"
                 placeholder="Tất cả"
@@ -1924,8 +1986,9 @@ export function GoalsPage({
                 }))}
               >
                 <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="label" />
+                <XAxis dataKey="label" minTickGap={32} />
                 <YAxis />
+                <Legend />
                 <Tooltip
                   content={({ active, payload, label }) => {
                     if (!active || !payload || payload.length === 0) return null;
@@ -1961,17 +2024,63 @@ export function GoalsPage({
                   type="monotone"
                   dataKey="totalMoney"
                   name="Tổng tiền"
+                  stroke="var(--money-info)"
                   strokeWidth={3}
                 />
                 <Line
                   type="monotone"
                   dataKey="actualMoney"
                   name="Tiền thực tế"
+                  stroke="var(--money-income)"
                   strokeWidth={3}
                 />
               </LineChart>
             </ResponsiveContainer>
           </div>
+        </section>
+
+        <section className="goals-movement-list">
+          <div className="goals-section-heading">
+            <div>
+              <h2>Chi tiết biến động</h2>
+              <p>Các khoản thu và chi giải thích thay đổi trên biểu đồ.</p>
+            </div>
+            <span>{visibleBalanceMovementData.length} ngày</span>
+          </div>
+
+          {visibleBalanceMovementData.length === 0 ? (
+            <div className="goals-empty-state goals-empty-state--compact">
+              <p>Chưa có dữ liệu biến động trong khoảng thời gian này.</p>
+            </div>
+          ) : (
+            <div className="goals-movement-list__rows">
+              {paginatedBalanceMovements.map((item) => {
+                const netChange = item.income - item.expense;
+
+                return (
+                  <article key={item.date} className="goals-movement-row">
+                    <time dateTime={item.date}>{formatReportDate(item.date)}</time>
+                    <div>
+                      <strong>{netChange >= 0 ? "Tăng trong ngày" : "Giảm trong ngày"}</strong>
+                      <span>
+                        Thu {formatMoney(item.income)} · Chi {formatMoney(item.expense)}
+                      </span>
+                    </div>
+                    <strong className={netChange >= 0 ? "is-income" : "is-expense"}>
+                      {netChange >= 0 ? "+" : "−"}{formatMoney(Math.abs(netChange))}
+                    </strong>
+                    <span>Số dư {formatMoney(item.actualMoney)}</span>
+                  </article>
+                );
+              })}
+            </div>
+          )}
+          <PaginationControls
+            currentPage={safeMovementCurrentPage}
+            label="Chi tiết biến động"
+            onPageChange={setMovementCurrentPage}
+            totalItems={visibleBalanceMovementData.length}
+          />
         </section>
       </>
 )}
@@ -1980,104 +2089,70 @@ export function GoalsPage({
   <GoalMilestonesPage
     goals={goals}
     totalSavedForBigGoal={totalSavedForBigGoal}
-    onBack={() => navigateTo("goals", "menu")}
   />
 )}
 
 {goalScreen === "menu" && (
-  <section className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
-    <button
-      type="button"
-      onClick={() => navigateTo("goals", "current")}
-      className="rounded-2xl bg-white p-6 text-left shadow-sm hover:bg-slate-50"
-    >
-      <p className="text-3xl">🎯</p>
-      <h3 className="mt-3 text-xl font-bold">Mục tiêu hiện tại</h3>
-      <p className="mt-1 text-sm text-slate-500">
-        Xem và chỉnh sửa mục tiêu chính, mục tiêu ngày, tuần và tháng.
-      </p>
-    </button>
-
-    <button
-      type="button"
-      onClick={() => navigateTo("goals", "subGoals")}
-      className="rounded-2xl bg-white p-6 text-left shadow-sm hover:bg-slate-50"
-    >
-      <p className="text-3xl">📌</p>
-      <h3 className="mt-3 text-xl font-bold">Mục tiêu phụ</h3>
-      <p className="mt-1 text-sm text-slate-500">
-        Quản lý các mục tiêu phụ như lens, quỹ dự phòng, trả nợ.
-      </p>
-    </button>
-
-    <button
-      type="button"
-      onClick={() => navigateTo("goals", "balance")}
-      className="rounded-2xl bg-white p-6 text-left shadow-sm hover:bg-slate-50"
-    >
-      <p className="text-3xl">📈</p>
-      <h3 className="mt-3 text-xl font-bold">Biến động tiền</h3>
-      <p className="mt-1 text-sm text-slate-500">
-        Theo dõi tiền thực tế hiện có và tổng tiền theo từng ngày.
-      </p>
-    </button>
-
-    <button
-      type="button"
-      onClick={() => navigateTo("goals", "completed")}
-      className="rounded-2xl bg-white p-6 text-left shadow-sm hover:bg-slate-50"
-    >
-      <p className="text-3xl">✅</p>
-      <h3 className="mt-3 text-xl font-bold">Mục tiêu đã hoàn thành</h3>
-      <p className="mt-1 text-sm text-slate-500">
-        Xem lại các mục tiêu cũ và lịch sử biến động tiền.
-      </p>
-    </button>
-
-    <button
-      type="button"
-      onClick={() => navigateTo("goals", "milestones")}
-      className="rounded-2xl bg-white p-6 text-left shadow-sm hover:bg-slate-50"
-    >
-      <p className="text-3xl">🏁</p>
-      <h3 className="mt-3 text-xl font-bold">Mốc kiểm tra</h3>
-      <p className="mt-1 text-sm text-slate-500">
-        Xem các mốc 25%, 50%, 75%, 100% và số tiền cần mỗi ngày để đạt mốc kế tiếp.
-      </p>
-    </button>
-  </section>
+  <GoalsOverview
+    balanceHistory={currentBalanceMovementData}
+    completedGoals={completedGoals}
+    goals={goals}
+    navigateTo={navigateTo}
+    onAddSubGoal={() => {
+      navigateTo("goals", "subGoals");
+      openNewSubGoalSheet();
+    }}
+    totalSavedForBigGoal={totalSavedForBigGoal}
+  />
 )}
 
     {goalScreen === "current" && (
       <>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-      <div>
-        <h2 className="text-2xl font-bold">Mục tiêu chính</h2>
-          <p className="text-sm text-slate-500">
-            Quản lý mục tiêu chính, mục tiêu ngày, tuần và tháng.
-          </p>
-      </div>
-
-        <div className="flex flex-wrap gap-2">
+      <div className="goals-current-heading">
+        <div>
+          <p className="goals-current-heading__label">Mục tiêu chính</p>
+          <h2>{goals.bigGoalName || "Chưa đặt tên mục tiêu"}</h2>
+          <p>Dự kiến hoàn thành: {goalForecast.targetDate ?? "Chưa đủ dữ liệu"}</p>
+        </div>
+        <div className="goals-current-heading__actions">
           <button
             type="button"
-            onClick={() => navigateTo("goals", "menu")}
-            className="rounded-xl border bg-white px-4 py-2 font-medium shadow-sm hover:bg-slate-100"
+            onClick={() => setIsMainGoalSheetOpen(true)}
+            className="goals-button goals-button--secondary"
           >
-            Quay lại
+            <Pencil aria-hidden="true" size={17} />
+            Chỉnh sửa mục tiêu
           </button>
-
           <button
             type="button"
             onClick={completeCurrentGoal}
-            className="rounded-xl bg-green-600 px-4 py-2 font-medium text-white shadow-sm hover:bg-green-700"
+            className="goals-button goals-button--primary"
           >
             Hoàn thành mục tiêu
           </button>
         </div>
-        </div>
+      </div>
 
-        <section className="grid gap-6 lg:grid-cols-3">
+      <div className="goals-inner-tabs" role="tablist" aria-label="Nội dung mục tiêu hiện tại">
+        {([
+          ["overview", "Tổng quan"],
+          ["forecast", "Dự báo"],
+          ["scenarios", "Kịch bản"],
+        ] as const).map(([value, label]) => (
+          <button
+            key={value}
+            type="button"
+            role="tab"
+            aria-selected={currentGoalTab === value}
+            className={currentGoalTab === value ? "is-active" : ""}
+            onClick={() => setCurrentGoalTab(value)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+        <section className={`${currentGoalTab === "overview" ? "grid" : "hidden"} gap-6 lg:grid-cols-3`}>
           <div className="rounded-2xl bg-white p-5 shadow-sm lg:col-span-2">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
@@ -2222,7 +2297,14 @@ export function GoalsPage({
             </div>
           </div>
 
-          <div className="rounded-2xl bg-white p-5 shadow-sm">
+          <>
+          <GoalSheet
+            isOpen={isMainGoalSheetOpen}
+            onClose={() => setIsMainGoalSheetOpen(false)}
+            title="Chỉnh sửa mục tiêu chính"
+            description="Cập nhật tên, số tiền và thời hạn của mục tiêu hiện tại."
+          >
+          <div className="goal-main-form">
             <h2 className="text-xl font-bold">Mục tiêu lớn</h2>
 
             <div className="mt-4 grid gap-3">
@@ -2315,7 +2397,9 @@ export function GoalsPage({
             >
               Lưu mục tiêu lớn
             </button>
-
+          </div>
+          </GoalSheet>
+          <div className="rounded-2xl bg-white p-5 shadow-sm goal-current-summary">
             <div className="mt-5 rounded-xl bg-slate-100 p-4">
               <p className="font-bold">{goals.bigGoalName}</p>
               <p className="mt-1 text-sm">
@@ -2364,12 +2448,17 @@ export function GoalsPage({
               </p>
             </div>
           </div>
+          </>
         </section>
 
-        <section className="rounded-2xl bg-white p-5 shadow-sm">
+        <section className={`${currentGoalTab === "overview" ? "hidden" : "block"} rounded-2xl bg-white p-5 shadow-sm`}>
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <h2 className="text-xl font-bold">Dự đoán ngày đạt mục tiêu</h2>
+              <h2 className="text-xl font-bold">
+                {currentGoalTab === "scenarios"
+                  ? "So sánh kịch bản"
+                  : "Dự đoán ngày đạt mục tiêu"}
+              </h2>
               <p className="text-sm text-slate-500">
                 Dựa trên dòng tiền ròng: thu nhập thực nhận trừ chi tiêu trong
                 các ngày gần nhất.
@@ -2413,6 +2502,8 @@ export function GoalsPage({
             </div>
           </div>
 
+          {currentGoalTab === "forecast" && (
+          <>
           <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
             <div className="rounded-xl bg-slate-100 p-3">
               <p className="text-sm text-slate-500">Khoảng dữ liệu</p>
@@ -2520,7 +2611,11 @@ export function GoalsPage({
               <ForecastPaceCard key={pace.id} pace={pace} />
             ))}
           </div>
+          </>
+          )}
 
+          {currentGoalTab === "scenarios" && (
+          <>
           <div className="mt-5">
             <h3 className="text-lg font-bold">
               Kịch bản thận trọng / thực tế / tốt
@@ -2569,6 +2664,8 @@ export function GoalsPage({
               </article>
             ))}
           </div>
+          </>
+          )}
 
           <div
             className={`mt-4 rounded-xl p-4 ${
@@ -2648,7 +2745,7 @@ export function GoalsPage({
           </div>
         </section>
 
-        <section className="rounded-2xl bg-white p-5 shadow-sm">
+        <section className={`${currentGoalTab === "overview" ? "block" : "hidden"} rounded-2xl bg-white p-5 shadow-sm`}>
           <h2 className="text-xl font-bold">Mục tiêu ngày / tuần / tháng</h2>
 
           <div className="mt-4 grid gap-3 md:grid-cols-2 lg:grid-cols-3">
@@ -2718,32 +2815,12 @@ export function GoalsPage({
 
     {goalScreen === "completed" && (
       <>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="text-2xl font-bold">Các mục tiêu đã hoàn thành</h2>
-          <p className="text-sm text-slate-500">
-            Xem lại các mục tiêu cũ và lịch sử biến động tiền.
-          </p>
-        </div>
-
-        <div>
-          <button
-            type="button"
-            onClick={() => setGoalScreen("menu")}
-            className="rounded-xl border bg-white px-4 py-2 font-medium shadow-sm hover:bg-slate-100"
-          >
-            Quay lại
-          </button>
-        </div>
-      </div>
-
         <section className="rounded-2xl bg-white p-4 shadow-sm sm:p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h2 className="text-xl font-bold">Các mục tiêu đã hoàn thành</h2>
+              <h2 className="text-xl font-bold">Lịch sử hoàn thành</h2>
               <p className="text-sm text-slate-500">
-                Danh sách rút gọn để xem nhanh mục tiêu, số tiền đạt được và
-                deadline.
+                Tổng giá trị {formatMoney(completedGoals.reduce((sum, goal) => sum + goal.saved, 0))}.
               </p>
             </div>
             <span className="rounded-full bg-slate-100 px-3 py-1 text-sm font-bold text-slate-600">
@@ -2760,6 +2837,13 @@ export function GoalsPage({
               {completedGoals.map((goal) => {
                 const progress = getProgress(goal.saved, goal.target);
                 const difference = goal.saved - goal.target;
+                const completionTiming = !goal.deadline
+                  ? "Đã hoàn thành"
+                  : goal.completedAt < goal.deadline
+                    ? "Hoàn thành sớm"
+                    : goal.completedAt === goal.deadline
+                      ? "Đúng hạn"
+                      : "Hoàn thành trễ";
 
                 return (
                   <article key={goal.id} className="p-4">
@@ -2768,7 +2852,7 @@ export function GoalsPage({
                         <div className="flex flex-wrap items-center gap-2">
                           <h3 className="font-bold">{goal.name}</h3>
                           <span className="rounded-full bg-green-50 px-2 py-0.5 text-xs font-bold text-green-700">
-                            Đã hoàn thành
+                            {completionTiming}
                           </span>
                           <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-bold text-slate-600">
                             {goal.goalType === "sub"
@@ -2778,8 +2862,8 @@ export function GoalsPage({
                         </div>
 
                         <p className="mt-1 text-sm text-slate-500">
-                          Hoàn thành {goal.completedAt} · Deadline{" "}
-                          {goal.deadline}
+                          Hoàn thành {formatReportDate(goal.completedAt)} · Deadline{" "}
+                          {formatReportDate(goal.deadline)}
                         </p>
 
                         <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100">
@@ -2797,20 +2881,26 @@ export function GoalsPage({
                             setCompletedDetailPanel(null);
                             setCompletedDetailPages(initialCompletedDetailPages);
                             setSelectedCompletedGoalId(goal.id);
-                            navigateTo("goals", "completedDetail");
+                            navigateTo("goals", "completedDetail", goal.id);
                           }}
-                          className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-bold text-white hover:bg-slate-700"
+                          className="goals-button goals-button--primary"
                         >
-                          Chi tiết
+                          Xem chi tiết
                         </button>
-
-                        <button
-                          type="button"
-                          onClick={() => deleteCompletedGoal(goal.id)}
-                          className="rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-red-600 hover:bg-red-100"
-                        >
-                          Xóa
-                        </button>
+                        <details className="goal-card-menu">
+                          <summary aria-label={`Mở thao tác cho ${goal.name}`}>
+                            <MoreHorizontal aria-hidden="true" size={20} />
+                          </summary>
+                          <div className="goal-card-menu__content">
+                            <button
+                              type="button"
+                              className="is-danger"
+                              onClick={() => deleteCompletedGoal(goal.id)}
+                            >
+                              Xóa
+                            </button>
+                          </div>
+                        </details>
                       </div>
                     </div>
 
@@ -3252,6 +3342,6 @@ export function GoalsPage({
     )}
   </>
     )}
-      </>
+      </GoalsLayout>
   );
 }

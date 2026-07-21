@@ -55,11 +55,15 @@ export function formatReportDate(dateString?: string) {
 }
 
 export function getDaysLeft(deadline: string) {
-  if (!deadline) return 0;
+  return getDaysLeftFromDate(deadline, getToday());
+}
 
-  const today = toDate(getToday());
+export function getDaysLeftFromDate(deadline: string, fromDate: string) {
+  if (!deadline || !fromDate) return 0;
+
+  const referenceDate = toDate(fromDate);
   const targetDate = toDate(deadline);
-  const diffTime = targetDate.getTime() - today.getTime();
+  const diffTime = targetDate.getTime() - referenceDate.getTime();
 
   return Math.max(Math.ceil(diffTime / (1000 * 60 * 60 * 24)), 0);
 }

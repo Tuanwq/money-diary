@@ -1,4 +1,4 @@
-import type { Dispatch, FormEvent, ReactNode, SetStateAction } from "react";
+import type { Dispatch, FormEvent, SetStateAction } from "react";
 import { OtherExpenseItemsInput } from "../components/OtherExpenseItemsInput";
 import type { GoalScreen, Mood, Page } from "../types";
 import { getToday } from "../utils/date";
@@ -41,7 +41,6 @@ type EntryPageProps = {
   setEditingDate: (date: string | null) => void;
   setEditingExpenseDate: (date: string | null) => void;
   todayString: string;
-  renderBalanceCheckCard: (title?: string) => ReactNode;
   navigateTo: (nextPage: Page, nextGoalScreen?: GoalScreen) => void;
 };
 

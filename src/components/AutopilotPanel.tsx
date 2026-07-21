@@ -22,7 +22,7 @@ import {
 } from "../utils/moneyRadar";
 import { ProgressBar } from "./ProgressBar";
 
-type AutopilotPanelProps = {
+export type AutopilotPanelProps = {
   actualMoney: number;
   balanceChecks: BalanceCheckEntry[];
   entries: DailyEntry[];
@@ -127,8 +127,8 @@ export function AutopilotPanel({
       <section className="app-card rounded-2xl p-4 sm:p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
-              Trợ lý điều hành
+            <p className="text-xs font-bold text-slate-500">
+              Kế hoạch chi tiết
             </p>
             <h3 className="mt-1 text-xl font-black">Kế hoạch ngày mai</h3>
             <p className="mt-1 text-sm text-slate-500">
@@ -215,8 +215,8 @@ export function AutopilotPanel({
       <section className="rounded-2xl bg-white p-4 shadow-sm sm:p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
-              Autopilot mục tiêu
+            <p className="text-xs font-bold text-slate-500">
+              Kế hoạch mục tiêu
             </p>
             <h3 className="mt-1 text-xl font-black">
               Trạng thái sống của từng mục tiêu
@@ -245,38 +245,44 @@ export function AutopilotPanel({
 
   return (
     <>
-      <section className="rounded-2xl bg-white p-4 shadow-sm sm:p-5">
-        <div className="flex flex-wrap items-start justify-between gap-3">
+      <section className="money-card money-next-suggestion" aria-labelledby="next-suggestion-title">
+        <div className="money-section-heading">
           <div>
-            <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
-              Điều hành & Autopilot
-            </p>
-            <h3 className="mt-1 text-xl font-black">Kế hoạch thông minh</h3>
-            <p className="mt-1 text-sm text-slate-500">
-              Home chỉ hiển thị tóm tắt, bấm xem để mở phân tích đầy đủ.
-            </p>
+            <p className="money-eyebrow">Kế hoạch tài chính</p>
+            <h3 id="next-suggestion-title">Gợi ý tiếp theo</h3>
           </div>
-
-          <button
-            type="button"
-            onClick={() => setIsOpen(true)}
-            className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-bold text-white hover:bg-slate-700"
-          >
-            Xem kế hoạch
-          </button>
         </div>
 
-        <div className="mt-4 grid gap-3 lg:grid-cols-3">
-          <OperatorMetric
-            label="Ngày mai cần ròng"
-            value={formatMoney(tomorrow.targetNet)}
-          />
-          <OperatorMetric
-            label="Ưu tiên"
-            value={mostUrgentGoal?.name ?? "Chưa có mục tiêu"}
-          />
-          <OperatorMetric label="Radar tiền" value={moneyRadar.statusText} />
+        <div className="money-next-suggestion-primary">
+          <span>Ngày mai cần đạt</span>
+          <strong>{formatMoney(tomorrow.targetNet)}</strong>
         </div>
+
+        <div className="money-next-suggestion-support">
+          <span>Ưu tiên hiện tại</span>
+          <strong>{mostUrgentGoal?.name ?? "Chưa có mục tiêu"}</strong>
+          {mostUrgentGoal && (
+            <p>
+              {mostUrgentGoal.remaining > 0
+                ? `Còn ${formatMoney(mostUrgentGoal.remaining)} · ${mostUrgentGoal.statusLabel.toLocaleLowerCase("vi-VN")}.`
+                : "Mục tiêu ưu tiên đã hoàn thành."}
+            </p>
+          )}
+        </div>
+
+        <p className="money-next-suggestion-note">
+          {tomorrow.targetNet > 0
+            ? `Duy trì mức ròng ${formatMoney(tomorrow.targetNet)}/ngày để theo kịp kế hoạch.`
+            : "Nhịp hiện tại đang đáp ứng kế hoạch đã đặt."}
+        </p>
+
+        <button
+          type="button"
+          onClick={() => setIsOpen(true)}
+          className="money-primary-action money-next-suggestion-action"
+        >
+          Xem kế hoạch
+        </button>
       </section>
 
       {isOpen && (
@@ -284,11 +290,11 @@ export function AutopilotPanel({
           <div className="mx-auto flex max-h-[92vh] max-w-5xl flex-col overflow-hidden rounded-2xl bg-[var(--background)] shadow-2xl">
             <header className="flex flex-wrap items-start justify-between gap-3 border-b bg-white px-4 py-4 sm:px-5">
               <div>
-                <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
-                  Điều hành & Autopilot
+                <p className="text-xs font-bold text-slate-500">
+                  Kế hoạch chi tiết
                 </p>
                 <h2 className="mt-1 text-xl font-black">
-                  Kế hoạch và radar tiền
+                  Kế hoạch và đối chiếu tiền
                 </h2>
               </div>
 

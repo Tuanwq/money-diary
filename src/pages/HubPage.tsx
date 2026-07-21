@@ -35,6 +35,8 @@ import type {
   HubSettings,
   HubType,
 } from "../types/hub";
+import { DeleteShiftDialog } from "../features/shifts/components/DeleteShiftDialog";
+import { ShiftResultCard } from "../features/shifts/components/ShiftResultCard";
 
 type HubTab = "add" | "calculator" | "dashboard" | "list" | "settings";
 type HubTypeFilter = "ALL" | HubType;
@@ -74,15 +76,6 @@ type HubCalculatorForm = {
   date: string;
   negativeWallet: string;
   target: string;
-};
-
-type HubMobileDateGroup = {
-  date: string;
-  entries: HubEntry[];
-  grossIncome: number;
-  workIncome: number;
-  orders: number;
-  joins: number;
 };
 
 type HubMobileDateChip = {
@@ -515,6 +508,14 @@ export function HubPage({
     loadJson<HubChangeLog[]>(STORAGE_HUB_CHANGE_LOGS_KEY, [])
   );
   const [hubChangeLogPage, setHubChangeLogPage] = useState(1);
+  const [expandedShiftIds, setExpandedShiftIds] = useState<Set<string>>(
+    () => new Set()
+  );
+  const [pendingDeleteEntry, setPendingDeleteEntry] = useState<HubEntry | null>(
+    null
+  );
+  const [isDeletingShift, setIsDeletingShift] = useState(false);
+  const [deleteShiftError, setDeleteShiftError] = useState("");
   const [hubCloudStatus, setHubCloudStatus] = useState(
     "Hub đang lưu trên thiết bị"
   );
@@ -747,37 +748,11 @@ export function HubPage({
           income: summary.income + income.total,
           orders: summary.orders + entry.order,
           joins: summary.joins + income.totalJoinChildOrders,
+          singles: summary.singles + income.remainingSingleOrders,
         };
       },
-      { income: 0, orders: 0, joins: 0 }
+      { income: 0, orders: 0, joins: 0, singles: 0 }
     );
-  }, [filteredHubEntries, settings]);
-
-  const mobileHubDateGroups = useMemo<HubMobileDateGroup[]>(() => {
-    const groups = new Map<string, HubMobileDateGroup>();
-
-    filteredHubEntries.forEach((entry) => {
-      const income = calculateHubIncome(entry, settings);
-      const current = groups.get(entry.date) ?? {
-        date: entry.date,
-        entries: [],
-        grossIncome: 0,
-        workIncome: 0,
-        orders: 0,
-        joins: 0,
-      };
-
-      groups.set(entry.date, {
-        ...current,
-        entries: [...current.entries, entry],
-        grossIncome: current.grossIncome + income.total,
-        workIncome: current.workIncome + income.workIncome,
-        orders: current.orders + entry.order,
-        joins: current.joins + income.totalJoinChildOrders,
-      });
-    });
-
-    return Array.from(groups.values()).sort((a, b) => b.date.localeCompare(a.date));
   }, [filteredHubEntries, settings]);
 
   const mobileDateChips = useMemo<HubMobileDateChip[]>(() => {
@@ -1071,7 +1046,7 @@ export function HubPage({
     }
 
     if (order <= 0 && joins.length === 0) {
-      alert("Bạn cần nhập tổng số đơn hoặc ít nhất một dòng đơn ghép.");
+      alert("Bạn cần nhập tổng số đơn hoặc ít nhất một lượt ghép.");
       return;
     }
 
@@ -1158,19 +1133,23 @@ export function HubPage({
     );
   }
 
-  function deleteHubEntry(id: string) {
+  function deleteHubEntry(id: string, deletionLog?: HubChangeLog) {
     const entryToDelete = entries.find((entry) => entry.id === id);
-    const confirmed = confirm("Xóa ca hub này?");
-    if (!confirmed) return;
 
     setEntries((prev) => prev.filter((entry) => entry.id !== id));
+    setExpandedShiftIds((current) => {
+      const next = new Set(current);
+      next.delete(id);
+      return next;
+    });
 
     if (entryToDelete) {
       setChangeLogs((prev) => [
-        createHubChangeLog({
-          action: "delete",
-          previousEntry: entryToDelete,
-        }),
+        deletionLog ??
+          createHubChangeLog({
+            action: "delete",
+            previousEntry: entryToDelete,
+          }),
         ...prev,
       ]);
       onAdjustDiaryContribution?.(
@@ -1182,6 +1161,67 @@ export function HubPage({
     if (editingHubEntryId === id) {
       setEditingHubEntryId(null);
       setForm(createForm());
+    }
+  }
+
+  function toggleShiftDetails(id: string) {
+    setExpandedShiftIds((current) => {
+      const next = new Set(current);
+
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+
+      return next;
+    });
+  }
+
+  function requestDeleteShift(entry: HubEntry) {
+    setDeleteShiftError("");
+    setPendingDeleteEntry(entry);
+  }
+
+  async function confirmDeleteShift() {
+    if (!pendingDeleteEntry || isDeletingShift) return;
+
+    const entryToDelete = pendingDeleteEntry;
+    const deletionLog = createHubChangeLog({
+      action: "delete",
+      previousEntry: entryToDelete,
+    });
+    const nextEntries = entries.filter((entry) => entry.id !== entryToDelete.id);
+    const nextChangeLogs = [deletionLog, ...changeLogs].slice(0, 200);
+
+    setIsDeletingShift(true);
+    setDeleteShiftError("");
+
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const userId = sessionData.session?.user.id;
+
+      if (hubCloudReady && userId) {
+        setHubCloudStatus("Đang xóa ca trên Hub cloud...");
+        const { error } = await supabase.from("money_diary_state").upsert({
+          user_id: userId,
+          hub_entries: nextEntries,
+          hub_settings: settings,
+          hub_change_logs: nextChangeLogs,
+          updated_at: new Date().toISOString(),
+        });
+
+        if (error) throw error;
+        setHubCloudStatus("Hub đã đồng bộ cloud");
+      }
+
+      deleteHubEntry(entryToDelete.id, deletionLog);
+      setPendingDeleteEntry(null);
+    } catch (error) {
+      console.error(error);
+      setHubCloudStatus("Lỗi lưu Hub cloud");
+      setDeleteShiftError(
+        "Không thể xóa ca lúc này. Dữ liệu vẫn được giữ nguyên, hãy thử lại."
+      );
+    } finally {
+      setIsDeletingShift(false);
     }
   }
 
@@ -1532,7 +1572,7 @@ export function HubPage({
               <div className="mt-3 grid gap-3">
                 {form.joins.length === 0 ? (
                   <p className="rounded-xl bg-slate-100 p-3 text-sm text-slate-500">
-                    Chưa có dòng đơn ghép nào.
+                    Chưa có lượt ghép nào.
                   </p>
                 ) : (
                   form.joins.map((row) => (
@@ -2402,224 +2442,50 @@ export function HubPage({
             </div>
           </section>
 
-          <section className="grid min-w-0 gap-2 sm:grid-cols-3">
-            <SummaryCard
-              label="Số ca đang xem"
-              value={`${filteredHubEntries.length} ca`}
-            />
-            <SummaryCard
-              label="Tổng tiền đang xem"
-              value={formatMoney(filteredHubSummary.income)}
-            />
-            <SummaryCard
-              label="Tổng đơn đang xem"
-              value={`${filteredHubSummary.orders} đơn`}
-            />
-          </section>
-
-          <section className="grid min-w-0 max-w-full gap-3 overflow-hidden lg:hidden">
-            <div className="flex items-center justify-between gap-3">
+          <section className="hub-filter-results-summary">
+            <div className="hub-filter-results-summary__heading">
               <div>
-                <h3 className="text-xl font-black">Dòng thời gian ca Hub</h3>
-                <p className="text-sm text-slate-500">
-                  Mỗi ngày gom các ca thành card dễ bấm trên điện thoại.
+                <h3>Các ca phù hợp</h3>
+                <p>
+                  {filteredHubEntries.length} ca · {filteredHubSummary.orders} đơn · {formatMoney(filteredHubSummary.income)}
                 </p>
               </div>
+              <span>{getRangeLabel(listDateRange.fromDate, listDateRange.toDate)}</span>
             </div>
-
-            {mobileHubDateGroups.length === 0 ? (
-              <p className="rounded-2xl bg-white p-4 text-sm font-medium text-slate-500 shadow-sm">
-                Không có ca hub nào trong bộ lọc này.
-              </p>
-            ) : (
-              mobileHubDateGroups.map((group) => (
-                <HubMobileDateGroupCard
-                  key={group.date}
-                  group={group}
-                  onDelete={deleteHubEntry}
-                  onEdit={editHubEntry}
-                  settings={settings}
-                />
-              ))
-            )}
+            <dl>
+              <div><dt>Số ca</dt><dd>{filteredHubEntries.length}</dd></div>
+              <div><dt>Tổng số đơn</dt><dd>{filteredHubSummary.orders}</dd></div>
+              <div><dt>Đơn ghép</dt><dd>{filteredHubSummary.joins}</dd></div>
+              <div><dt>Đơn lẻ</dt><dd>{filteredHubSummary.singles}</dd></div>
+              <div><dt>Tổng thu nhập</dt><dd>{formatMoney(filteredHubSummary.income)}</dd></div>
+            </dl>
           </section>
 
-          <section className="hidden rounded-2xl bg-white p-5 shadow-sm lg:block">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <h3 className="text-xl font-bold">Bảng lịch sử Hub chi tiết</h3>
-              <p className="text-sm font-medium text-slate-500">
-                Gross, tiền làm được thật và thưởng bị tách riêng.
-              </p>
-            </div>
-
-            <div className="mt-4 overflow-x-auto">
-              <table className="min-w-[920px] w-full border-collapse text-left text-sm">
-                <thead>
-                  <tr className="border-b text-xs uppercase text-slate-500">
-                    <th className="py-2 pr-3">Ngày</th>
-                    <th className="py-2 pr-3">Hub</th>
-                    <th className="py-2 pr-3">Ca</th>
-                    <th className="py-2 pr-3">Đơn</th>
-                    <th className="py-2 pr-3">Ghép</th>
-                    <th className="py-2 pr-3">Tổng gross</th>
-                    <th className="py-2 pr-3">Làm thật</th>
-                    <th className="py-2 pr-3">Thưởng tách</th>
-                    <th className="py-2 pr-3">Ghi chú</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredHubEntries.length === 0 ? (
-                    <tr>
-                      <td
-                        colSpan={9}
-                        className="py-4 text-center text-slate-500"
-                      >
-                        Không có dữ liệu trong bộ lọc này.
-                      </td>
-                    </tr>
-                  ) : (
-                    filteredHubEntries.map((entry) => {
-                      const income = calculateHubIncome(entry, settings);
-
-                      return (
-                        <tr key={entry.id} className="border-b last:border-0">
-                          <td className="py-3 pr-3 font-bold">{entry.date}</td>
-                          <td className="py-3 pr-3">
-                            {HUB_TYPE_LABEL[entry.hubType]}
-                          </td>
-                          <td className="py-3 pr-3">{entry.shiftName}</td>
-                          <td className="py-3 pr-3">{entry.order}</td>
-                          <td className="py-3 pr-3">
-                            {income.totalJoinChildOrders}
-                          </td>
-                          <td className="py-3 pr-3 font-bold">
-                            {formatMoney(income.total)}
-                          </td>
-                          <td className="py-3 pr-3 font-bold text-green-700">
-                            {formatMoney(income.workIncome)}
-                          </td>
-                          <td className="py-3 pr-3 text-amber-700">
-                            {formatMoney(income.excludedFromWorkIncome)}
-                          </td>
-                          <td className="max-w-[220px] truncate py-3 pr-3 text-slate-500">
-                            {entry.note || "Không có"}
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </section>
-
-          <section className="hidden rounded-2xl bg-white p-4 shadow-sm sm:p-5 lg:block">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <h3 className="text-xl font-bold">Kết quả lọc</h3>
-              <p className="text-sm font-medium text-slate-500">
-                {filteredHubSummary.joins} đơn đã ghép
-              </p>
-            </div>
-
-            <div className="mt-4 grid gap-3">
+          <section className="hub-filter-results" aria-label="Các ca phù hợp">
+            <div className="hub-filter-results__list">
               {filteredHubEntries.length === 0 ? (
-                <p className="rounded-xl bg-slate-100 p-4 text-sm text-slate-500">
-                  Không có ca hub nào trong bộ lọc này.
-                </p>
+                <div className="hub-filter-results__empty">
+                  <h3>Không tìm thấy ca phù hợp</h3>
+                  <p>Hãy thay đổi bộ lọc hoặc thêm một ca làm mới.</p>
+                  <button type="button" onClick={() => setTab("add")}>
+                    Thêm ca mới
+                  </button>
+                </div>
               ) : (
                 filteredHubEntries.map((entry) => {
                   const income = calculateHubIncome(entry, settings);
 
                   return (
-                    <article key={entry.id} className="rounded-2xl border p-4">
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div>
-                          <h4 className="font-bold">
-                            {entry.date} · {HUB_TYPE_LABEL[entry.hubType]}
-                          </h4>
-                          <p className="mt-1 text-sm text-slate-500">
-                            {entry.shiftName || "Chưa nhập khung giờ"} · {entry.order} tổng đơn · {income.remainingSingleOrders} đơn lẻ còn lại · {income.totalJoinChildOrders} đơn đã ghép
-                          </p>
-                        </div>
-
-                        <div className="text-right">
-                          <p className="text-sm text-slate-500">Tổng tiền</p>
-                          <p className="text-xl font-black">
-                            {formatMoney(income.total)}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="mt-3 grid gap-2 text-sm md:grid-cols-3">
-                        <p>
-                          Đơn lẻ còn lại: {formatMoney(income.singleOrderIncome)}
-                        </p>
-                        <p>Đơn ghép: {formatMoney(income.joinOrderIncome)}</p>
-                        <p>
-                          Vượt mốc đơn: {formatMoney(income.extraOrderReward)}
-                        </p>
-                        <p>
-                          Vượt mốc ghép:{" "}
-                          {formatMoney(income.extraJoinOrderReward)}
-                        </p>
-                        <p>Thưởng Chủ nhật: {formatMoney(income.sundayReward)}</p>
-                        <p>
-                          Thưởng khu vực:{" "}
-                          {formatMoney(income.weekdayRegionReward)}
-                        </p>
-                        <p>
-                          Tiền làm được ghi nhật ký:{" "}
-                          {formatMoney(income.workIncome)}
-                        </p>
-                        <p>Thu nhập khác: {formatMoney(income.extraIncome)}</p>
-                        <p>
-                          Ghép: {income.joinDifference >= 0 ? "Tăng" : "Giảm"}{" "}
-                          {formatMoney(Math.abs(income.joinDifference))}
-                        </p>
-                        <p>
-                          Hiệu suất:{" "}
-                          <strong>{entry.isWellDone ? "Đạt" : "Không đạt"}</strong>
-                        </p>
-                        <p>
-                          Loại đơn:{" "}
-                          <strong>{entry.isHubShort ? "Hub ngắn" : "Thường"}</strong>
-                        </p>
-                      </div>
-
-                      {entry.joins.length > 0 && (
-                        <div className="mt-3 rounded-xl bg-slate-100 p-3 text-sm text-slate-600">
-                          {entry.joins.map((join, index) => (
-                            <p key={`${entry.id}-${index}`}>
-                              Ghép {join.type}: {getJoinQuantity(join)} dòng ·{" "}
-                              {formatMoney(join.price)}
-                            </p>
-                          ))}
-                        </div>
-                      )}
-
-                      {entry.note && (
-                        <p className="mt-2 text-sm text-slate-500">
-                          Ghi chú: {entry.note}
-                        </p>
-                      )}
-
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        <button
-                          type="button"
-                          onClick={() => editHubEntry(entry)}
-                          className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-bold text-white hover:bg-slate-700"
-                        >
-                          Cập nhật ca
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => deleteHubEntry(entry.id)}
-                          className="rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-red-600 hover:bg-red-100"
-                        >
-                          Xóa
-                        </button>
-                      </div>
-                    </article>
+                    <ShiftResultCard
+                      key={entry.id}
+                      durationHours={getShiftHours(entry.shiftName)}
+                      entry={entry}
+                      income={income}
+                      isExpanded={expandedShiftIds.has(entry.id)}
+                      onEdit={editHubEntry}
+                      onRequestDelete={requestDeleteShift}
+                      onToggle={toggleShiftDetails}
+                    />
                   );
                 })
               )}
@@ -2681,6 +2547,19 @@ export function HubPage({
           </div>
         </section>
       )}
+
+      <DeleteShiftDialog
+        entry={pendingDeleteEntry}
+        error={deleteShiftError}
+        isDeleting={isDeletingShift}
+        onCancel={() => {
+          if (!isDeletingShift) {
+            setPendingDeleteEntry(null);
+            setDeleteShiftError("");
+          }
+        }}
+        onConfirm={confirmDeleteShift}
+      />
     </>
   );
 }
@@ -2690,143 +2569,6 @@ type ButtonProps = {
   children: string;
   onClick: () => void;
 };
-
-function HubMobileDateGroupCard({
-  group,
-  onDelete,
-  onEdit,
-  settings,
-}: {
-  group: HubMobileDateGroup;
-  onDelete: (id: string) => void;
-  onEdit: (entry: HubEntry) => void;
-  settings: HubSettings;
-}) {
-  return (
-    <article className="app-card min-w-0 max-w-full overflow-hidden rounded-2xl p-4">
-      <div className="flex min-w-0 items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-xs font-bold uppercase tracking-wide text-emerald-700">
-            {formatDateLabel(group.date)}
-          </p>
-          <h4 className="mt-1 text-lg font-black">{group.entries.length} ca</h4>
-        </div>
-
-        <div className="min-w-0 shrink-0 text-right">
-          <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
-            Làm thật
-          </p>
-          <p className="mt-1 text-lg font-black text-emerald-700">
-            {formatMoney(group.workIncome)}
-          </p>
-        </div>
-      </div>
-
-      <div className="mt-3 grid grid-cols-3 gap-2 text-center text-xs">
-        <div className="min-w-0 rounded-xl bg-emerald-50 p-2">
-          <p className="text-slate-500">Gross</p>
-          <p className="mt-1 break-words font-black">
-            {formatMoney(group.grossIncome)}
-          </p>
-        </div>
-        <div className="min-w-0 rounded-xl bg-cyan-50 p-2">
-          <p className="text-slate-500">Đơn</p>
-          <p className="mt-1 break-words font-black">{group.orders}</p>
-        </div>
-        <div className="min-w-0 rounded-xl bg-amber-50 p-2">
-          <p className="text-slate-500">Ghép</p>
-          <p className="mt-1 break-words font-black">{group.joins}</p>
-        </div>
-      </div>
-
-      <div className="mt-4 grid min-w-0 gap-3">
-        {group.entries.map((entry) => (
-          <HubMobileEntryCard
-            key={entry.id}
-            entry={entry}
-            income={calculateHubIncome(entry, settings)}
-            onDelete={onDelete}
-            onEdit={onEdit}
-          />
-        ))}
-      </div>
-    </article>
-  );
-}
-
-function HubMobileEntryCard({
-  entry,
-  income,
-  onDelete,
-  onEdit,
-}: {
-  entry: HubEntry;
-  income: ReturnType<typeof calculateHubIncome>;
-  onDelete: (id: string) => void;
-  onEdit: (entry: HubEntry) => void;
-}) {
-  return (
-    <article className="min-w-0 max-w-full overflow-hidden rounded-2xl border border-emerald-100 bg-white p-3">
-      <div className="flex min-w-0 items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="font-black">{HUB_TYPE_LABEL[entry.hubType]}</p>
-          <p className="mt-1 break-words text-sm text-slate-500">
-            {entry.shiftName || "Chưa nhập ca"}
-          </p>
-        </div>
-
-        <div className="min-w-0 shrink-0 text-right">
-          <p className="text-xs text-slate-500">Làm thật</p>
-          <p className="break-words font-black text-emerald-700">
-            {formatMoney(income.workIncome)}
-          </p>
-        </div>
-      </div>
-
-      <div className="mt-3 grid min-w-0 grid-cols-2 gap-2 text-sm">
-        <MiniHubMetric label="Tổng đơn" value={`${entry.order}`} />
-        <MiniHubMetric label="Đơn ghép" value={`${income.totalJoinChildOrders}`} />
-        <MiniHubMetric label="Gross" value={formatMoney(income.total)} />
-        <MiniHubMetric
-          label="Thưởng tách"
-          value={formatMoney(income.excludedFromWorkIncome)}
-        />
-      </div>
-
-      {entry.note && (
-        <p className="mt-3 rounded-xl bg-slate-50 p-2 text-sm text-slate-600">
-          {entry.note}
-        </p>
-      )}
-
-      <div className="mt-3 grid min-w-0 grid-cols-2 gap-2">
-        <button
-          type="button"
-          onClick={() => onEdit(entry)}
-          className="app-primary-button rounded-xl px-3 py-2 text-sm font-bold"
-        >
-          Cập nhật
-        </button>
-        <button
-          type="button"
-          onClick={() => onDelete(entry.id)}
-          className="min-h-11 rounded-xl bg-red-50 px-3 py-2 text-sm font-bold text-red-600 hover:bg-red-100"
-        >
-          Xóa
-        </button>
-      </div>
-    </article>
-  );
-}
-
-function MiniHubMetric({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="min-w-0 rounded-xl bg-slate-50 p-2">
-      <p className="text-xs text-slate-500">{label}</p>
-      <p className="mt-1 break-words font-bold">{value}</p>
-    </div>
-  );
-}
 
 function TabButton({ active, children, onClick }: ButtonProps) {
   return (

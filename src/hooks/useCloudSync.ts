@@ -1,8 +1,16 @@
 import type { Session } from "@supabase/supabase-js";
 import type { Dispatch, SetStateAction } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { defaultGoals } from "../constants";
+import {
+  STORAGE_BALANCE_CHECKS_KEY,
+  STORAGE_COMPLETED_GOALS_KEY,
+  STORAGE_ENTRIES_KEY,
+  STORAGE_EXPENSES_KEY,
+  STORAGE_GOALS_KEY,
+  defaultGoals,
+} from "../constants";
 import { supabase, supabaseEnvError } from "../lib/supabase";
+import { getCloudRenderState } from "./cloudSyncState";
 import type {
   BalanceCheckEntry,
   CompletedGoal,
@@ -25,6 +33,8 @@ type UseCloudSyncParams = {
   setCompletedGoals: Dispatch<SetStateAction<CompletedGoal[]>>;
 };
 
+type CloudLoadMode = "initial" | "background";
+
 export function useCloudSync({
   entries,
   setEntries,
@@ -41,11 +51,33 @@ export function useCloudSync({
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
   const [cloudLoaded, setCloudLoaded] = useState(false);
+  const [isCloudRefreshing, setIsCloudRefreshing] = useState(false);
   const [syncStatus, setSyncStatus] = useState(
     supabaseEnvError ? "Thiếu cấu hình Supabase" : "Chưa đồng bộ"
   );
+  const [hadLocalDataAtMount] = useState(() => {
+    if (
+      entries.length > 0 ||
+      expenses.length > 0 ||
+      balanceChecks.length > 0 ||
+      completedGoals.length > 0
+    ) {
+      return true;
+    }
+
+    return [
+      STORAGE_ENTRIES_KEY,
+      STORAGE_EXPENSES_KEY,
+      STORAGE_BALANCE_CHECKS_KEY,
+      STORAGE_GOALS_KEY,
+      STORAGE_COMPLETED_GOALS_KEY,
+    ].some((key) => localStorage.getItem(key) !== null);
+  });
   const localDirtyRef = useRef(false);
+  const cloudLoadedRef = useRef(false);
+  const cloudRequestRef = useRef<Promise<void> | null>(null);
   const userId = session?.user?.id;
+  const activeUserIdRef = useRef(userId);
   const latestDataRef = useRef({
     entries,
     expenses,
@@ -63,6 +95,11 @@ export function useCloudSync({
       completedGoals,
     };
   }, [entries, expenses, balanceChecks, goals, completedGoals]);
+
+  useEffect(() => {
+    activeUserIdRef.current = userId;
+    cloudRequestRef.current = null;
+  }, [userId]);
 
   useEffect(() => {
     if (supabaseEnvError) {
@@ -85,114 +122,163 @@ export function useCloudSync({
   }, []);
 
   const loadCloudData = useCallback(
-    async (userId: string) => {
-      setCloudLoaded(false);
-      setSyncStatus("Đang tải và gộp dữ liệu...");
-
-      const { data, error } = await supabase
-        .from("money_diary_state")
-        .select("entries, goals, completed_goals, expenses, balance_checks")
-        .eq("user_id", userId)
-        .maybeSingle();
-
-      if (error) {
-        console.error(error);
-        setSyncStatus("Lỗi tải dữ liệu cloud");
-        return;
+    (userId: string, mode: CloudLoadMode = "initial") => {
+      if (cloudRequestRef.current) {
+        return cloudRequestRef.current;
       }
 
-      const {
-        entries: localEntries,
-        expenses: localExpenses,
-        balanceChecks: localBalanceChecks,
-        goals: localGoals,
-        completedGoals: localCompletedGoals,
-      } = latestDataRef.current;
+      const isBackground = mode === "background";
+      const request = (async () => {
+        if (isBackground) {
+          setIsCloudRefreshing(true);
+          setSyncStatus("Đang đồng bộ...");
+        } else {
+          setSyncStatus("Đang tải và gộp dữ liệu...");
+        }
 
-      const cloudExpenses = data?.expenses
-        ? ((data.expenses || []) as unknown as ExpenseEntry[])
-        : [];
+        try {
+          const { data, error } = await supabase
+            .from("money_diary_state")
+            .select("entries, goals, completed_goals, expenses, balance_checks")
+            .eq("user_id", userId)
+            .maybeSingle();
 
-      const cloudBalanceChecks = data?.balance_checks
-        ? ((data.balance_checks || []) as unknown as BalanceCheckEntry[])
-        : [];
+          if (activeUserIdRef.current !== userId) return;
 
-      const cloudEntries = data?.entries
-        ? ((data.entries || []) as unknown as DailyEntry[])
-        : [];
+          if (error) {
+            console.error(error);
+            setSyncStatus(
+              isBackground ? "Chưa thể đồng bộ" : "Lỗi tải dữ liệu cloud"
+            );
+            return;
+          }
 
-      const cloudGoals = data?.goals
-        ? ({
-            ...defaultGoals,
-            ...((data.goals || {}) as unknown as Goals),
-          } as Goals)
-        : null;
+          const {
+            entries: localEntries,
+            expenses: localExpenses,
+            balanceChecks: localBalanceChecks,
+            goals: localGoals,
+            completedGoals: localCompletedGoals,
+          } = latestDataRef.current;
 
-      const cloudCompletedGoals = data?.completed_goals
-        ? ((data.completed_goals || []) as unknown as CompletedGoal[])
-        : [];
+          const cloudExpenses = data?.expenses
+            ? ((data.expenses || []) as unknown as ExpenseEntry[])
+            : [];
 
-      const mergedExpenses = mergeByNewestDate(cloudExpenses, localExpenses);
-      const mergedBalanceChecks = mergeByNewestDate(
-        cloudBalanceChecks,
-        localBalanceChecks
-      );
-      const mergedEntries = mergeByNewestDate(cloudEntries, localEntries);
+          const cloudBalanceChecks = data?.balance_checks
+            ? ((data.balance_checks || []) as unknown as BalanceCheckEntry[])
+            : [];
 
-      const mergedCompletedGoalsMap = new Map<string, CompletedGoal>();
+          const cloudEntries = data?.entries
+            ? ((data.entries || []) as unknown as DailyEntry[])
+            : [];
 
-      cloudCompletedGoals.forEach((goal) => {
-        mergedCompletedGoalsMap.set(goal.id, goal);
+          const cloudGoals = data?.goals
+            ? ({
+                ...defaultGoals,
+                ...((data.goals || {}) as unknown as Goals),
+              } as Goals)
+            : null;
+
+          const cloudCompletedGoals = data?.completed_goals
+            ? ((data.completed_goals || []) as unknown as CompletedGoal[])
+            : [];
+
+          const mergedExpenses = mergeByNewestDate(cloudExpenses, localExpenses);
+          const mergedBalanceChecks = mergeByNewestDate(
+            cloudBalanceChecks,
+            localBalanceChecks
+          );
+          const mergedEntries = mergeByNewestDate(cloudEntries, localEntries);
+
+          const mergedCompletedGoalsMap = new Map<string, CompletedGoal>();
+
+          cloudCompletedGoals.forEach((goal) => {
+            mergedCompletedGoalsMap.set(goal.id, goal);
+          });
+
+          localCompletedGoals.forEach((goal) => {
+            mergedCompletedGoalsMap.set(goal.id, goal);
+          });
+
+          const mergedCompletedGoals = Array.from(
+            mergedCompletedGoalsMap.values()
+          );
+          const mergedGoals = cloudGoals ?? localGoals;
+
+          setExpenses(mergedExpenses);
+          setBalanceChecks(mergedBalanceChecks);
+          setEntries(mergedEntries);
+          setGoals(mergedGoals);
+          setCompletedGoals(mergedCompletedGoals);
+          cloudLoadedRef.current = true;
+          setCloudLoaded(true);
+
+          const { error: upsertError } = await supabase
+            .from("money_diary_state")
+            .upsert({
+              user_id: userId,
+              entries: mergedEntries,
+              goals: mergedGoals,
+              completed_goals: mergedCompletedGoals,
+              expenses: mergedExpenses,
+              balance_checks: mergedBalanceChecks,
+              updated_at: new Date().toISOString(),
+            });
+
+          if (activeUserIdRef.current !== userId) return;
+
+          if (upsertError) {
+            console.error(upsertError);
+            setSyncStatus("Chưa thể đồng bộ");
+            return;
+          }
+
+          setSyncStatus("Đã đồng bộ");
+        } catch (error) {
+          console.error(error);
+          setSyncStatus(
+            isBackground ? "Chưa thể đồng bộ" : "Lỗi tải dữ liệu cloud"
+          );
+        } finally {
+          if (isBackground) {
+            setIsCloudRefreshing(false);
+          }
+        }
+      })();
+
+      cloudRequestRef.current = request;
+      void request.finally(() => {
+        if (cloudRequestRef.current === request) {
+          cloudRequestRef.current = null;
+        }
       });
 
-      localCompletedGoals.forEach((goal) => {
-        mergedCompletedGoalsMap.set(goal.id, goal);
-      });
-
-      const mergedCompletedGoals = Array.from(
-        mergedCompletedGoalsMap.values()
-      );
-      const mergedGoals = cloudGoals ?? localGoals;
-
-      setExpenses(mergedExpenses);
-      setBalanceChecks(mergedBalanceChecks);
-      setEntries(mergedEntries);
-      setGoals(mergedGoals);
-      setCompletedGoals(mergedCompletedGoals);
-
-      const { error: upsertError } = await supabase
-        .from("money_diary_state")
-        .upsert({
-          user_id: userId,
-          entries: mergedEntries,
-          goals: mergedGoals,
-          completed_goals: mergedCompletedGoals,
-          expenses: mergedExpenses,
-          balance_checks: mergedBalanceChecks,
-          updated_at: new Date().toISOString(),
-        });
-
-      if (upsertError) {
-        console.error(upsertError);
-        setSyncStatus("Lỗi đẩy dữ liệu local lên cloud");
-        return;
-      }
-
-      setCloudLoaded(true);
-      setSyncStatus("Đã đồng bộ");
+      return request;
     },
     [setBalanceChecks, setCompletedGoals, setEntries, setExpenses, setGoals]
   );
+
+  const retryCloudLoad = useCallback(() => {
+    if (!userId) return Promise.resolve();
+    const mode = cloudLoadedRef.current || hadLocalDataAtMount
+      ? "background"
+      : "initial";
+    return loadCloudData(userId, mode);
+  }, [hadLocalDataAtMount, loadCloudData, userId]);
 
   useEffect(() => {
     if (!userId) return;
 
     const timeout = window.setTimeout(() => {
-      void loadCloudData(userId);
+      void loadCloudData(
+        userId,
+        hadLocalDataAtMount ? "background" : "initial"
+      );
     }, 0);
 
     return () => window.clearTimeout(timeout);
-  }, [userId, loadCloudData]);
+  }, [hadLocalDataAtMount, userId, loadCloudData]);
 
   useEffect(() => {
     if (!userId || !cloudLoaded) return;
@@ -244,9 +330,15 @@ export function useCloudSync({
       if (localDirtyRef.current) return;
 
       refreshing = true;
-      setCloudLoaded(false);
-      await loadCloudData(userId);
-      refreshing = false;
+      const mode = cloudLoadedRef.current || hadLocalDataAtMount
+        ? "background"
+        : "initial";
+
+      try {
+        await loadCloudData(userId, mode);
+      } finally {
+        refreshing = false;
+      }
     }
 
     function handleVisibilityChange() {
@@ -262,7 +354,7 @@ export function useCloudSync({
       window.removeEventListener("focus", refreshWhenBackToApp);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [userId, loadCloudData]);
+  }, [hadLocalDataAtMount, userId, loadCloudData]);
 
   function markLocalChanged(message = "Có thay đổi, đang chờ đồng bộ...") {
     localDirtyRef.current = true;
@@ -327,10 +419,19 @@ export function useCloudSync({
 
     await supabase.auth.signOut();
 
+    cloudLoadedRef.current = false;
     setSession(null);
     setCloudLoaded(false);
+    setIsCloudRefreshing(false);
     setSyncStatus("Chưa đồng bộ");
   }
+
+  const { cloudLoadError, isCloudLoading } = getCloudRenderState({
+    cloudLoaded,
+    hadLocalDataAtMount,
+    syncStatus,
+    userId,
+  });
 
   return {
     session,
@@ -338,6 +439,10 @@ export function useCloudSync({
     setAuthEmail,
     authPassword,
     setAuthPassword,
+    cloudLoadError,
+    isCloudLoading,
+    isCloudRefreshing,
+    retryCloudLoad,
     syncStatus,
     supabaseEnvError,
     setSyncStatus,

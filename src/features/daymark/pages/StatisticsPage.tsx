@@ -1,10 +1,9 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   addDaysToDateString,
   getMonthStart,
   getToday,
 } from "../../../utils/date";
-import type { DayMarkTask } from "../types/daymark";
 import { useDayMarkTaskRange } from "../hooks/useDayMarkTaskRange";
 import {
   buildDayMarkMetrics,
@@ -12,36 +11,51 @@ import {
   formatDuration,
   taskCategoryLabels,
 } from "../utils/daymarkUtils";
+import { PageHeader } from "../components/ui/PageHeader";
 
 type StatisticsPageProps = {
   userId?: string;
 };
 
 export function StatisticsPage({ userId }: StatisticsPageProps) {
+  const [range, setRange] = useState<7 | 14 | 30 | "month">("month");
   const today = getToday();
-  const fromDate = addDaysToDateString(today, -29);
+  const fromDate = range === "month" ? getMonthStart() : addDaysToDateString(today, -(range - 1));
   const { error, isLoading, tasks } = useDayMarkTaskRange({
     fromDate,
     toDate: today,
     userId,
   });
-  const todayTasks = tasks.filter((task) => task.task_date === today);
-  const weekStart = addDaysToDateString(today, -6);
-  const weekTasks = tasks.filter((task) => task.task_date >= weekStart);
-  const monthTasks = tasks.filter((task) => task.task_date >= getMonthStart());
-  const monthMetrics = useMemo(
-    () => buildDayMarkMetrics(monthTasks),
-    [monthTasks]
-  );
+  const rangeMetrics = useMemo(() => buildDayMarkMetrics(tasks), [tasks]);
 
   return (
     <section className="grid gap-4">
-      <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-5">
-        <h1 className="text-2xl font-black">Thống kê DayMark</h1>
-        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-          Dựa trên nhiệm vụ thật đã lưu trong 30 ngày gần nhất.
-        </p>
-      </div>
+      <PageHeader
+        eyebrow="Thống kê"
+        title="Nhìn lại nhẹ nhàng"
+        subtitle="Chỉ giữ các chỉ số cần đọc để biết nhịp ngày của bạn."
+        actions={
+          <div className="flex flex-wrap gap-2">
+            {[
+              { label: "7 ngày", value: 7 },
+              { label: "14 ngày", value: 14 },
+              { label: "30 ngày", value: 30 },
+              { label: "Tháng này", value: "month" },
+            ].map((item) => (
+              <button
+                key={item.label}
+                type="button"
+                onClick={() => setRange(item.value as 7 | 14 | 30 | "month")}
+                className={`daymark-secondary-action ${
+                  range === item.value ? "bg-[var(--dm-primary-soft)]" : ""
+                }`}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+        }
+      />
 
       {error && (
         <p className="rounded-2xl bg-red-50 p-3 text-sm font-medium text-red-700">
@@ -50,25 +64,25 @@ export function StatisticsPage({ userId }: StatisticsPageProps) {
       )}
 
       <div className="grid gap-3 sm:grid-cols-3">
-        <StatCard title="Hôm nay" tasks={todayTasks} />
-        <StatCard title="7 ngày" tasks={weekTasks} />
-        <StatCard title="Tháng này" tasks={monthTasks} />
+        <MetricTile label="Hoàn thành" value={`${rangeMetrics.completionRate}%`} />
+        <MetricTile label="Nhiệm vụ" value={`${rangeMetrics.completedCount}/${rangeMetrics.totalTasks}`} />
+        <MetricTile label="Tổng thời gian" value={formatDuration(rangeMetrics.totalMinutes)} />
       </div>
 
-      <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-5">
-        <h2 className="text-xl font-black">Thời gian theo loại trong tháng</h2>
+      <section className="daymark-section">
+        <h2 className="text-xl font-black">Thời gian theo loại</h2>
 
-        {monthTasks.length === 0 ? (
+        {tasks.length === 0 ? (
           <p className="mt-4 rounded-2xl bg-slate-50 p-4 text-sm text-slate-500 dark:bg-slate-800 dark:text-slate-400">
             Chưa có dữ liệu tháng này.
           </p>
         ) : (
           <div className="mt-4 grid gap-3">
             {dayMarkCategories.map((category) => {
-              const minutes = monthMetrics.categoryMinutes[category];
+              const minutes = rangeMetrics.categoryMinutes[category];
               const percent =
-                monthMetrics.totalMinutes > 0
-                  ? Math.round((minutes / monthMetrics.totalMinutes) * 100)
+                rangeMetrics.totalMinutes > 0
+                  ? Math.round((minutes / rangeMetrics.totalMinutes) * 100)
                   : 0;
 
               return (
@@ -83,7 +97,7 @@ export function StatisticsPage({ userId }: StatisticsPageProps) {
                   </div>
                   <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
                     <div
-                      className="h-full rounded-full bg-emerald-700"
+                      className="h-full rounded-full bg-[var(--dm-primary)]"
                       style={{ width: `${percent}%` }}
                     />
                   </div>
@@ -101,17 +115,11 @@ export function StatisticsPage({ userId }: StatisticsPageProps) {
   );
 }
 
-function StatCard({ tasks, title }: { tasks: DayMarkTask[]; title: string }) {
-  const metrics = buildDayMarkMetrics(tasks);
-
+function MetricTile({ label, value }: { label: string; value: string }) {
   return (
-    <article className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-      <p className="text-sm text-slate-500 dark:text-slate-400">{title}</p>
-      <p className="mt-1 text-3xl font-black">{metrics.completionRate}%</p>
-      <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-        {metrics.completedCount}/{metrics.totalTasks} hoàn thành ·{" "}
-        {formatDuration(metrics.totalMinutes)}
-      </p>
+    <article className="daymark-side-panel">
+      <p className="text-sm font-bold text-[var(--dm-muted)]">{label}</p>
+      <p className="mt-1 text-3xl font-black">{value}</p>
     </article>
   );
 }

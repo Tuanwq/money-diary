@@ -1,8 +1,11 @@
-import { BalanceCheckCard } from "./components/BalanceCheckCard";
-import { AccountBar } from "./components/AccountBar";
 import { useBrowserRoute } from "./app/router/useBrowserRoute";
 import { DayMarkApp } from "./features/daymark/DayMarkApp";
 import { HubSelectionPage } from "./features/hub/pages/HubSelectionPage";
+import {
+  BalanceCheckOverlay,
+  type BalanceCheckOverlayMode,
+} from "./features/money-diary/components/balance-check/BalanceCheckOverlay";
+import { MoneyPageShell } from "./features/money-diary/components/layout/MoneyPageShell";
 import { exportWordReport } from "./features/report/exportWordReport";
 import { useAppNavigation } from "./hooks/useAppNavigation";
 import { useCloudSync } from "./hooks/useCloudSync";
@@ -24,7 +27,6 @@ import {
   STORAGE_HUB_ENTRIES_KEY,
   STORAGE_HUB_SETTINGS_KEY,
 } from "./constants/hanoiHub";
-import { BottomNav } from "./components/BottomNav";
 import {
   HubPage,
   type HubDiaryContribution,
@@ -460,13 +462,18 @@ export default function App() {
     bank: "",
     note: "",
   });
+  const [balanceCheckOverlay, setBalanceCheckOverlay] = useState<{
+    isOpen: boolean;
+    mode: BalanceCheckOverlayMode;
+  }>({ isOpen: false, mode: "edit" });
+  const [isBalanceCheckSubmitting, setIsBalanceCheckSubmitting] = useState(false);
   const [selectedDate, setSelectedDate] = useState(getToday());
   const [editingDate, setEditingDate] = useState<string | null>(null);
   const [editingExpenseDate, setEditingExpenseDate] = useState<string | null>(
   null
 );
   const { route, navigateApp } = useBrowserRoute();
-  const { page, goalScreen, setGoalScreen, navigateTo, resetMoneyNavigation } =
+  const { page, goalId, goalScreen, navigateTo, resetMoneyNavigation } =
     useAppNavigation();
   const [chartDays, setChartDays] = useState(7);
   const [forecastDays, setForecastDays] = useState(14);
@@ -479,6 +486,10 @@ export default function App() {
     setAuthEmail,
     authPassword,
     setAuthPassword,
+    cloudLoadError,
+    isCloudLoading,
+    isCloudRefreshing,
+    retryCloudLoad,
     syncStatus,
     setSyncStatus,
     markLocalChanged,
@@ -500,7 +511,6 @@ export default function App() {
   });
   const hubDiaryMigrationDoneRef = useRef(false);
   const balanceCheckDraftDirtyRef = useRef(false);
-  const balanceCheckSectionRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!session) {
@@ -792,6 +802,9 @@ function restoreChangeLog(id: string) {
   const selectedIncome = selectedMainIncome + selectedBonusMoney;
   const selectedHours = selectedEntry?.workHours ?? 0;
   const selectedExpense = expenses.find((expense) => expense.date === selectedDate);
+  const selectedBalanceCheck = balanceChecks.find(
+    (item) => item.date === selectedDate
+  );
 
 const selectedExpenseTotal = selectedExpense
   ? selectedExpense.breakfast +
@@ -1162,7 +1175,11 @@ const totalExpense = expenses.reduce((sum, expense) => {
 const currentGoalStartDate = goals.bigGoalStartDate ?? getToday();
 
 const selectedCompletedGoal = completedGoals.find(
-  (goal) => goal.id === selectedCompletedGoalId
+  (goal) =>
+    goal.id ===
+    (goalScreen === "completedDetail"
+      ? (goalId ?? selectedCompletedGoalId)
+      : selectedCompletedGoalId)
 );
 
 const currentBalanceMovementData = buildBalanceMovementData(
@@ -1209,20 +1226,15 @@ const todayGoalPaceRemaining =
   goals.bigGoalTarget > 0 && remainingBigGoal > 0
     ? Math.max(needPerDay - todayActualIncome, 0)
     : 0;
-const todayChecklistDoneCount = [
-  todayEntry,
-  todayExpense,
-  todayBalanceCheck,
-].filter(Boolean).length;
 const dataWarnings = useMemo(
   () =>
     buildDataWarnings({
       entries,
       expenses,
       balanceChecks,
-      today: todayString,
+      today: selectedDate,
     }),
-  [entries, expenses, balanceChecks, todayString]
+  [entries, expenses, balanceChecks, selectedDate]
 );
 
 const safeForecastDays = Math.min(Math.max(forecastDays, 1), 365);
@@ -1352,41 +1364,49 @@ function handleDataWarningAction(warning: DataWarning) {
   }
 
   if (warning.actionPage === "home") {
-    const safeDate = warningDate > todayString ? todayString : warningDate;
-
-    setSelectedDate(safeDate);
-    setBalanceCheckForm((prev) => ({
-      ...prev,
-      date: safeDate,
-    }));
-    navigateTo("home", warning.actionGoalScreen ?? "menu");
-
-    window.setTimeout(() => {
-      balanceCheckSectionRef.current?.scrollIntoView({
-        behavior: "smooth",
-        block: "start",
-      });
-    }, 0);
-
+    openBalanceCheckOverlay(warningDate, "edit");
     return;
   }
 
   navigateTo(warning.actionPage, warning.actionGoalScreen ?? "menu");
 }
 
-function goToTodayBalanceCheck() {
-  setSelectedDate(todayString);
-  setBalanceCheckForm((prev) => ({
-    ...prev,
-    date: todayString,
-  }));
+function openBalanceCheckOverlay(
+  date: string,
+  mode: BalanceCheckOverlayMode = "edit"
+) {
+  const safeDate = date > todayString ? todayString : date;
+  const existing = balanceChecks.find((item) => item.date === safeDate);
 
-  window.setTimeout(() => {
-    balanceCheckSectionRef.current?.scrollIntoView({
-      behavior: "smooth",
-      block: "start",
-    });
-  }, 0);
+  balanceCheckDraftDirtyRef.current = false;
+  setSelectedDate(safeDate);
+  setBalanceCheckForm({
+    date: safeDate,
+    cash: existing ? formatMoneyInput(String(existing.cash ?? 0)) : "",
+    bank: existing ? formatMoneyInput(String(existing.bank ?? 0)) : "",
+    note: existing?.note ?? "",
+  });
+  setBalanceCheckOverlay({
+    isOpen: true,
+    mode: mode === "details" && !existing ? "edit" : mode,
+  });
+  navigateTo("home", "menu");
+}
+
+function closeBalanceCheckOverlay() {
+  if (
+    balanceCheckDraftDirtyRef.current &&
+    !confirm("Bạn có thay đổi chưa lưu. Bạn có chắc muốn đóng kiểm kê không?")
+  ) {
+    return;
+  }
+
+  balanceCheckDraftDirtyRef.current = false;
+  setBalanceCheckOverlay((current) => ({ ...current, isOpen: false }));
+}
+
+function goToTodayBalanceCheck() {
+  openBalanceCheckOverlay(todayString, "edit");
 }
 
 function handleExpenseSubmit(event: React.FormEvent) {
@@ -1613,6 +1633,8 @@ function handleCloseDaySubmit(event: React.FormEvent) {
 function handleBalanceCheckSubmit(event: React.FormEvent) {
   event.preventDefault();
 
+  if (isBalanceCheckSubmitting) return;
+
   if (!balanceCheckForm.date) {
     alert("Bạn chưa chọn ngày kiểm kê.");
     return;
@@ -1625,6 +1647,8 @@ function handleBalanceCheckSubmit(event: React.FormEvent) {
     alert("Tiền mặt và tiền tài khoản không được âm.");
     return;
   }
+
+  setIsBalanceCheckSubmitting(true);
 
   const appMoney = getAppMoneyAtDate(balanceCheckForm.date);
   const actualMoney = cash + bank;
@@ -1671,7 +1695,11 @@ function handleBalanceCheckSubmit(event: React.FormEvent) {
   });
 
   setSyncStatus("Đã lưu kiểm kê số dư");
-  alert("Đã thêm kiểm kê thành công.");
+  window.requestAnimationFrame(() => {
+    setBalanceCheckOverlay((current) => ({ ...current, isOpen: false }));
+    setIsBalanceCheckSubmitting(false);
+    alert("Đã thêm kiểm kê thành công.");
+  });
 }
 
 function deleteBalanceCheck(id: string) {
@@ -1704,21 +1732,7 @@ function deleteBalanceCheck(id: string) {
 }
 
 function editBalanceCheck(item: BalanceCheckEntry) {
-  setSelectedDate(item.date);
-
-  setBalanceCheckForm({
-    date: item.date,
-    cash: formatMoneyInput(String(item.cash ?? 0)),
-    bank: formatMoneyInput(String(item.bank ?? 0)),
-    note: item.note ?? "",
-  });
-
-  navigateTo("home", "menu");
-
-  window.scrollTo({
-    top: 0,
-    behavior: "smooth",
-  });
+  openBalanceCheckOverlay(item.date, "edit");
 }
 
   function handleSubmit(event: React.FormEvent) {
@@ -2915,51 +2929,6 @@ function exportToWord() {
   });
 }
 
-function renderBalanceCheckCard(title = "Kiểm kê số dư hôm nay") {
-  return (
-    <BalanceCheckCard
-      title={title}
-      form={balanceCheckForm}
-      maxDate={todayString}
-      appMoney={getAppMoneyAtDate(balanceCheckForm.date)}
-      onSubmit={handleBalanceCheckSubmit}
-      onDateChange={(nextDate) => {
-        balanceCheckDraftDirtyRef.current = false;
-
-        setSelectedDate(nextDate);
-        setBalanceCheckForm((prev) => ({
-          ...prev,
-          date: nextDate,
-        }));
-      }}
-      onCashChange={(value) => {
-        balanceCheckDraftDirtyRef.current = true;
-
-        setBalanceCheckForm((prev) => ({
-          ...prev,
-          cash: value,
-        }));
-      }}
-      onBankChange={(value) => {
-        balanceCheckDraftDirtyRef.current = true;
-
-        setBalanceCheckForm((prev) => ({
-          ...prev,
-          bank: value,
-        }));
-      }}
-      onNoteChange={(value) => {
-        balanceCheckDraftDirtyRef.current = true;
-
-        setBalanceCheckForm((prev) => ({
-          ...prev,
-          note: value,
-        }));
-      }}
-    />
-  );
-}
-
 if (!session) {
   return (
     <div className="app-shell-bg min-h-[100dvh] text-[var(--text-primary)]">
@@ -3007,61 +2976,40 @@ if (route.kind === "daymark") {
 }
 
   return (
-    <div className="app-shell-bg min-h-[100dvh] text-[var(--text-primary)]">
-      <header className="app-header pt-[env(safe-area-inset-top)] shadow-sm">
-        <div className="mx-auto max-w-6xl px-3 py-4 sm:px-4 sm:py-6">
-          <h1 className="text-2xl font-black tracking-tight sm:text-3xl">
-            Nhật ký kiếm tiền
-          </h1>
-          <p className="mt-1 max-w-2xl text-sm text-emerald-50 sm:text-base">
-            Ghi lại mỗi ngày, theo dõi tiền kiếm được, giờ làm và tiến độ mục tiêu.
-          </p>
-        </div>
-      </header>
-
-      {!session && (
-        <AuthPage
-          authEmail={authEmail}
-          setAuthEmail={setAuthEmail}
-          authPassword={authPassword}
-          setAuthPassword={setAuthPassword}
-          handleLogin={handleLogin}
-          handleSignUp={handleSignUp}
-          supabaseEnvError={supabaseEnvError}
-          themeMode={themeMode}
-          toggleThemeMode={toggleThemeMode}
-        />
-      )}
-
-      {session && (
-        <>
-        <main className="mx-auto grid max-w-6xl gap-4 px-3 pb-[var(--bottom-nav-clearance)] pt-4 sm:gap-6 sm:px-4 sm:pt-6">
-          <AccountBar
-            email={session.user.email}
-            syncStatus={syncStatus}
-            onExportWord={exportToWord}
-            onOpenChangeLog={() => navigateTo("changes")}
-            onLogout={handleLogout}
-            themeMode={themeMode}
-            toggleThemeMode={toggleThemeMode}
-          />
-
+    <MoneyPageShell
+      currentPage={page}
+      email={session.user.email}
+      isCloudRefreshing={isCloudRefreshing}
+      navigateTo={navigateTo}
+      onExportReport={exportToWord}
+      onLogout={handleLogout}
+      onOpenBalanceCheck={goToTodayBalanceCheck}
+      onOpenChangeLog={() => navigateTo("changes")}
+      onOpenCloseDay={() => openCloseDay()}
+      onOpenExpense={goToTodayEntryForm}
+      onOpenIncome={() => navigateTo("hub")}
+      onRetrySync={() => void retryCloudLoad()}
+      onSwitchApp={openAppHub}
+      syncStatus={syncStatus}
+      themeMode={themeMode}
+      toggleThemeMode={toggleThemeMode}
+    >
           {page === "home" && (
             <HomePage
               entries={entries}
               expenses={expenses}
               balanceChecks={balanceChecks}
+              cloudLoadError={cloudLoadError}
+              isCloudLoading={isCloudLoading}
               isSelectedToday={isSelectedToday}
               selectedDate={selectedDate}
               goals={goals}
-              isBigGoalBehind={isBigGoalBehind}
               daysLeft={daysLeft}
               goToPreviousDay={goToPreviousDay}
               goToNextDay={goToNextDay}
               goToToday={goToToday}
               handleSelectDate={handleSelectDate}
               todayString={todayString}
-              todayChecklistDoneCount={todayChecklistDoneCount}
               todayGoalPaceRemaining={todayGoalPaceRemaining}
               needPerDay={needPerDay}
               todayActualIncome={todayActualIncome}
@@ -3074,9 +3022,13 @@ if (route.kind === "daymark") {
               dataWarnings={dataWarnings}
               goToTodayEntryForm={goToTodayEntryForm}
               goToTodayBalanceCheck={goToTodayBalanceCheck}
-              openCloseDay={() => openCloseDay()}
+              openCloseDay={() => openCloseDay(selectedDate)}
               onDataWarningAction={handleDataWarningAction}
               selectedActualIncome={selectedActualIncome}
+              selectedEntry={selectedEntry}
+              selectedExpense={selectedExpense}
+              selectedBalanceCheck={selectedBalanceCheck}
+              selectedAppMoney={getAppMoneyAtDate(selectedDate)}
               selectedMainIncome={selectedMainIncome}
               selectedBonusMoney={selectedBonusMoney}
               selectedExpenseTotal={selectedExpenseTotal}
@@ -3086,8 +3038,13 @@ if (route.kind === "daymark") {
               monthIncome={monthIncome}
               actualMoney={actualMoney}
               totalJourneyMoney={totalJourneyMoney}
-              balanceCheckSectionRef={balanceCheckSectionRef}
-              renderBalanceCheckCard={renderBalanceCheckCard}
+              onOpenSelectedBalanceDetails={() =>
+                openBalanceCheckOverlay(selectedDate, "details")
+              }
+              onOpenSelectedBalanceEditor={() =>
+                openBalanceCheckOverlay(selectedDate, "edit")
+              }
+              retryCloudLoad={retryCloudLoad}
               navigateTo={navigateTo}
             />
           )}
@@ -3117,6 +3074,7 @@ if (route.kind === "daymark") {
               form={form}
               goalForecast={goalForecast}
               goals={goals}
+              goalId={goalId}
               goalScreen={goalScreen}
               getSubGoalAllocationAvailable={getSubGoalAllocationAvailable}
               incomePerHour={incomePerHour}
@@ -3134,7 +3092,6 @@ if (route.kind === "daymark") {
               setChartDays={setChartDays}
               setForecastDays={setForecastDays}
               setForm={setForm}
-              setGoalScreen={setGoalScreen}
               setMainGoalForm={setMainGoalForm}
               setSelectedCompletedGoalId={setSelectedCompletedGoalId}
               startEditSubGoal={startEditSubGoal}
@@ -3173,7 +3130,6 @@ if (route.kind === "daymark") {
       setEditingDate={setEditingDate}
       setEditingExpenseDate={setEditingExpenseDate}
       todayString={todayString}
-      renderBalanceCheckCard={renderBalanceCheckCard}
       navigateTo={navigateTo}
     />
   )}
@@ -3357,45 +3313,45 @@ if (route.kind === "daymark") {
       navigateTo={navigateTo}
       restoreChangeLog={restoreChangeLog}
     />
-  )}</main>
+  )}
+  <BalanceCheckOverlay
+    appMoney={getAppMoneyAtDate(balanceCheckForm.date)}
+    balanceCheck={balanceChecks.find((item) => item.date === balanceCheckForm.date)}
+    form={balanceCheckForm}
+    isOpen={balanceCheckOverlay.isOpen}
+    isSubmitting={isBalanceCheckSubmitting}
+    maxDate={todayString}
+    mode={balanceCheckOverlay.mode}
+    onBankChange={(value) => {
+      balanceCheckDraftDirtyRef.current = true;
+      setBalanceCheckForm((current) => ({ ...current, bank: value }));
+    }}
+    onCashChange={(value) => {
+      balanceCheckDraftDirtyRef.current = true;
+      setBalanceCheckForm((current) => ({ ...current, cash: value }));
+    }}
+    onDateChange={(nextDate) => {
+      if (
+        balanceCheckDraftDirtyRef.current &&
+        !confirm("Bạn có thay đổi chưa lưu. Bạn có chắc muốn chuyển ngày kiểm kê không?")
+      ) {
+        return;
+      }
 
-    <BottomNav
-      currentPage={page}
-      navigateTo={navigateTo}
-      openCloseDay={() => openCloseDay()}
-    />
-    {page !== "home" && (
-      <FloatingHomeButton onClick={() => navigateTo("home", "menu")} />
-    )}
-  </>
-)}
-    </div>
-  );
-}
-
-function FloatingHomeButton({ onClick }: { onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      title="Về trang chủ"
-      aria-label="Về trang chủ"
-      className="fixed bottom-[calc(5.75rem+env(safe-area-inset-bottom))] right-4 z-[60] flex h-14 w-14 items-center justify-center rounded-full bg-emerald-700 text-white shadow-xl shadow-emerald-900/25 transition hover:bg-emerald-800 focus:outline-none focus:ring-4 focus:ring-emerald-200 sm:bottom-8"
-    >
-      <svg
-        aria-hidden="true"
-        viewBox="0 0 24 24"
-        className="h-6 w-6"
-        fill="none"
-        stroke="currentColor"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth="2.4"
-      >
-        <path d="M3 10.5 12 3l9 7.5" />
-        <path d="M5 10v10h14V10" />
-        <path d="M9 20v-6h6v6" />
-      </svg>
-    </button>
+      balanceCheckDraftDirtyRef.current = false;
+      setSelectedDate(nextDate);
+      setBalanceCheckForm((current) => ({ ...current, date: nextDate }));
+    }}
+    onNoteChange={(value) => {
+      balanceCheckDraftDirtyRef.current = true;
+      setBalanceCheckForm((current) => ({ ...current, note: value }));
+    }}
+    onRequestClose={closeBalanceCheckOverlay}
+    onStartEditing={() =>
+      setBalanceCheckOverlay((current) => ({ ...current, mode: "edit" }))
+    }
+    onSubmit={handleBalanceCheckSubmit}
+  />
+    </MoneyPageShell>
   );
 }

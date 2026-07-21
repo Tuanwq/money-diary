@@ -7,6 +7,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
+    "test:cloud-sync": "node --experimental-strip-types scripts/cloudSyncState.test.mjs",
+    "test:goals": "node --experimental-strip-types scripts/goalNavigation.test.mjs",
     "test:streak": "node scripts/daymarkStreak.test.mjs",
     "preview": "vite preview"
   },
@@ -15,6 +17,7 @@
     "@tailwindcss/vite": "^4.3.1",
     "docx": "^9.7.1",
     "file-saver": "^2.0.5",
+    "lucide-react": "^1.25.0",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
     "recharts": "^3.8.1",

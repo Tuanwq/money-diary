@@ -42,7 +42,9 @@ export function DayMarkApp({
       {currentRoute === "today" && (
         <TodayPage onNavigate={onNavigate} userId={userId} />
       )}
-      {currentRoute === "calendar" && <CalendarPage userId={userId} />}
+      {currentRoute === "calendar" && (
+        <CalendarPage onNavigate={onNavigate} userId={userId} />
+      )}
       {currentRoute === "statistics" && <StatisticsPage userId={userId} />}
       {currentRoute === "notes" && <NotesPage userId={userId} />}
       {currentRoute === "settings" && <DayMarkSettingsPage />}

@@ -1,9 +1,11 @@
+import { Settings2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { getToday } from "../../../utils/date";
 import { recordPomodoroSession } from "../services/daymarkPomodoroService";
 import { updateDayMarkTask } from "../services/daymarkTasksService";
 import { useDayMarkTasks } from "../hooks/useDayMarkTasks";
 import { usePomodoroTimer } from "../hooks/usePomodoroTimer";
+import { PageHeader } from "../components/ui/PageHeader";
 import type { DayMarkTask, TaskStatus } from "../types/daymark";
 import {
   formatDuration,
@@ -90,6 +92,7 @@ export function PomodoroPage({ onNavigate, userId }: PomodoroPageProps) {
   const queryHandledRef = useRef(false);
   const autoCompletingRef = useRef(false);
   const [isFocusViewOpen, setIsFocusViewOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const selectedTask = tasks.find((task) => task.id === timer.state.taskId);
   const plannedFocusSeconds = getTaskPlannedSeconds(selectedTask);
   const progressPercent =
@@ -299,30 +302,32 @@ export function PomodoroPage({ onNavigate, userId }: PomodoroPageProps) {
   }
 
   return (
-    <section className="grid gap-4">
-      <header className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-5">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <p className="text-sm font-bold uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-300">
-              Pomodoro
-            </p>
-            <h1 className="mt-1 text-2xl font-black tracking-tight sm:text-3xl">
-              Tập trung theo nhiệm vụ
-            </h1>
-            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-              Chọn nhiệm vụ, bấm bắt đầu và app sẽ ghi lại thời gian thực tế.
-            </p>
-          </div>
-
+    <section className={`grid gap-4 daymark-pomodoro-page daymark-pomodoro-${timer.state.mode}`}>
+      <PageHeader
+        eyebrow="Pomodoro"
+        title="Tập trung"
+        subtitle="Chọn nhiệm vụ, bấm bắt đầu và để DayMark ghi lại thời gian thực tế."
+        actions={
+          <>
           <button
             type="button"
             onClick={() => onNavigate("/daymark/today")}
-            className="rounded-2xl border border-slate-200 px-4 py-2 text-sm font-bold transition hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800"
+            className="daymark-secondary-action"
           >
             Quay lại Hôm nay
           </button>
-        </div>
-      </header>
+          <button
+            type="button"
+            onClick={() => setSettingsOpen((value) => !value)}
+            className="daymark-secondary-action"
+            aria-expanded={settingsOpen}
+          >
+            <Settings2 aria-hidden="true" size={18} />
+            Cài đặt
+          </button>
+          </>
+        }
+      />
 
       {error && (
         <p className="rounded-2xl border border-red-200 bg-red-50 p-3 text-sm font-medium text-red-700">
@@ -330,7 +335,13 @@ export function PomodoroPage({ onNavigate, userId }: PomodoroPageProps) {
         </p>
       )}
 
-      <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(0,380px)]">
+      <div
+        className={`grid min-w-0 gap-4 ${
+          settingsOpen
+            ? "xl:grid-cols-[minmax(0,1.45fr)_minmax(0,380px)]"
+            : "xl:grid-cols-1"
+        }`}
+      >
         <section className="min-w-0 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-5">
           <TaskFocusPanel
             actualFocusSeconds={actualFocusSeconds}
@@ -367,6 +378,7 @@ export function PomodoroPage({ onNavigate, userId }: PomodoroPageProps) {
           />
         </section>
 
+        {settingsOpen && (
         <section className="min-w-0 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-5">
           <h2 className="text-xl font-black">Cài đặt nhanh</h2>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
@@ -451,6 +463,7 @@ export function PomodoroPage({ onNavigate, userId }: PomodoroPageProps) {
             />
           </div>
         </section>
+        )}
       </div>
 
       {isFocusViewOpen && (

@@ -1,12 +1,12 @@
+import { CircleCheck, Flag } from "lucide-react";
 import { ProgressBar } from "../components/ProgressBar";
 import type { Goals } from "../types";
-import { getDateString, getToday, toDate } from "../utils/date";
+import { formatReportDate, getDateString, getToday, toDate } from "../utils/date";
 import { formatMoney } from "../utils/money";
 
 type GoalMilestonesPageProps = {
   goals: Goals;
   totalSavedForBigGoal: number;
-  onBack: () => void;
 };
 
 type MilestonePercent = 25 | 50 | 75 | 100;
@@ -86,7 +86,6 @@ function buildGoalMilestones(
 export function GoalMilestonesPage({
   goals,
   totalSavedForBigGoal,
-  onBack,
 }: GoalMilestonesPageProps) {
   const target = Math.max(goals.bigGoalTarget ?? 0, 0);
   const milestones = buildGoalMilestones(goals, totalSavedForBigGoal);
@@ -107,215 +106,118 @@ export function GoalMilestonesPage({
     : "Đã đạt 100%";
 
   return (
-    <>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="text-2xl font-bold">Mốc kiểm tra mục tiêu</h2>
-          <p className="text-sm text-slate-500">
-            Theo dõi các mốc 25%, 50%, 75% và 100% của mục tiêu lớn.
-          </p>
-        </div>
-
-        <button
-          type="button"
-          onClick={onBack}
-          className="rounded-xl border bg-white px-4 py-2 font-medium shadow-sm hover:bg-slate-100"
-        >
-          Quay lại
-        </button>
-      </div>
-
+    <div className="goal-milestones-page">
       {target <= 0 ? (
-        <section className="rounded-2xl bg-white p-5 shadow-sm">
-          <p className="font-bold">Bạn chưa đặt số tiền mục tiêu.</p>
-          <p className="mt-1 text-sm text-slate-500">
-            Hãy quay lại phần mục tiêu lớn và nhập số tiền cần đạt trước.
-          </p>
+        <section className="goals-empty-state">
+          <Flag aria-hidden="true" size={28} />
+          <h2>Chưa có mốc để theo dõi</h2>
+          <p>Hãy nhập số tiền mục tiêu chính trước khi theo dõi các cột mốc.</p>
         </section>
       ) : (
         <>
-          <section className="rounded-2xl bg-white p-5 shadow-sm">
-            <div className="flex flex-wrap items-start justify-between gap-4">
+          <section className="goal-milestones-hero">
+            <div className="goal-milestones-hero__heading">
               <div>
-                <h3 className="text-xl font-bold">{goals.bigGoalName}</h3>
-                <p className="mt-1 text-sm text-slate-500">
-                  Từ {goals.bigGoalStartDate} đến {goals.bigGoalDeadline}
+                <p className="goals-overview__kicker">
+                  <Flag aria-hidden="true" size={17} />
+                  Mục tiêu chính
                 </p>
+                <h2>{goals.bigGoalName}</h2>
               </div>
+              <strong>{currentProgress}%</strong>
+            </div>
 
-              <div className="rounded-xl bg-slate-100 px-4 py-2 text-sm">
-                Tiến độ hiện tại: <strong>{currentProgress}%</strong>
+            <p className="goal-milestones-hero__money">
+              <strong>{formatMoney(totalSavedForBigGoal)}</strong> / {formatMoney(target)}
+            </p>
+            <ProgressBar label={`Tiến độ ${goals.bigGoalName}`} value={currentProgress} />
+
+            <dl className="goal-milestones-hero__summary">
+              <div>
+                <dt>Mốc đã đạt</dt>
+                <dd>{reachedText}</dd>
               </div>
-            </div>
-
-            <div className="mt-5">
-              <ProgressBar value={currentProgress} />
-
-              <p className="mt-2 text-sm font-medium">
-                Đã có {formatMoney(totalSavedForBigGoal)} / {formatMoney(target)}
-              </p>
-            </div>
-          </section>
-
-          <section className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
-            <div className="rounded-2xl bg-white p-4 shadow-sm">
-              <p className="text-sm text-slate-500">Đã vượt mốc</p>
-              <p className="mt-1 font-bold text-green-700">{reachedText}</p>
-            </div>
-
-            <div className="rounded-2xl bg-white p-4 shadow-sm">
-              <p className="text-sm text-slate-500">Mốc kế tiếp</p>
-              <p className="mt-1 font-bold">{nextMilestoneText}</p>
-            </div>
-
-            <div className="rounded-2xl bg-white p-4 shadow-sm">
-              <p className="text-sm text-slate-500">Còn đến mốc kế tiếp</p>
-              <p className="mt-1 font-bold">
-                {nextMilestone ? formatMoney(nextMilestone.remaining) : "0đ"}
-              </p>
-            </div>
-
-            <div className="rounded-2xl bg-white p-4 shadow-sm">
-              <p className="text-sm text-slate-500">Cần mỗi ngày</p>
-              <p className="mt-1 font-bold">
-                {nextMilestone ? formatMoney(nextMilestone.needPerDay) : "0đ"}
-              </p>
-            </div>
-          </section>
-
-          {nextMilestone && (
-            <section
-              className={`rounded-2xl p-5 shadow-sm ${
-                nextMilestone.overdue ? "bg-red-50" : "bg-white"
-              }`}
-            >
-              <h3 className="text-xl font-bold">Thông báo mốc kế tiếp</h3>
-
-              <div className="mt-3 grid gap-3 md:grid-cols-3">
-                <div className="rounded-xl bg-white/80 p-3">
-                  <p className="text-sm text-slate-500">Mốc cần đạt</p>
-                  <p className="font-bold">{nextMilestone.percent}%</p>
-                  <p className="mt-1 text-xs text-slate-500">
-                    Tương đương {formatMoney(nextMilestone.amount)}
-                  </p>
-                </div>
-
-                <div className="rounded-xl bg-white/80 p-3">
-                  <p className="text-sm text-slate-500">
-                    Còn bao lâu đến mốc kế tiếp
-                  </p>
-                  <p
-                    className={`font-bold ${
-                      nextMilestone.overdue ? "text-red-600" : "text-slate-900"
-                    }`}
-                  >
-                    {nextMilestone.overdue
+              <div>
+                <dt>Mốc tiếp theo</dt>
+                <dd>{nextMilestoneText}</dd>
+              </div>
+              <div>
+                <dt>Còn thiếu đến mốc</dt>
+                <dd>{nextMilestone ? formatMoney(nextMilestone.remaining) : "0 đ"}</dd>
+              </div>
+              <div>
+                <dt>Dự kiến đạt</dt>
+                <dd>
+                  {nextMilestone && !nextMilestone.overdue
+                    ? formatReportDate(nextMilestone.dueDate)
+                    : nextMilestone?.overdue
                       ? "Đã quá hạn mốc"
-                      : `${nextMilestone.daysToDueDate} ngày`}
-                  </p>
-                  <p className="mt-1 text-xs text-slate-500">
-                    Ngày nên đạt: {nextMilestone.dueDate}
-                  </p>
-                </div>
-
-                <div className="rounded-xl bg-white/80 p-3">
-                  <p className="text-sm text-slate-500">
-                    Cần/ngày để đạt mốc
-                  </p>
-                  <p className="font-bold">
-                    {formatMoney(nextMilestone.needPerDay)}
-                  </p>
-                  <p className="mt-1 text-xs text-slate-500">
-                    Tính theo số ngày còn lại đến mốc.
-                  </p>
-                </div>
+                      : "Đã đạt"}
+                </dd>
               </div>
-            </section>
-          )}
+            </dl>
+          </section>
 
-          {!nextMilestone && (
-            <section className="rounded-2xl bg-green-50 p-5 shadow-sm">
-              <h3 className="text-xl font-bold text-green-700">
-                Bạn đã đạt đủ 100% mục tiêu 🎉
-              </h3>
-              <p className="mt-1 text-sm text-green-700">
-                Có thể bấm hoàn thành mục tiêu để lưu lại hành trình này.
-              </p>
-            </section>
-          )}
+          <section className="goal-milestones-timeline-section">
+            <div className="goals-section-heading">
+              <div>
+                <h2>Hành trình cột mốc</h2>
+                <p>Mốc tiếp theo được làm nổi bật để bạn dễ theo dõi.</p>
+              </div>
+            </div>
 
-          <section className="rounded-2xl bg-white p-5 shadow-sm">
-            <h3 className="text-xl font-bold">Chi tiết từng mốc</h3>
-
-            <div className="mt-4 grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+            <div className="goal-milestones-timeline">
               {milestones.map((milestone) => (
                 <article
                   key={milestone.percent}
-                  className={`rounded-2xl border p-4 ${
-                    milestone.reached
-                      ? "border-green-200 bg-green-50"
-                      : milestone.overdue
-                        ? "border-red-200 bg-red-50"
-                        : "border-slate-200 bg-white"
-                  }`}
+                  className={`goal-milestone${milestone.reached ? " is-reached" : ""}${
+                    nextMilestone?.percent === milestone.percent ? " is-next" : ""
+                  }${milestone.overdue ? " is-overdue" : ""}`}
                 >
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <p className="text-2xl font-bold">{milestone.percent}%</p>
-                      <p className="text-sm text-slate-500">
-                        {formatMoney(milestone.amount)}
-                      </p>
-                    </div>
-
-                    <span
-                      className={`rounded-full px-3 py-1 text-xs font-bold ${
-                        milestone.reached
-                          ? "bg-green-100 text-green-700"
-                          : milestone.overdue
-                            ? "bg-red-100 text-red-700"
-                            : "bg-slate-100 text-slate-700"
-                      }`}
-                    >
-                      {milestone.reached
-                        ? "Đã vượt"
-                        : milestone.overdue
-                          ? "Quá hạn"
-                          : "Sắp tới"}
-                    </span>
+                  <div className="goal-milestone__marker" aria-hidden="true">
+                    {milestone.reached ? <CircleCheck size={20} /> : <Flag size={18} />}
                   </div>
-
-                  <div className="mt-4 space-y-2 text-sm">
-                    <p>
-                      Ngày nên đạt: <strong>{milestone.dueDate}</strong>
-                    </p>
-
-                    <p>
-                      Còn thiếu:{" "}
-                      <strong>{formatMoney(milestone.remaining)}</strong>
-                    </p>
-
-                    <p>
-                      Còn lại:{" "}
-                      <strong>
+                  <div className="goal-milestone__content">
+                    <div>
+                      <strong>{milestone.percent}%</strong>
+                      <span>
                         {milestone.reached
                           ? "Đã đạt"
                           : milestone.overdue
-                            ? "0 ngày"
-                            : `${milestone.daysToDueDate} ngày`}
-                      </strong>
-                    </p>
-
-                    <p>
-                      Cần/ngày:{" "}
-                      <strong>{formatMoney(milestone.needPerDay)}</strong>
-                    </p>
+                            ? "Quá hạn"
+                            : nextMilestone?.percent === milestone.percent
+                              ? "Đang tiến tới"
+                              : "Chưa đạt"}
+                      </span>
+                    </div>
+                    <dl>
+                      <div><dt>Số tiền mốc</dt><dd>{formatMoney(milestone.amount)}</dd></div>
+                      <div><dt>Còn thiếu</dt><dd>{formatMoney(milestone.remaining)}</dd></div>
+                      <div><dt>Ngày dự kiến</dt><dd>{formatReportDate(milestone.dueDate)}</dd></div>
+                      <div><dt>Cần mỗi ngày</dt><dd>{formatMoney(milestone.needPerDay)}</dd></div>
+                    </dl>
                   </div>
                 </article>
               ))}
             </div>
           </section>
+
+          {nextMilestone && (
+            <section className={`goal-next-milestone${nextMilestone.overdue ? " is-overdue" : ""}`}>
+              <div>
+                <p>Mốc tiếp theo: {nextMilestone.percent}%</p>
+                <h2>Còn thiếu {formatMoney(nextMilestone.remaining)}</h2>
+                <span>
+                  {nextMilestone.overdue
+                    ? "Mốc này đã quá ngày dự kiến."
+                    : `Dự kiến đạt ${formatReportDate(nextMilestone.dueDate)}.`}
+                </span>
+              </div>
+              <strong>{formatMoney(nextMilestone.needPerDay)}/ngày</strong>
+            </section>
+          )}
         </>
       )}
-    </>
+    </div>
   );
 }

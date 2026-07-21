@@ -14,10 +14,11 @@ import {
 } from "../utils/daymarkStreak";
 
 type CalendarPageProps = {
+  onNavigate: (path: string) => void;
   userId?: string;
 };
 
-export function CalendarPage({ userId }: CalendarPageProps) {
+export function CalendarPage({ onNavigate, userId }: CalendarPageProps) {
   const [monthStart, setMonthStart] = useState(getMonthStart());
   const monthEnd = useMemo(() => getMonthEnd(monthStart), [monthStart]);
   const { error, isLoading, tasks } = useDayMarkTaskRange({
@@ -92,8 +93,10 @@ export function CalendarPage({ userId }: CalendarPageProps) {
           );
 
           return (
-            <div
+            <button
+              type="button"
               key={day.date}
+              onClick={() => onNavigate(`/daymark/today?date=${day.date}`)}
               title={getCalendarDayTitle(stats, requiredCompletionRate)}
               aria-label={getCalendarDayTitle(stats, requiredCompletionRate)}
               className={`min-h-24 rounded-2xl border p-2 text-left transition ${getCalendarDayClass(
@@ -119,7 +122,7 @@ export function CalendarPage({ userId }: CalendarPageProps) {
                   </p>
                 </div>
               )}
-            </div>
+            </button>
           );
         })}
       </div>

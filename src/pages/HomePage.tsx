@@ -1,10 +1,15 @@
-import { useEffect, useState } from "react";
-import type { RefObject, ReactNode } from "react";
+import { useEffect } from "react";
 import { AiFinanceInsight } from "../components/AiFinanceInsight";
-import { AutopilotPanel } from "../components/AutopilotPanel";
-import { DataWarningsPanel } from "../components/DataWarningsPanel";
-import { StatCard } from "../components/StatCard";
-import { TodayDashboard } from "../components/TodayDashboard";
+import { BalanceCheckSummaryCard } from "../features/money-diary/components/dashboard/BalanceCheckSummaryCard";
+import { DataCompletionCard } from "../features/money-diary/components/dashboard/DataCompletionCard";
+import { GoalJourney } from "../features/money-diary/components/dashboard/GoalJourney";
+import { GreetingHeader } from "../features/money-diary/components/dashboard/GreetingHeader";
+import { IncomeProgressSection } from "../features/money-diary/components/dashboard/IncomeProgressSection";
+import { MainGoalCard } from "../features/money-diary/components/dashboard/MainGoalCard";
+import { NextSuggestionCard } from "../features/money-diary/components/dashboard/NextSuggestionCard";
+import { QuickActions } from "../features/money-diary/components/dashboard/QuickActions";
+import { RecentTransactions } from "../features/money-diary/components/dashboard/RecentTransactions";
+import { TodayTargetCard } from "../features/money-diary/components/dashboard/TodayTargetCard";
 import type {
   BalanceCheckEntry,
   DailyEntry,
@@ -13,26 +18,24 @@ import type {
   Goals,
   Page,
 } from "../types";
-import { formatDateShort, getDaysLeft } from "../utils/date";
-import { formatMoney } from "../utils/money";
-import { getProgress, isGoalBehind } from "../utils/goals";
 import type { DataWarning } from "../utils/dataWarnings";
+import { getProgress } from "../utils/goals";
 
 type HomePageProps = {
   entries: DailyEntry[];
   expenses: ExpenseEntry[];
   balanceChecks: BalanceCheckEntry[];
+  cloudLoadError: string | null;
+  isCloudLoading: boolean;
   isSelectedToday: boolean;
   selectedDate: string;
   goals: Goals;
-  isBigGoalBehind: boolean;
   daysLeft: number;
   goToPreviousDay: () => void;
   goToNextDay: () => void;
   goToToday: () => void;
   handleSelectDate: (value: string) => void;
   todayString: string;
-  todayChecklistDoneCount: number;
   todayGoalPaceRemaining: number;
   needPerDay: number;
   todayActualIncome: number;
@@ -48,6 +51,10 @@ type HomePageProps = {
   openCloseDay: () => void;
   onDataWarningAction: (warning: DataWarning) => void;
   selectedActualIncome: number;
+  selectedEntry?: DailyEntry;
+  selectedExpense?: ExpenseEntry;
+  selectedBalanceCheck?: BalanceCheckEntry;
+  selectedAppMoney: number;
   selectedMainIncome: number;
   selectedBonusMoney: number;
   selectedExpenseTotal: number;
@@ -57,8 +64,9 @@ type HomePageProps = {
   monthIncome: number;
   actualMoney: number;
   totalJourneyMoney: number;
-  balanceCheckSectionRef: RefObject<HTMLDivElement | null>;
-  renderBalanceCheckCard: (title?: string) => ReactNode;
+  onOpenSelectedBalanceDetails: () => void;
+  onOpenSelectedBalanceEditor: () => void;
+  retryCloudLoad: () => void;
   navigateTo: (nextPage: Page, nextGoalScreen?: GoalScreen) => void;
 };
 
@@ -66,32 +74,33 @@ export function HomePage({
   entries,
   expenses,
   balanceChecks,
+  cloudLoadError,
+  isCloudLoading,
   isSelectedToday,
   selectedDate,
   goals,
-  isBigGoalBehind,
   daysLeft,
   goToPreviousDay,
   goToNextDay,
   goToToday,
   handleSelectDate,
   todayString,
-  todayChecklistDoneCount,
   todayGoalPaceRemaining,
   needPerDay,
   todayActualIncome,
-  todayDailyIncomeRemaining,
-  todayWorkActualIncome,
   todayEntry,
   todayExpense,
   todayBalanceCheck,
-  todayExpenseTotal,
   dataWarnings,
   goToTodayEntryForm,
   goToTodayBalanceCheck,
   openCloseDay,
   onDataWarningAction,
   selectedActualIncome,
+  selectedEntry,
+  selectedExpense,
+  selectedBalanceCheck,
+  selectedAppMoney,
   selectedMainIncome,
   selectedBonusMoney,
   selectedExpenseTotal,
@@ -101,25 +110,28 @@ export function HomePage({
   monthIncome,
   actualMoney,
   totalJourneyMoney,
-  balanceCheckSectionRef,
-  renderBalanceCheckCard,
+  onOpenSelectedBalanceDetails,
+  onOpenSelectedBalanceEditor,
+  retryCloudLoad,
   navigateTo,
 }: HomePageProps) {
-  const [showMoreStats, setShowMoreStats] = useState(false);
-  const [isGoalNavigationCompact, setIsGoalNavigationCompact] = useState(false);
   const mainGoalProgress = getProgress(actualMoney, goals.bigGoalTarget);
   const mainGoalRemaining = Math.max(goals.bigGoalTarget - actualMoney, 0);
   const missingTodayItems = [
-    !todayEntry ? "ca Hub/nhật ký" : "",
+    !todayEntry ? "thu nhập" : "",
     !todayExpense ? "chi tiêu" : "",
     !todayBalanceCheck ? "kiểm kê" : "",
   ].filter(Boolean);
   const shouldShowEndOfDayReminder =
     isSelectedToday && new Date().getHours() >= 18 && missingTodayItems.length > 0;
+  const hasSuggestionData = Boolean(
+    goals.bigGoalTarget > 0 &&
+      (entries.some((entry) => entry.date <= selectedDate) ||
+        expenses.some((expense) => expense.date <= selectedDate))
+  );
 
   useEffect(() => {
-    if (!shouldShowEndOfDayReminder) return;
-    if (!("Notification" in window)) return;
+    if (!shouldShowEndOfDayReminder || !("Notification" in window)) return;
     if (Notification.permission !== "granted") return;
 
     const storageKey = `money-diary-end-day-reminder-${todayString}`;
@@ -131,385 +143,10 @@ export function HomePage({
     localStorage.setItem(storageKey, "1");
   }, [missingTodayItems, shouldShowEndOfDayReminder, todayString]);
 
-  useEffect(() => {
-    let animationFrame = 0;
+  const openIncome = () => navigateTo("hub");
+  const openHistory = () => navigateTo("history");
+  const openGoal = () => navigateTo("goals", "current");
 
-    function updateGoalNavigationMode() {
-      window.cancelAnimationFrame(animationFrame);
-      animationFrame = window.requestAnimationFrame(() => {
-        setIsGoalNavigationCompact(window.scrollY > 120);
-      });
-    }
-
-    updateGoalNavigationMode();
-    window.addEventListener("scroll", updateGoalNavigationMode, {
-      passive: true,
-    });
-
-    return () => {
-      window.cancelAnimationFrame(animationFrame);
-      window.removeEventListener("scroll", updateGoalNavigationMode);
-    };
-  }, []);
-
-  const primaryStats = [
-    {
-      title: isSelectedToday ? "Tiền thực tế hôm nay" : "Tiền thực tế ngày này",
-      value: formatMoney(selectedActualIncome),
-      target: `Làm: ${formatMoney(selectedMainIncome)} + Thưởng: ${formatMoney(
-        selectedBonusMoney
-      )} - Chi: ${formatMoney(selectedExpenseTotal)} | Nhận: ${formatMoney(
-        selectedReceivedMoney
-      )}`,
-      progress: getProgress(selectedActualIncome, goals.dailyIncome),
-    },
-    {
-      title: isSelectedToday ? "Giờ làm hôm nay" : "Giờ làm ngày này",
-      value: `${selectedHours} giờ`,
-      target: `${goals.dailyHours} giờ`,
-      progress: getProgress(selectedHours, goals.dailyHours),
-    },
-  ];
-  const detailStats = [
-    {
-      title: isSelectedToday ? "Tiền tuần này" : "Tiền tuần đang xem",
-      value: formatMoney(weekIncome),
-      target: formatMoney(goals.weeklyIncome),
-      progress: getProgress(weekIncome, goals.weeklyIncome),
-    },
-    {
-      title: isSelectedToday ? "Tiền tháng này" : "Tiền tháng đang xem",
-      value: formatMoney(monthIncome),
-      target: formatMoney(goals.monthlyIncome),
-      progress: getProgress(monthIncome, goals.monthlyIncome),
-    },
-    {
-      title: "Tiền thực tế App tính hiện có:",
-      value: formatMoney(actualMoney),
-      target: formatMoney(goals.bigGoalTarget),
-      progress: getProgress(actualMoney, goals.bigGoalTarget),
-    },
-    {
-      title: "Tổng tiền hành trình",
-      value: formatMoney(totalJourneyMoney),
-      target: formatMoney(goals.bigGoalTarget),
-      progress: getProgress(totalJourneyMoney, goals.bigGoalTarget),
-    },
-  ];
-
-  return (
-    <>
-      <section className="home-page__main-stack grid gap-3 sm:gap-4">
-        <div
-          className={`app-card goal-section goal-navigation rounded-2xl ${
-            isGoalNavigationCompact ? "goal-section--compact" : ""
-          }`}
-        >
-          <div className="goal-section__content">
-            <div className="goal-section__left">
-              <div className="goal-section__title">
-                <h2 className="goal-section__heading text-lg font-black tracking-tight sm:text-xl">
-                  {isSelectedToday ? "Mục tiêu hôm nay" : "Mục tiêu ngày đang xem"}
-                </h2>
-
-                <p className="goal-section__meta text-sm text-slate-500">
-                  Ngày:{" "}
-                  <strong>
-                    {isSelectedToday ? "Hôm nay" : formatDateShort(selectedDate)}
-                  </strong>
-                </p>
-              </div>
-
-              <div className="goal-section__cards snap-x">
-                <div
-                  title={`Mục tiêu chính: ${goals.bigGoalName}`}
-                  className={`goal-section__main-card shrink-0 rounded-2xl px-4 py-3 ${
-                    isBigGoalBehind ? "bg-red-50" : "bg-emerald-700 text-white"
-                  }`}
-                >
-                  <p
-                    className={`goal-section__card-label text-xs ${
-                      isBigGoalBehind ? "text-red-600" : "text-slate-200"
-                    }`}
-                  >
-                    Mục tiêu chính
-                  </p>
-
-                  <div className="goal-section__main-card-value-row flex items-end gap-1">
-                    <span
-                      className={`goal-section__main-value text-3xl font-black ${
-                        isBigGoalBehind ? "text-red-600" : "text-white"
-                      }`}
-                    >
-                      {daysLeft}
-                    </span>
-                    <span
-                      className={`goal-section__unit pb-1 text-sm font-medium ${
-                        isBigGoalBehind ? "text-red-600" : "text-slate-200"
-                      }`}
-                    >
-                      ngày
-                    </span>
-                  </div>
-                </div>
-
-                {(goals.subGoals ?? []).map((goal) => {
-                  const subDaysLeft = getDaysLeft(goal.deadline);
-                  const behind = isGoalBehind(goal);
-
-                  return (
-                    <div
-                      key={goal.id}
-                      title={`${goal.name} · còn ${subDaysLeft} ngày`}
-                      className={`goal-section__sub-card shrink-0 rounded-xl px-3 py-2 ${
-                        behind ? "bg-red-50" : "bg-emerald-50"
-                      } shadow-sm ring-1 ring-slate-100`}
-                    >
-                      <p
-                        className={`goal-section__card-label text-xs ${
-                          behind ? "text-red-600" : "text-slate-500"
-                        }`}
-                      >
-                        Phụ
-                      </p>
-
-                      <p
-                        className={`goal-section__sub-value text-lg font-black ${
-                          behind ? "text-red-600" : "text-slate-900"
-                        }`}
-                      >
-                        {subDaysLeft}
-                        <span className="ml-1 text-xs font-medium">ngày</span>
-                      </p>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="goal-section__right">
-              <div className="goal-section__analysis col-span-3 min-w-0 sm:col-span-1">
-                <AiFinanceInsight
-                  entries={entries}
-                  expenses={expenses}
-                  balanceChecks={balanceChecks}
-                  goals={goals}
-                  today={todayString}
-                />
-              </div>
-
-              <button
-                type="button"
-                onClick={goToPreviousDay}
-                aria-label="Xem ngày trước"
-                className="app-secondary-button goal-section__nav-button goal-section__nav-button--previous rounded-xl px-4 py-2 text-lg font-bold shadow-sm"
-              >
-                {"<"}
-              </button>
-
-              <button
-                type="button"
-                onClick={goToNextDay}
-                disabled={isSelectedToday}
-                aria-label="Xem ngày sau"
-                className={`app-secondary-button goal-section__nav-button goal-section__nav-button--next rounded-xl px-4 py-2 text-lg font-bold shadow-sm ${
-                  isSelectedToday
-                    ? "cursor-not-allowed opacity-40"
-                    : ""
-                }`}
-              >
-                {">"}
-              </button>
-
-              <button
-                type="button"
-                onClick={goToToday}
-                disabled={isSelectedToday}
-                className={`app-secondary-button goal-section__today-button rounded-xl px-4 py-2 text-sm font-bold shadow-sm ${
-                  isSelectedToday
-                    ? "cursor-not-allowed opacity-40"
-                    : ""
-                }`}
-              >
-                Hôm nay
-              </button>
-
-              <input
-                type="date"
-                value={selectedDate}
-                max={todayString}
-                onChange={(e) => handleSelectDate(e.target.value)}
-                className="app-input goal-section__date-input col-span-3 min-w-0 rounded-xl border px-4 py-2 text-sm shadow-sm sm:col-span-1"
-              />
-            </div>
-          </div>
-        </div>
-
-        <div className="app-card goal-section__main-progress rounded-2xl">
-          <div className="goal-section__main-progress-header">
-            <div className="goal-section__main-progress-copy">
-              <p className="goal-section__main-progress-label">
-                Tiến trình mục tiêu chính
-              </p>
-              <p className="goal-section__main-progress-name">
-                {goals.bigGoalName}
-              </p>
-            </div>
-
-            <div className="goal-section__main-progress-value">
-              {mainGoalProgress}%
-            </div>
-          </div>
-
-          <div
-            className="goal-section__main-progress-track"
-            aria-label={`Tiến trình mục tiêu chính ${mainGoalProgress}%`}
-            role="progressbar"
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-valuenow={mainGoalProgress}
-          >
-            <div
-              className="goal-section__main-progress-fill"
-              style={{ width: `${mainGoalProgress}%` }}
-            />
-          </div>
-
-          <div className="goal-section__main-progress-footer">
-            <div className="goal-section__main-progress-money">
-              Đã có {formatMoney(actualMoney)} /{" "}
-              {formatMoney(goals.bigGoalTarget)}
-            </div>
-
-            <div className="goal-section__main-progress-remaining">
-              Còn thiếu {formatMoney(mainGoalRemaining)}
-            </div>
-          </div>
-        </div>
-
-        <TodayDashboard
-          todayString={todayString}
-          todayChecklistDoneCount={todayChecklistDoneCount}
-          todayGoalPaceRemaining={todayGoalPaceRemaining}
-          needPerDay={needPerDay}
-          todayActualIncome={todayActualIncome}
-          todayDailyIncomeRemaining={todayDailyIncomeRemaining}
-          dailyIncomeGoal={goals.dailyIncome}
-          todayWorkActualIncome={todayWorkActualIncome}
-          todayEntry={todayEntry}
-          todayExpense={todayExpense}
-          todayBalanceCheck={todayBalanceCheck}
-          todayExpenseTotal={todayExpenseTotal}
-          onEntryClick={() => navigateTo("hub")}
-          onExpenseClick={goToTodayEntryForm}
-          onBalanceCheckClick={goToTodayBalanceCheck}
-        />
-
-        <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3">
-          {primaryStats.map((stat) => (
-            <StatCard key={stat.title} {...stat} />
-          ))}
-
-          {detailStats.map((stat) => (
-            <div
-              key={stat.title}
-              className={showMoreStats ? "" : "hidden lg:block"}
-            >
-              <StatCard {...stat} />
-            </div>
-          ))}
-        </div>
-
-        <button
-          type="button"
-          onClick={() => setShowMoreStats((prev) => !prev)}
-          className="app-secondary-button rounded-xl px-4 py-2 text-sm font-bold shadow-sm lg:hidden"
-        >
-          {showMoreStats ? "Thu gọn số liệu" : "Xem thêm số liệu"}
-        </button>
-
-        <DataWarningsPanel
-          warnings={dataWarnings}
-          onAction={onDataWarningAction}
-        />
-
-        {shouldShowEndOfDayReminder && (
-          <EndOfDayReminder
-            missingItems={missingTodayItems}
-            onCloseDay={openCloseDay}
-          />
-        )}
-
-        <div ref={balanceCheckSectionRef}>
-          {renderBalanceCheckCard("Kiểm kê số dư hôm nay")}
-        </div>
-
-        <AutopilotPanel
-          actualMoney={actualMoney}
-          balanceChecks={balanceChecks}
-          entries={entries}
-          expenses={expenses}
-          goals={goals}
-          today={todayString}
-          navigateToGoals={() => navigateTo("goals", "current")}
-          navigateToHub={() => navigateTo("hub")}
-        />
-      </section>
-
-      {/* <section className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        <HomeAction
-          icon="🎯"
-          title="Các mục tiêu và biến động số dư"
-          description="Xem mục tiêu lớn, mục tiêu ngày, tuần và tháng."
-          onClick={() => navigateTo("goals", "menu")}
-        />
-
-        <HomeAction
-          icon="✅"
-          title="Chốt ngày"
-          description="Nhập nhanh tiền, chi tiêu, tâm trạng và ghi chú cuối ngày."
-          onClick={openCloseDay}
-        />
-
-        <HomeAction
-          icon="📝"
-          title="Ghi nhật kí"
-          description="Ghi lại hôm nay làm gì, kiếm được bao nhiêu và làm mấy giờ."
-          onClick={() => navigateTo("entry")}
-        />
-
-        <HomeAction
-          icon="📚"
-          title="Lịch sử nhật kí"
-          description="Xem lại, sửa hoặc xóa các ngày đã ghi."
-          onClick={() => navigateTo("history")}
-        />
-
-        <HomeAction
-          icon="💸"
-          title="Lịch sử chi tiêu"
-          description="Xem lại chi tiêu ăn uống và các khoản khác theo ngày."
-          onClick={() => navigateTo("expenses")}
-        />
-
-        <HomeAction
-          icon="🧾"
-          title="Lịch sử kiểm kê"
-          description="Xem lại tiền mặt, tiền tài khoản và hao hụt từng ngày."
-          onClick={() => navigateTo("balanceChecks")}
-        />
-      </section> */}
-    </>
-  );
-}
-
-function EndOfDayReminder({
-  missingItems,
-  onCloseDay,
-}: {
-  missingItems: string[];
-  onCloseDay: () => void;
-}) {
   function requestNotificationPermission() {
     if (!("Notification" in window)) {
       alert("Trình duyệt này chưa hỗ trợ thông báo hệ thống.");
@@ -520,53 +157,126 @@ function EndOfDayReminder({
   }
 
   return (
-    <section className="rounded-2xl border border-amber-200 bg-amber-50 p-4 shadow-sm">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h3 className="font-bold text-amber-900">Nhắc chốt ngày</h3>
-          <p className="mt-1 text-sm text-amber-800">
-            Hôm nay còn thiếu: <strong>{missingItems.join(", ")}</strong>.
-          </p>
-        </div>
+    <div className="money-overview-page">
+      <GreetingHeader
+        isSelectedToday={isSelectedToday}
+        onDateChange={handleSelectDate}
+        onNextDay={goToNextDay}
+        onPreviousDay={goToPreviousDay}
+        onToday={goToToday}
+        selectedDate={selectedDate}
+        today={todayString}
+      />
 
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={requestNotificationPermission}
-            className="min-h-11 rounded-xl bg-white px-3 py-2 text-sm font-bold text-amber-900 shadow-sm hover:bg-amber-100"
-          >
-            Bật thông báo
-          </button>
-          <button
-            type="button"
-            onClick={onCloseDay}
-            className="app-primary-button rounded-xl px-3 py-2 text-sm font-bold"
-          >
-            Chốt ngày
-          </button>
+      <IncomeProgressSection
+        actualMoney={actualMoney}
+        error={cloudLoadError}
+        goals={goals}
+        isLoading={isCloudLoading}
+        isSelectedToday={isSelectedToday}
+        monthIncome={monthIncome}
+        selectedActualIncome={selectedActualIncome}
+        selectedBonusMoney={selectedBonusMoney}
+        selectedEntry={selectedEntry}
+        selectedExpenseTotal={selectedExpenseTotal}
+        selectedHours={selectedHours}
+        selectedMainIncome={selectedMainIncome}
+        selectedReceivedMoney={selectedReceivedMoney}
+        totalJourneyMoney={totalJourneyMoney}
+        onRetry={retryCloudLoad}
+        weekIncome={weekIncome}
+      />
+
+      <div className="money-overview-primary-grid">
+        <MainGoalCard
+          daysLeft={daysLeft}
+          error={cloudLoadError}
+          goals={goals}
+          isLoading={isCloudLoading}
+          name={goals.bigGoalName}
+          onOpenGoals={openGoal}
+          onRetry={retryCloudLoad}
+          onViewDetails={openGoal}
+          progress={mainGoalProgress}
+          remaining={mainGoalRemaining}
+          saved={actualMoney}
+          selectedDate={selectedDate}
+          target={goals.bigGoalTarget}
+        />
+        <div className="money-overview-today-column">
+          <TodayTargetCard
+            earned={todayActualIncome}
+            needed={todayGoalPaceRemaining}
+            onAction={todayGoalPaceRemaining > 0 ? openIncome : openHistory}
+            target={needPerDay}
+          />
+          <DataCompletionCard
+            balanceCheck={selectedBalanceCheck}
+            entry={selectedEntry}
+            error={cloudLoadError}
+            expense={selectedExpense}
+            isLoading={isCloudLoading}
+            isSelectedToday={isSelectedToday}
+            onAddExpense={openCloseDay}
+            onAddIncome={openCloseDay}
+            onCheckBalance={onOpenSelectedBalanceEditor}
+            onEnableNotifications={requestNotificationPermission}
+            onOpenHistory={openHistory}
+            onRetry={retryCloudLoad}
+            onWarningAction={onDataWarningAction}
+            selectedDate={selectedDate}
+            warnings={dataWarnings}
+          />
         </div>
       </div>
-    </section>
+
+      <GoalJourney progress={mainGoalProgress} />
+
+      <div className="money-overview-decision-grid">
+        <BalanceCheckSummaryCard
+          balanceCheck={selectedBalanceCheck}
+          isLoading={isCloudLoading}
+          isSelectedToday={isSelectedToday}
+          onOpenDetails={onOpenSelectedBalanceDetails}
+          onOpenEditor={onOpenSelectedBalanceEditor}
+          selectedDate={selectedDate}
+        />
+
+        <NextSuggestionCard
+          actualMoney={selectedAppMoney}
+          balanceChecks={balanceChecks}
+          entries={entries}
+          expenses={expenses}
+          goals={goals}
+          isDataComplete={hasSuggestionData}
+          isLoading={isCloudLoading}
+          navigateToGoals={openGoal}
+          navigateToHub={openIncome}
+          today={selectedDate}
+        />
+      </div>
+
+      <RecentTransactions
+        entries={entries}
+        expenses={expenses}
+        onViewAll={openHistory}
+      />
+
+      <QuickActions
+        onBalance={goToTodayBalanceCheck}
+        onExpense={goToTodayEntryForm}
+        onHistory={openHistory}
+        onIncome={openIncome}
+      />
+
+      <AiFinanceInsight
+        balanceChecks={balanceChecks}
+        entries={entries}
+        expenses={expenses}
+        goals={goals}
+        hideTrigger
+        today={todayString}
+      />
+    </div>
   );
 }
-
-// type HomeActionProps = {
-//   icon: string;
-//   title: string;
-//   description: string;
-//   onClick: () => void;
-// };
-
-// function HomeAction({ icon, title, description, onClick }: HomeActionProps) {
-//   return (
-//     <button
-//       type="button"
-//       onClick={onClick}
-//       className="rounded-2xl bg-white p-6 text-left shadow-sm hover:bg-slate-50"
-//     >
-//       <p className="text-3xl">{icon}</p>
-//       <h3 className="mt-3 text-xl font-bold">{title}</h3>
-//       <p className="mt-1 text-sm text-slate-500">{description}</p>
-//     </button>
-//   );
-// }

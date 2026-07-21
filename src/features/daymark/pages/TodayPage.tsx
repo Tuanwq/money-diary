@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ProgressBar } from "../../../components/ProgressBar";
+import { CalendarPlus, ChevronLeft, ChevronRight } from "lucide-react";
 import {
   addDaysToDateString,
   formatDateShort,
@@ -13,6 +13,10 @@ import type {
   TaskPriority,
   TaskStatus,
 } from "../types/daymark";
+import { NextTaskCard } from "../components/today/NextTaskCard";
+import { ProgressSummary } from "../components/today/ProgressSummary";
+import { TaskTimeline } from "../components/today/TaskTimeline";
+import { PageHeader } from "../components/ui/PageHeader";
 import { useDayMarkTaskRange } from "../hooks/useDayMarkTaskRange";
 import { useDayMarkTasks } from "../hooks/useDayMarkTasks";
 import { useDayMarkStreakSettings } from "../hooks/useDayMarkStreakSettings";
@@ -30,6 +34,7 @@ import {
   taskStatusLabels,
   validateTaskForm,
 } from "../utils/daymarkUtils";
+import { getGreeting, getNextTask } from "../utils/daymarkSelectors";
 import {
   buildDailyTaskStatsMap,
   calculateCurrentStreak,
@@ -52,9 +57,11 @@ export function TodayPage({
   onNavigate,
   userId,
 }: TodayPageProps) {
-  const [selectedDate, setSelectedDate] = useState(initialDate);
+  const initialParams = new URLSearchParams(window.location.search);
+  const initialSelectedDate = initialParams.get("date") || initialDate;
+  const [selectedDate, setSelectedDate] = useState(initialSelectedDate);
   const [form, setForm] = useState<DayMarkTaskForm>(() =>
-    createEmptyTaskForm(initialDate)
+    createEmptyTaskForm(initialSelectedDate)
   );
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
@@ -118,6 +125,9 @@ export function TodayPage({
     () => calculateLongestStreak(streakStatsMap, getToday()),
     [streakStatsMap]
   );
+  const nextTask = useMemo(() => getNextTask(tasks), [tasks]);
+  const focusingTaskId =
+    pomodoroSnapshot.status === "running" ? pomodoroSnapshot.taskId : null;
 
   useEffect(() => {
     const interval = window.setInterval(() => {
@@ -231,10 +241,6 @@ export function TodayPage({
     }
   }
 
-  function openPomodoro() {
-    onNavigate("/daymark/pomodoro");
-  }
-
   function openTaskPomodoro(task: DayMarkTask) {
     const snapshot = readStoredPomodoroState();
     const isAnotherTaskActive =
@@ -317,97 +323,64 @@ export function TodayPage({
 
   return (
     <>
-      <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-5">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <p className="text-sm font-bold uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-300">
-              Hôm nay
-            </p>
-            <h1 className="mt-1 text-2xl font-black tracking-tight sm:text-3xl">
-              {formatDateShort(selectedDate)}
-            </h1>
-          </div>
-
-          <div className="grid grid-cols-[44px_44px_1fr] gap-2 sm:flex">
+      <PageHeader
+        eyebrow={getGreeting()}
+        title={formatDateShort(selectedDate)}
+        subtitle="Một ngày gọn gàng bắt đầu từ việc tiếp theo."
+        actions={
+          <div className="daymark-date-actions">
             <button
               type="button"
               onClick={() => updateSelectedDate(addDaysToDateString(selectedDate, -1))}
-              className="rounded-2xl border border-slate-200 px-3 py-2 font-bold transition hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800"
+              className="daymark-icon-button"
               aria-label="Ngày trước"
             >
-              {"<"}
+              <ChevronLeft aria-hidden="true" size={18} />
             </button>
             <button
               type="button"
               onClick={() => updateSelectedDate(addDaysToDateString(selectedDate, 1))}
-              className="rounded-2xl border border-slate-200 px-3 py-2 font-bold transition hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800"
+              className="daymark-icon-button"
               aria-label="Ngày sau"
             >
-              {">"}
+              <ChevronRight aria-hidden="true" size={18} />
             </button>
             <button
               type="button"
               onClick={() => updateSelectedDate(getToday())}
-              className="rounded-2xl bg-slate-900 px-4 py-2 text-sm font-bold text-white transition hover:bg-emerald-700"
+              className="daymark-secondary-action"
             >
               Hôm nay
             </button>
-            <button
-              type="button"
-              onClick={openPomodoro}
-              className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-bold text-emerald-800 transition hover:bg-emerald-100 focus:outline-none focus:ring-4 focus:ring-emerald-200"
-            >
-              Pomodoro
-            </button>
           </div>
-        </div>
+        }
+      />
 
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <StreakCard
+      <div className="daymark-today-grid">
+        <div className="grid gap-4">
+          <ProgressSummary
+            completedCount={metrics.completedCount}
+            completionRate={metrics.completionRate}
             currentStreak={currentStreak}
             longestStreak={longestStreak}
             requiredCompletionRate={requiredCompletionRate}
-            todayCompleted={todayStats.completedTasks}
-            todayRate={todayStats.completionRate}
-            todayTotal={todayStats.totalTasks}
+            totalTasks={metrics.totalTasks}
           />
-          <MetricCard
-            label="Hoàn thành"
-            value={`${metrics.completionRate}%`}
-            detail={`${metrics.completedCount}/${metrics.totalTasks} nhiệm vụ hoàn tất`}
-          />
-          <MetricCard
-            label="Tổng thời gian"
-            value={formatDuration(metrics.totalMinutes)}
-            detail="Tính theo giờ bắt đầu/kết thúc"
-          />
-          <MetricCard
-            label="Số nhiệm vụ"
-            value={`${metrics.totalTasks}`}
-            detail={isLoading ? "Đang tải..." : "Theo ngày đang xem"}
-          />
-        </div>
 
-        <div className="mt-4">
-          <ProgressBar value={metrics.completionRate} />
+          <NextTaskCard task={nextTask} onFocus={openTaskPomodoro} />
         </div>
-
-        <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-          {dayMarkCategories
-            .filter((category) => metrics.categoryMinutes[category] > 0)
-            .map((category) => (
-              <div
-                key={category}
-                className="rounded-2xl bg-slate-50 p-3 text-sm dark:bg-slate-800"
-              >
-                <p className="font-bold">{taskCategoryLabels[category]}</p>
-                <p className="mt-1 text-slate-500 dark:text-slate-400">
-                  {formatDuration(metrics.categoryMinutes[category])}
-                </p>
-              </div>
-            ))}
-        </div>
-      </section>
+        <aside className="daymark-side-panel">
+          <p className="daymark-muted-label">Tổng kết nhẹ</p>
+          <div className="mt-3 grid gap-3">
+            <SideMetric label="Tổng thời gian" value={formatDuration(metrics.totalMinutes)} />
+            <SideMetric label="Số nhiệm vụ" value={isLoading ? "Đang tải..." : String(metrics.totalTasks)} />
+            <SideMetric
+              label="Hôm nay"
+              value={`${todayStats.completedTasks}/${todayStats.totalTasks} · ${todayStats.completionRate}%`}
+            />
+          </div>
+        </aside>
+      </div>
 
       {error && (
         <p className="rounded-2xl border border-red-200 bg-red-50 p-3 text-sm font-medium text-red-700">
@@ -415,47 +388,32 @@ export function TodayPage({
         </p>
       )}
 
-      <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-5">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+      <section className="daymark-section">
+        <div className="daymark-section-heading">
           <div>
-            <h2 className="text-xl font-black">Nhiệm vụ theo giờ</h2>
-            <p className="text-sm text-slate-500 dark:text-slate-400">
-              Đổi trạng thái nhanh, sửa, xóa hoặc chuyển sang ngày mai.
-            </p>
+            <h2>Timeline hôm nay</h2>
+            <p>Chạm vào vòng trạng thái để đổi nhanh tiến độ.</p>
           </div>
-
           <button
             type="button"
             onClick={openScheduleModal}
-            className="rounded-2xl bg-slate-900 px-5 py-2 font-bold text-white transition hover:bg-emerald-700"
+            className="daymark-secondary-action"
           >
+            <CalendarPlus aria-hidden="true" size={16} />
             Thêm lịch
           </button>
         </div>
 
-        {tasks.length === 0 ? (
-          <p className="mt-4 rounded-2xl bg-slate-50 p-4 text-sm text-slate-500 dark:bg-slate-800 dark:text-slate-400">
-            Chưa có nhiệm vụ nào cho ngày này.
-          </p>
-        ) : (
-          <div className="mt-4 grid gap-3">
-            {tasks.map((task) => (
-              <TaskCard
-                key={task.id}
-                isFocusing={
-                  pomodoroSnapshot.status === "running" &&
-                  pomodoroSnapshot.taskId === task.id
-                }
-                onDelete={() => handleDeleteTask(task)}
-                onEdit={() => startEditTask(task)}
-                onFocus={() => openTaskPomodoro(task)}
-                onMoveTomorrow={() => handleMoveTaskTomorrow(task)}
-                onStatusChange={(status) => updateTaskStatus(task.id, status)}
-                task={task}
-              />
-            ))}
-          </div>
-        )}
+        <TaskTimeline
+          focusingTaskId={focusingTaskId}
+          onAddTask={openScheduleModal}
+          onDelete={handleDeleteTask}
+          onEdit={startEditTask}
+          onFocus={openTaskPomodoro}
+          onMoveTomorrow={handleMoveTaskTomorrow}
+          onStatusChange={(task, status) => updateTaskStatus(task.id, status)}
+          tasks={tasks}
+        />
       </section>
 
       {isScheduleModalOpen && (
@@ -540,72 +498,11 @@ function ScheduleModal({
   );
 }
 
-function MetricCard({
-  detail,
-  label,
-  value,
-}: {
-  detail: string;
-  label: string;
-  value: string;
-}) {
+function SideMetric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl bg-slate-50 p-3 dark:bg-slate-800">
-      <p className="text-sm text-slate-500 dark:text-slate-400">{label}</p>
-      <p className="mt-1 text-2xl font-black">{value}</p>
-      <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{detail}</p>
-    </div>
-  );
-}
-
-function StreakCard({
-  currentStreak,
-  longestStreak,
-  requiredCompletionRate,
-  todayCompleted,
-  todayRate,
-  todayTotal,
-}: {
-  currentStreak: number;
-  longestStreak: number;
-  requiredCompletionRate: number;
-  todayCompleted: number;
-  todayRate: number;
-  todayTotal: number;
-}) {
-  const hasStreak = currentStreak > 0;
-  const isTodayOnTrack =
-    todayTotal > 0 && todayRate >= requiredCompletionRate;
-
-  return (
-    <div
-      className={`rounded-2xl border p-3 ${
-        hasStreak
-          ? "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900 dark:bg-slate-800 dark:text-amber-100"
-          : "border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800"
-      }`}
-      aria-label={`Chuỗi hoàn thành hiện tại ${currentStreak} ngày`}
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-sm font-bold text-slate-500 dark:text-slate-400">
-            Chuỗi hoàn thành hiện tại
-          </p>
-          <p className="mt-1 text-2xl font-black">{currentStreak} ngày</p>
-        </div>
-        <span
-          aria-hidden="true"
-          className={`text-3xl ${hasStreak || isTodayOnTrack ? "" : "grayscale"}`}
-        >
-          🔥
-        </span>
-      </div>
-      <p className="mt-2 text-xs font-bold text-slate-600 dark:text-slate-300">
-        Kỷ lục: {longestStreak} ngày
-      </p>
-      <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-        Hôm nay: {todayCompleted}/{todayTotal} nhiệm vụ · {todayRate}% · yêu cầu {requiredCompletionRate}%
-      </p>
+    <div className="rounded-3xl bg-[var(--dm-soft)] p-4">
+      <p className="text-sm font-bold text-[var(--dm-muted)]">{label}</p>
+      <p className="mt-1 text-xl font-black">{value}</p>
     </div>
   );
 }
@@ -936,110 +833,6 @@ function ImportScheduleCard({
         </div>
       )}
     </section>
-  );
-}
-
-function TaskCard({
-  isFocusing,
-  onDelete,
-  onEdit,
-  onFocus,
-  onMoveTomorrow,
-  onStatusChange,
-  task,
-}: {
-  isFocusing: boolean;
-  onDelete: () => void;
-  onEdit: () => void;
-  onFocus: () => void;
-  onMoveTomorrow: () => void;
-  onStatusChange: (status: TaskStatus) => void;
-  task: DayMarkTask;
-}) {
-  return (
-    <article className="rounded-2xl border border-slate-200 p-3 dark:border-slate-800">
-      <div className="grid gap-3 sm:grid-cols-[130px_1fr_auto] sm:items-start">
-        <div className="rounded-2xl bg-slate-50 p-3 text-sm font-bold dark:bg-slate-800">
-          <p>
-            {task.start_time.slice(0, 5)} - {task.end_time.slice(0, 5)}
-          </p>
-          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-            {formatDuration(task.duration_minutes)}
-          </p>
-        </div>
-
-        <div className="min-w-0">
-          <h3 className="break-words font-black">{task.title}</h3>
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-            {taskCategoryLabels[task.category]} · Ưu tiên{" "}
-            {taskPriorityLabels[task.priority]}
-          </p>
-          {task.description && (
-            <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
-              {task.description}
-            </p>
-          )}
-          {task.note && (
-            <p className="mt-2 rounded-xl bg-slate-50 p-2 text-sm text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-              {task.note}
-            </p>
-          )}
-        </div>
-
-        <div className="grid gap-2 sm:min-w-44">
-          <select
-            value={task.status}
-            onChange={(event) => onStatusChange(event.target.value as TaskStatus)}
-            className="app-input rounded-xl border px-3 py-2 text-sm"
-          >
-            {dayMarkStatuses.map((status) => (
-              <option key={status} value={status}>
-                {taskStatusLabels[status]}
-              </option>
-            ))}
-          </select>
-
-          <div className="grid grid-cols-4 gap-2">
-            <button
-              type="button"
-              onClick={onFocus}
-              aria-label={isFocusing ? "Đang tập trung" : "Tập trung"}
-              className={`rounded-xl px-2 py-2 text-sm font-bold transition active:scale-[0.98] focus:outline-none focus:ring-4 focus:ring-emerald-200 ${
-                isFocusing
-                  ? "bg-emerald-700 text-white hover:bg-emerald-800"
-                  : "bg-emerald-50 text-emerald-800 hover:bg-emerald-100"
-              }`}
-            >
-              <span aria-hidden="true">⏱️</span>
-              <span className="hidden lg:inline">
-                {isFocusing ? " Đang tập trung" : " Tập trung"}
-              </span>
-            </button>
-            <button
-              type="button"
-              onClick={onEdit}
-              className="rounded-xl bg-slate-100 px-3 py-2 text-sm font-bold transition hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700"
-            >
-              Sửa
-            </button>
-            <button
-              type="button"
-              onClick={onMoveTomorrow}
-              className="rounded-xl bg-blue-50 px-3 py-2 text-sm font-bold text-blue-700 transition hover:bg-blue-100"
-            >
-              Mai
-            </button>
-            <button
-              type="button"
-              onClick={onDelete}
-              className="rounded-xl bg-red-50 px-3 py-2 text-sm font-bold text-red-700 transition hover:bg-red-100"
-            >
-              Xóa
-            </button>
-          </div>
-        </div>
-      </div>
-    </article>
   );
 }
 

@@ -5,6 +5,11 @@ export function formatMoney(value: number) {
   }).format(value);
 }
 
+export function formatSignedMoney(value: number) {
+  if (value > 0) return `+${formatMoney(value)}`;
+  return formatMoney(value);
+}
+
 export function parseMoneyInput(value: string) {
   return Number(value.replace(/[^\d]/g, ""));
 }

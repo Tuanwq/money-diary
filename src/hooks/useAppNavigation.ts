@@ -13,15 +13,66 @@ const moneyPagePaths: Record<Page, string> = {
   hub: "/money/hub",
 };
 
-function getMoneyStateFromPath(pathname: string): AppHistoryState {
-  const segment = pathname.split("/")[2];
+const goalScreenPaths: Record<GoalScreen, string> = {
+  menu: "/money/goals",
+  current: "/money/goals/current",
+  subGoals: "/money/goals/secondary",
+  balance: "/money/goals/movements",
+  completed: "/money/goals/completed",
+  completedDetail: "/money/goals/completed/detail",
+  milestones: "/money/goals/milestones",
+};
+
+export function getGoalScreenPath(screen: GoalScreen, goalId?: string) {
+  const basePath = goalScreenPaths[screen];
+
+  if (!goalId) return basePath;
+  if (screen === "subGoals") return `${basePath}/${encodeURIComponent(goalId)}`;
+  if (screen === "completedDetail") {
+    return `${basePath}/${encodeURIComponent(goalId)}`;
+  }
+
+  return basePath;
+}
+
+export function getMoneyStateFromPath(pathname: string): AppHistoryState {
+  const [, , segment, goalSegment, goalDetailSegment, goalIdSegment] =
+    pathname.split("/");
 
   if (segment === "balance-checks") return { page: "balanceChecks", goalScreen: "menu" };
   if (segment === "changes") return { page: "changes", goalScreen: "menu" };
   if (segment === "close-day") return { page: "closeDay", goalScreen: "menu" };
   if (segment === "entry") return { page: "entry", goalScreen: "menu" };
   if (segment === "expenses") return { page: "expenses", goalScreen: "menu" };
-  if (segment === "goals") return { page: "goals", goalScreen: "menu" };
+  if (segment === "goals") {
+    const goalScreen: GoalScreen =
+      goalSegment === "current"
+        ? "current"
+        : goalSegment === "secondary"
+          ? "subGoals"
+          : goalSegment === "movements"
+            ? "balance"
+            : goalSegment === "completed" && goalDetailSegment === "detail"
+              ? "completedDetail"
+              : goalSegment === "completed"
+                ? "completed"
+                : goalSegment === "milestones"
+                  ? "milestones"
+                  : "menu";
+
+    const goalId =
+      goalScreen === "subGoals"
+        ? goalDetailSegment
+        : goalScreen === "completedDetail"
+          ? goalIdSegment
+          : undefined;
+
+    return {
+      page: "goals",
+      goalScreen,
+      goalId: goalId ? decodeURIComponent(goalId) : undefined,
+    };
+  }
   if (segment === "history") return { page: "history", goalScreen: "menu" };
   if (segment === "hub") return { page: "hub", goalScreen: "menu" };
 
@@ -34,6 +85,7 @@ export function useAppNavigation() {
   const [goalScreen, setGoalScreen] = useState<GoalScreen>(
     initialState.goalScreen
   );
+  const [goalId, setGoalId] = useState<string | undefined>(initialState.goalId);
 
   useEffect(() => {
     const initialState = getMoneyStateFromPath(window.location.pathname);
@@ -46,6 +98,7 @@ export function useAppNavigation() {
       if (state?.page) {
         setPage(state.page);
         setGoalScreen(state.goalScreen ?? "menu");
+        setGoalId(state.goalId);
         return;
       }
 
@@ -53,6 +106,7 @@ export function useAppNavigation() {
 
       setPage(nextState.page);
       setGoalScreen(nextState.goalScreen);
+      setGoalId(nextState.goalId);
     }
 
     window.addEventListener("popstate", handleBrowserBack);
@@ -62,28 +116,38 @@ export function useAppNavigation() {
     };
   }, []);
 
-  function navigateTo(nextPage: Page, nextGoalScreen: GoalScreen = "menu") {
+  function navigateTo(
+    nextPage: Page,
+    nextGoalScreen: GoalScreen = "menu",
+    nextGoalId?: string
+  ) {
     const nextState: AppHistoryState = {
       page: nextPage,
       goalScreen: nextGoalScreen,
+      goalId: nextGoalId,
     };
     const nextPath = window.location.pathname.startsWith("/money")
-      ? moneyPagePaths[nextPage]
+      ? nextPage === "goals"
+        ? getGoalScreenPath(nextGoalScreen, nextGoalId)
+        : moneyPagePaths[nextPage]
       : window.location.href;
 
     window.history.pushState(nextState, "", nextPath);
 
     setPage(nextPage);
     setGoalScreen(nextGoalScreen);
+    setGoalId(nextGoalId);
   }
 
   function resetMoneyNavigation() {
     setPage("home");
     setGoalScreen("menu");
+    setGoalId(undefined);
   }
 
   return {
     page,
+    goalId,
     goalScreen,
     setGoalScreen,
     navigateTo,

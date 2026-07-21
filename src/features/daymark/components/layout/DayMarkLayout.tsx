@@ -1,7 +1,20 @@
-import type { ReactNode } from "react";
+import {
+  BarChart3,
+  CalendarDays,
+  Home,
+  LogOut,
+  Menu,
+  NotebookText,
+  Settings,
+  Timer,
+  Wand2,
+  type LucideIcon,
+} from "lucide-react";
+import { useState, type ReactNode } from "react";
 import { getDayMarkPath, type DayMarkRoute } from "../../../../app/router/routes";
 import { ThemeToggle } from "../../../../components/ThemeToggle";
 import type { ThemeMode } from "../../../../hooks/useThemeMode";
+import { MiniPomodoroTimer } from "./MiniPomodoroTimer";
 
 type DayMarkLayoutProps = {
   children: ReactNode;
@@ -14,17 +27,20 @@ type DayMarkLayoutProps = {
   toggleThemeMode: () => void;
 };
 
-const dayMarkNavItems: Array<{
-  icon: string;
+type NavIcon = LucideIcon;
+
+const primaryNavItems: Array<{
+  icon: NavIcon;
   label: string;
   route: DayMarkRoute;
 }> = [
-  { icon: "☀️", label: "Hôm nay", route: "today" },
-  { icon: "📅", label: "Lịch", route: "calendar" },
-  { icon: "📊", label: "Thống kê", route: "statistics" },
-  { icon: "📝", label: "Ghi chú", route: "notes" },
-  { icon: "⚙️", label: "Cài đặt", route: "settings" },
+  { icon: Home, label: "Hôm nay", route: "today" },
+  { icon: CalendarDays, label: "Lịch", route: "calendar" },
+  { icon: Timer, label: "Pomodoro", route: "pomodoro" },
+  { icon: BarChart3, label: "Thống kê", route: "statistics" },
 ];
+
+const moreRoutes = new Set<DayMarkRoute>(["notes", "settings"]);
 
 export function DayMarkLayout({
   children,
@@ -36,93 +52,130 @@ export function DayMarkLayout({
   themeMode,
   toggleThemeMode,
 }: DayMarkLayoutProps) {
+  const [moreOpen, setMoreOpen] = useState(false);
+  const isMoreActive = moreRoutes.has(currentRoute);
+
+  function navigate(route: DayMarkRoute) {
+    setMoreOpen(false);
+    onNavigate(getDayMarkPath(route));
+  }
+
   return (
-    <div className="min-h-[100dvh] bg-[var(--background)] text-[var(--text-primary)]">
-      <div className="mx-auto grid max-w-7xl lg:grid-cols-[280px_1fr]">
-        <aside className="sticky top-0 hidden h-[100dvh] border-r border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900 lg:block">
+    <div className="daymark-shell">
+      <div className="daymark-layout">
+        <aside className="daymark-sidebar">
           <DayMarkBrand email={email} />
 
-          <nav className="mt-6 grid gap-2" aria-label="DayMark">
-            {dayMarkNavItems.map((item) => (
+          <nav className="mt-8 grid gap-2" aria-label="DayMark">
+            {primaryNavItems.map((item) => (
               <DayMarkNavButton
                 key={item.route}
                 active={currentRoute === item.route}
                 icon={item.icon}
                 label={item.label}
-                onClick={() => onNavigate(getDayMarkPath(item.route))}
+                onClick={() => navigate(item.route)}
               />
             ))}
           </nav>
 
-          <div className="mt-6 grid gap-2">
-            <ThemeToggle
-              className="justify-start"
+          <div className="mt-auto grid gap-2 pt-8">
+            <MiniPomodoroTimer onOpen={() => navigate("pomodoro")} />
+            <MoreMenu
+              onLogout={onLogout}
+              onNavigate={navigate}
+              onSwitchApp={onSwitchApp}
               themeMode={themeMode}
               toggleThemeMode={toggleThemeMode}
             />
-            <button
-              type="button"
-              onClick={onSwitchApp}
-              className="rounded-2xl border border-slate-200 px-4 py-3 text-left text-sm font-bold transition hover:bg-slate-50 focus:outline-none focus:ring-4 focus:ring-emerald-200 dark:border-slate-700 dark:hover:bg-slate-800"
-            >
-              Đổi chức năng
-            </button>
-            <button
-              type="button"
-              onClick={onLogout}
-              className="rounded-2xl border border-slate-200 px-4 py-3 text-left text-sm font-bold text-red-600 transition hover:bg-red-50 focus:outline-none focus:ring-4 focus:ring-red-100 dark:border-slate-700 dark:hover:bg-red-950/30"
-            >
-              Đăng xuất
-            </button>
           </div>
         </aside>
 
-        <div className="min-w-0 pb-24 lg:pb-0">
-          <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/90 px-4 py-3 backdrop-blur dark:border-slate-800 dark:bg-slate-900/90 lg:hidden">
-            <div className="flex items-center justify-between gap-3">
-              <DayMarkBrand compact email={email} />
-              <button
-                type="button"
-                onClick={onSwitchApp}
-                className="rounded-2xl border border-slate-200 px-3 py-2 text-sm font-bold dark:border-slate-700"
-              >
-                Đổi
-              </button>
-              <ThemeToggle
-                themeMode={themeMode}
-                toggleThemeMode={toggleThemeMode}
-              />
-            </div>
+        <div className="min-w-0 pb-[calc(5.5rem+env(safe-area-inset-bottom))] lg:pb-0">
+          <header className="daymark-mobile-header">
+            <DayMarkBrand compact email={email} />
+            <ThemeToggle
+              themeMode={themeMode}
+              toggleThemeMode={toggleThemeMode}
+            />
           </header>
 
-          <main className="mx-auto grid max-w-5xl gap-4 px-4 py-4 sm:px-6 sm:py-6">
-            {children}
-          </main>
+          <main className="daymark-main">{children}</main>
         </div>
       </div>
 
-      <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-slate-200 bg-white/95 pb-[env(safe-area-inset-bottom)] shadow-[0_-8px_24px_rgba(15,23,42,0.08)] backdrop-blur dark:border-slate-800 dark:bg-slate-900/95 lg:hidden">
+      <nav className="daymark-bottom-nav" aria-label="DayMark mobile">
         <div className="grid grid-cols-5 gap-1 px-2 py-2">
-          {dayMarkNavItems.map((item) => (
-            <button
+          {primaryNavItems.map((item) => (
+            <DayMarkBottomButton
               key={item.route}
-              type="button"
-              onClick={() => onNavigate(getDayMarkPath(item.route))}
-              aria-current={currentRoute === item.route ? "page" : undefined}
-              className={`flex min-h-14 flex-col items-center justify-center rounded-2xl px-1 text-[11px] font-bold transition ${
-                currentRoute === item.route
-                  ? "bg-emerald-700 text-white"
-                  : "text-slate-500 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
-              }`}
-            >
-              <span aria-hidden="true" className="text-lg leading-none">
-                {item.icon}
-              </span>
-              <span>{item.label}</span>
-            </button>
+              active={currentRoute === item.route}
+              icon={item.icon}
+              label={item.label}
+              onClick={() => navigate(item.route)}
+            />
           ))}
+          <DayMarkBottomButton
+            active={isMoreActive || moreOpen}
+            icon={Menu}
+            label="Thêm"
+            onClick={() => setMoreOpen((value) => !value)}
+          />
         </div>
       </nav>
+
+      {moreOpen && (
+        <div className="daymark-more-sheet" role="dialog" aria-label="Menu thêm">
+          <div className="daymark-more-panel">
+            <MoreMenu
+              onLogout={onLogout}
+              onNavigate={navigate}
+              onSwitchApp={onSwitchApp}
+              themeMode={themeMode}
+              toggleThemeMode={toggleThemeMode}
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MoreMenu({
+  onLogout,
+  onNavigate,
+  onSwitchApp,
+  themeMode,
+  toggleThemeMode,
+}: {
+  onLogout: () => void;
+  onNavigate: (route: DayMarkRoute) => void;
+  onSwitchApp: () => void;
+  themeMode: ThemeMode;
+  toggleThemeMode: () => void;
+}) {
+  return (
+    <div className="daymark-more-menu">
+      <ThemeToggle
+        className="justify-start"
+        themeMode={themeMode}
+        toggleThemeMode={toggleThemeMode}
+      />
+      <button type="button" onClick={() => onNavigate("notes")} className="daymark-more-item">
+        <NotebookText aria-hidden="true" size={18} />
+        Ghi chú
+      </button>
+      <button type="button" onClick={() => onNavigate("settings")} className="daymark-more-item">
+        <Settings aria-hidden="true" size={18} />
+        Cài đặt
+      </button>
+      <button type="button" onClick={onSwitchApp} className="daymark-more-item">
+        <Wand2 aria-hidden="true" size={18} />
+        Đổi chức năng
+      </button>
+      <button type="button" onClick={onLogout} className="daymark-more-item text-red-600">
+        <LogOut aria-hidden="true" size={18} />
+        Đăng xuất
+      </button>
     </div>
   );
 }
@@ -136,27 +189,27 @@ function DayMarkBrand({
 }) {
   return (
     <div className="min-w-0">
-      <p className="text-sm font-black uppercase tracking-[0.2em] text-emerald-700 dark:text-emerald-300">
+      <p className="text-sm font-black uppercase tracking-[0.22em] text-[var(--dm-primary)]">
         DayMark
       </p>
       {!compact && (
-        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-          Theo dõi nhiệm vụ, học tập và sức khỏe mỗi ngày.
+        <p className="mt-2 text-sm leading-6 text-[var(--dm-muted)]">
+          Một lịch ngày nhẹ nhàng cho việc tiếp theo.
         </p>
       )}
-      <p className="mt-1 truncate text-xs text-slate-400">{email}</p>
+      <p className="mt-1 truncate text-xs text-[var(--dm-muted)]">{email}</p>
     </div>
   );
 }
 
 function DayMarkNavButton({
   active,
-  icon,
+  icon: Icon,
   label,
   onClick,
 }: {
   active: boolean;
-  icon: string;
+  icon: NavIcon;
   label: string;
   onClick: () => void;
 }) {
@@ -165,13 +218,33 @@ function DayMarkNavButton({
       type="button"
       onClick={onClick}
       aria-current={active ? "page" : undefined}
-      className={`flex items-center gap-3 rounded-2xl px-4 py-3 text-left font-bold transition focus:outline-none focus:ring-4 focus:ring-emerald-200 ${
-        active
-          ? "bg-emerald-700 text-white"
-          : "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
-      }`}
+      className={`daymark-nav-button ${active ? "is-active" : ""}`}
     >
-      <span aria-hidden="true">{icon}</span>
+      <Icon aria-hidden="true" size={18} />
+      <span>{label}</span>
+    </button>
+  );
+}
+
+function DayMarkBottomButton({
+  active,
+  icon: Icon,
+  label,
+  onClick,
+}: {
+  active: boolean;
+  icon: NavIcon;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-current={active ? "page" : undefined}
+      className={`daymark-bottom-button ${active ? "is-active" : ""}`}
+    >
+      <Icon aria-hidden="true" size={20} />
       <span>{label}</span>
     </button>
   );

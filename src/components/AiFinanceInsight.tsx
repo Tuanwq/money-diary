@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type {
   BalanceCheckEntry,
   DailyEntry,
@@ -30,6 +30,7 @@ type AiFinanceInsightProps = {
   expenses: ExpenseEntry[];
   balanceChecks: BalanceCheckEntry[];
   goals: Goals;
+  hideTrigger?: boolean;
   today: string;
 };
 
@@ -94,6 +95,7 @@ export function AiFinanceInsight({
   expenses,
   balanceChecks,
   goals,
+  hideTrigger = false,
   today,
 }: AiFinanceInsightProps) {
   const [isOpen, setIsOpen] = useState(false);
@@ -181,6 +183,18 @@ export function AiFinanceInsight({
   const selectedReport =
     reportMode === "week" ? automation.weeklyReport : automation.monthlyReport;
 
+  useEffect(() => {
+    function openFromMoneyNavigation() {
+      setIsOpen(true);
+    }
+
+    window.addEventListener("money-diary:open-ai", openFromMoneyNavigation);
+
+    return () => {
+      window.removeEventListener("money-diary:open-ai", openFromMoneyNavigation);
+    };
+  }, []);
+
   async function runRealAiAnalysis() {
     setIsRealAiLoading(true);
     setRealAiError("");
@@ -228,13 +242,15 @@ export function AiFinanceInsight({
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setIsOpen(true)}
-        className="app-primary-button w-full rounded-xl px-4 py-2 text-sm font-bold sm:w-auto"
-      >
-        Phân tích tài chính 
-      </button>
+      {!hideTrigger && (
+        <button
+          type="button"
+          onClick={() => setIsOpen(true)}
+          className="app-primary-button w-full rounded-xl px-4 py-2 text-sm font-bold sm:w-auto"
+        >
+          Phân tích tài chính
+        </button>
+      )}
 
       {isOpen && (
         <div className="fixed inset-0 z-[80] bg-slate-950/60 px-3 py-4 backdrop-blur-sm sm:px-6">

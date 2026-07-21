@@ -95,6 +95,7 @@ export type GoalScreen =
   | "completedDetail";
 
 export type AppHistoryState = {
+  goalId?: string;
   page: Page;
   goalScreen: GoalScreen;
 };
