@@ -1,5 +1,22 @@
 export type HubType = "HUB_10" | "HUB_8" | "HUB_5" | "HUB_3" | "HUB_1";
 
+export type IncomeSource =
+  | "hub_shift"
+  | "received_money"
+  | "bonus"
+  | "manual_income"
+  | "adjustment";
+
+export type StreakDayStatus = "qualified" | "restored" | "missed";
+
+export interface StreakData {
+  currentStreak: number;
+  longestStreak: number;
+  lastQualifiedDate: string | null;
+  restoreCredits: number;
+  restoredDates: string[];
+}
+
 export type HubJoinOrder = {
   id?: string;
   type: number;
@@ -35,6 +52,7 @@ export type HubSettings = {
   hubShortPrice: number;
   includeExtraOrderReward: boolean;
   includeSundayReward: boolean;
+  streakRestoredDates?: string[];
 };
 
 export type HubChangeAction = "create" | "update" | "delete" | "restore";

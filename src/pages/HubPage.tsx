@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  HUB_INITIAL_TAB_SESSION_KEY,
   DEFAULT_HUB_SETTINGS,
   DEFAULT_JOIN_PRICES,
   HUB_SHIFT_OPTIONS_BY_TYPE,
@@ -21,6 +22,11 @@ import {
   summarizeHubRows,
 } from "../utils/hubAnalytics";
 import { calculateHubIncome } from "../utils/hubIncome";
+import {
+  mergeHubChangeLogs,
+  mergeHubEntries,
+  mergeHubSettings,
+} from "../utils/hubSync";
 import { formatMoney, formatMoneyInput, parseMoneyInput } from "../utils/money";
 import type { ExpenseEntry, Mood } from "../types";
 import type {
@@ -28,7 +34,9 @@ import type {
   HubEntry,
   HubJoinOrder,
   HubSettings,
+  StreakDayStatus,
 } from "../types/hub";
+import { calculateMoneyStreak } from "../features/money-diary/streak/moneyStreak";
 import { DeleteShiftDialog } from "../features/shifts/components/DeleteShiftDialog";
 import { CalculatorPage } from "../features/hub/components/calculator/CalculatorPage";
 import { HubSettingsPage } from "../features/hub/components/settings/HubSettingsPage";
@@ -240,7 +248,11 @@ function getStatisticsDateRange(range: HubStatisticsRange, today: string) {
   return { fromDate: `${monthKey}-01`, toDate: getMonthEnd(monthKey) };
 }
 
-function getCalendarDays(monthKey: string, markedDates: Set<string>) {
+function getCalendarDays(
+  monthKey: string,
+  markedDates: Set<string>,
+  streakStatuses: Record<string, StreakDayStatus>
+) {
   const [year, month] = monthKey.split("-").map(Number);
   const firstDay = new Date(year, month - 1, 1);
   const leadingDays = (firstDay.getDay() + 6) % 7;
@@ -256,6 +268,7 @@ function getCalendarDays(monthKey: string, markedDates: Set<string>) {
       day: date.getDate(),
       isCurrentMonth: dateString.startsWith(monthKey),
       hasEntry: markedDates.has(dateString),
+      streakStatus: streakStatuses[dateString],
     };
   });
 }
@@ -348,45 +361,6 @@ function createHubDiaryContribution(
   };
 }
 
-function getHubSyncTime(item: { createdAt?: string; updatedAt?: string }) {
-  return new Date(
-    item.updatedAt ?? item.createdAt ?? "1970-01-01T00:00:00.000Z"
-  ).getTime();
-}
-
-function mergeHubEntries(cloudItems: HubEntry[], localItems: HubEntry[]) {
-  const map = new Map<string, HubEntry>();
-
-  [...localItems, ...cloudItems].forEach((item) => {
-    const current = map.get(item.id);
-
-    if (!current || getHubSyncTime(item) >= getHubSyncTime(current)) {
-      map.set(item.id, item);
-    }
-  });
-
-  return Array.from(map.values()).sort((a, b) => b.date.localeCompare(a.date));
-}
-
-function mergeHubChangeLogs(
-  cloudItems: HubChangeLog[],
-  localItems: HubChangeLog[]
-) {
-  const map = new Map<string, HubChangeLog>();
-
-  [...localItems, ...cloudItems].forEach((item) => {
-    const current = map.get(item.id);
-
-    if (!current || getHubSyncTime(item) >= getHubSyncTime(current)) {
-      map.set(item.id, item);
-    }
-  });
-
-  return Array.from(map.values()).sort((a, b) =>
-    b.createdAt.localeCompare(a.createdAt)
-  );
-}
-
 function isMissingHubCloudColumn(error: { message?: string } | null) {
   return Boolean(
     error?.message?.includes("hub_entries") ||
@@ -454,7 +428,12 @@ export function HubPage({
   onMigrateLegacyDiaryIncome,
   onSaveToDiary,
 }: HubPageProps) {
-  const [tab, setTab] = useState<HubTab>("add");
+  const [tab, setTab] = useState<HubTab>(() => {
+    const requestedTab = sessionStorage.getItem(HUB_INITIAL_TAB_SESSION_KEY);
+    sessionStorage.removeItem(HUB_INITIAL_TAB_SESSION_KEY);
+
+    return requestedTab === "list" ? "list" : "add";
+  });
   const [entries, setEntries] = useState<HubEntry[]>(() =>
     loadJson<HubEntry[]>(STORAGE_HUB_ENTRIES_KEY, [])
   );
@@ -566,19 +545,17 @@ export function HubPage({
         ? ((data.hub_entries || []) as unknown as HubEntry[])
         : [];
       const cloudSettings = data?.hub_settings
-        ? ({
-            ...DEFAULT_HUB_SETTINGS,
-            ...((data.hub_settings || {}) as unknown as Partial<HubSettings>),
-          } as HubSettings)
+        ? ((data.hub_settings || {}) as unknown as Partial<HubSettings>)
         : null;
       const cloudChangeLogs = data?.hub_change_logs
         ? ((data.hub_change_logs || []) as unknown as HubChangeLog[])
         : [];
       const mergedEntries = mergeHubEntries(cloudEntries, entries);
+      const mergedSettings = mergeHubSettings(cloudSettings, settings);
       const mergedChangeLogs = mergeHubChangeLogs(cloudChangeLogs, changeLogs);
 
       setEntries(mergedEntries);
-      if (cloudSettings) setSettings(cloudSettings);
+      setSettings(mergedSettings);
       setChangeLogs(mergedChangeLogs);
       setHubCloudReady(true);
       setHubCloudStatus("Hub đã đồng bộ cloud");
@@ -736,9 +713,18 @@ export function HubPage({
     );
   }, [entries, listHubTypeFilter]);
 
+  const hubStreakSummary = useMemo(
+    () => calculateMoneyStreak(entries, settings),
+    [entries, settings]
+  );
+
   const calendarDays = useMemo(() => {
-    return getCalendarDays(listCalendarMonth, markedCalendarDates);
-  }, [listCalendarMonth, markedCalendarDates]);
+    return getCalendarDays(
+      listCalendarMonth,
+      markedCalendarDates,
+      hubStreakSummary.dayStatuses
+    );
+  }, [hubStreakSummary.dayStatuses, listCalendarMonth, markedCalendarDates]);
 
   function isDateSelectedOnCalendar(date: string) {
     if (listDateRange.fromDate && date < listDateRange.fromDate) return false;

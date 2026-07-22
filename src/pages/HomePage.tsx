@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { AiFinanceInsight } from "../components/AiFinanceInsight";
+import { HUB_INITIAL_TAB_SESSION_KEY } from "../constants/hanoiHub";
 import { BalanceCheckSummaryCard } from "../features/money-diary/components/dashboard/BalanceCheckSummaryCard";
 import { DataCompletionCard } from "../features/money-diary/components/dashboard/DataCompletionCard";
 import { GoalJourney } from "../features/money-diary/components/dashboard/GoalJourney";
@@ -10,6 +11,8 @@ import { NextSuggestionCard } from "../features/money-diary/components/dashboard
 import { QuickActions } from "../features/money-diary/components/dashboard/QuickActions";
 import { RecentTransactions } from "../features/money-diary/components/dashboard/RecentTransactions";
 import { TodayTargetCard } from "../features/money-diary/components/dashboard/TodayTargetCard";
+import { MoneyStreakCard } from "../features/money-diary/streak/MoneyStreakCard";
+import { useMoneyStreak } from "../features/money-diary/streak/useMoneyStreak";
 import type {
   BalanceCheckEntry,
   DailyEntry,
@@ -115,6 +118,7 @@ export function HomePage({
   retryCloudLoad,
   navigateTo,
 }: HomePageProps) {
+  const moneyStreak = useMoneyStreak();
   const mainGoalProgress = getProgress(actualMoney, goals.bigGoalTarget);
   const mainGoalRemaining = Math.max(goals.bigGoalTarget - actualMoney, 0);
   const missingTodayItems = [
@@ -146,6 +150,10 @@ export function HomePage({
   const openIncome = () => navigateTo("hub");
   const openHistory = () => navigateTo("history");
   const openGoal = () => navigateTo("goals", "current");
+  const openStreakCalendar = () => {
+    sessionStorage.setItem(HUB_INITIAL_TAB_SESSION_KEY, "list");
+    navigateTo("hub");
+  };
 
   function requestNotificationPermission() {
     if (!("Notification" in window)) {
@@ -166,6 +174,15 @@ export function HomePage({
         onToday={goToToday}
         selectedDate={selectedDate}
         today={todayString}
+      />
+
+      <MoneyStreakCard
+        isCloudLoading={moneyStreak.isCloudLoading}
+        isRestoring={moneyStreak.isRestoring}
+        restoreError={moneyStreak.restoreError}
+        summary={moneyStreak.summary}
+        onOpenCalendar={openStreakCalendar}
+        onRestore={moneyStreak.restoreDate}
       />
 
       <IncomeProgressSection

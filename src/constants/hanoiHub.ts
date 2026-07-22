@@ -4,6 +4,7 @@ export const STORAGE_HUB_ENTRIES_KEY = "money-diary-hub-entries";
 export const STORAGE_HUB_SETTINGS_KEY = "money-diary-hub-settings";
 export const STORAGE_HUB_CALCULATOR_KEY = "money-diary-hub-calculator";
 export const STORAGE_HUB_CHANGE_LOGS_KEY = "money-diary-hub-change-logs";
+export const HUB_INITIAL_TAB_SESSION_KEY = "money-diary-hub-initial-tab";
 
 export const HUB_TYPE_LABEL: Record<HubType, string> = {
   HUB_10: "Hub 10",
@@ -67,6 +68,7 @@ export const DEFAULT_HUB_SETTINGS: HubSettings = {
   hubShortPrice: 9000,
   includeExtraOrderReward: true,
   includeSundayReward: true,
+  streakRestoredDates: [],
 };
 
 export const HANOI_EXTRA_ORDER_REWARD: Record<

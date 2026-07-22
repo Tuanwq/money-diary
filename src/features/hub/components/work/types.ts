@@ -1,6 +1,6 @@
 import type { Dispatch, SetStateAction } from "react";
 import type { Mood } from "../../../../types";
-import type { HubType } from "../../../../types/hub";
+import type { HubType, StreakDayStatus } from "../../../../types/hub";
 
 export type HubTab = "add" | "calculator" | "dashboard" | "list" | "settings";
 
@@ -67,6 +67,7 @@ export type HubCalendarDay = {
   day: number;
   isCurrentMonth: boolean;
   hasEntry: boolean;
+  streakStatus?: StreakDayStatus;
 };
 
 export type HubFilteredSummary = {

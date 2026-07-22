@@ -9,6 +9,7 @@
     "lint": "eslint .",
     "test:cloud-sync": "node --experimental-strip-types scripts/cloudSyncState.test.mjs",
     "test:goals": "node --experimental-strip-types scripts/goalNavigation.test.mjs",
+    "test:money-streak": "node scripts/moneyStreak.test.mjs",
     "test:streak": "node scripts/daymarkStreak.test.mjs",
     "preview": "vite preview"
   },
