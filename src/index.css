@@ -4423,20 +4423,14 @@ textarea {
   font-weight: 700;
 }
 
-.money-brand-mark {
-  display: grid;
+.money-brand-logo {
+  display: block;
   width: 2rem;
   height: 2rem;
   flex: 0 0 auto;
-  place-items: center;
   border-radius: 0.7rem;
-  background: var(--money-primary);
-  color: var(--money-background);
-  font-weight: 700;
-}
-
-.dark .money-brand-mark {
-  color: #101713;
+  object-fit: contain;
+  box-shadow: 0 3px 8px color-mix(in srgb, var(--money-primary) 18%, transparent);
 }
 
 .money-mobile-app-actions {
@@ -8347,7 +8341,40 @@ textarea {
   gap: 0.7rem;
 }
 
-.expense-breakdown-row > div {
+.expense-breakdown-row,
+.expense-label-row {
+  --expense-row-color: var(--money-primary);
+}
+
+.expense-breakdown-row[data-tone="amber"],
+.expense-label-row[data-tone="amber"] {
+  --expense-row-color: #a66b17;
+}
+
+.expense-breakdown-row[data-tone="sage"],
+.expense-label-row[data-tone="sage"] {
+  --expense-row-color: #3f7659;
+}
+
+.expense-breakdown-row[data-tone="blue"],
+.expense-label-row[data-tone="blue"] {
+  --expense-row-color: #47738d;
+}
+
+.expense-breakdown-row[data-tone="rose"],
+.expense-label-row[data-tone="rose"] {
+  --expense-row-color: #9a5963;
+}
+
+.expense-breakdown-row {
+  min-width: 0;
+  padding: 0.55rem 0.65rem;
+  border-left: 3px solid var(--expense-row-color);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--expense-row-color) 7%, var(--money-surface));
+}
+
+.expense-breakdown-row__summary {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -8378,6 +8405,106 @@ textarea {
   height: 100%;
   border-radius: inherit;
   background: var(--money-primary);
+}
+
+.expense-breakdown-row > i b,
+.expense-label-row > i b {
+  background: var(--expense-row-color);
+}
+
+.expense-breakdown-row__detail-toggle {
+  display: inline-flex;
+  min-height: 2.5rem;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 0.35rem;
+  color: var(--expense-row-color);
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.expense-breakdown-row__detail-toggle svg {
+  transition: transform 160ms ease;
+}
+
+.expense-breakdown-row__detail-toggle svg.is-expanded {
+  transform: rotate(180deg);
+}
+
+.expense-other-details {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.4rem;
+  align-items: stretch;
+  justify-content: normal;
+  margin-top: 0.35rem;
+  padding-top: 0.55rem;
+  border-top: 1px solid color-mix(in srgb, var(--expense-row-color) 22%, var(--money-border));
+}
+
+.expense-other-details > div {
+  --expense-row-color: var(--money-primary);
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.45rem 0.5rem;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--expense-row-color) 8%, var(--money-surface));
+}
+
+.expense-other-details > div[data-tone="amber"] {
+  --expense-row-color: #a66b17;
+}
+
+.expense-other-details > div[data-tone="sage"] {
+  --expense-row-color: #3f7659;
+}
+
+.expense-other-details > div[data-tone="blue"] {
+  --expense-row-color: #47738d;
+}
+
+.expense-other-details > div[data-tone="rose"] {
+  --expense-row-color: #9a5963;
+}
+
+.expense-other-details > div > span {
+  display: grid;
+  min-width: 0;
+  gap: 0.08rem;
+}
+
+.expense-other-details > div > span:last-child {
+  flex: 0 0 auto;
+  text-align: right;
+}
+
+.expense-other-details > div > span:first-child strong {
+  overflow-wrap: break-word;
+  word-break: normal;
+}
+
+.expense-other-details > div > span:last-child strong,
+.expense-other-details > div > span:last-child small {
+  white-space: nowrap;
+}
+
+.expense-other-details strong {
+  overflow-wrap: anywhere;
+  color: var(--money-text);
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.expense-other-details small {
+  color: var(--money-text-secondary);
+  font-size: 0.64rem;
+  font-variant-numeric: tabular-nums;
 }
 
 .history-analysis-section > header > strong {
@@ -8411,7 +8538,10 @@ textarea {
 
 .expense-label-row {
   padding: 0.65rem;
+  border-left: 3px solid var(--expense-row-color);
   border-bottom: 1px solid var(--money-border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--expense-row-color) 6%, var(--money-surface));
   font-size: 0.75rem;
 }
 

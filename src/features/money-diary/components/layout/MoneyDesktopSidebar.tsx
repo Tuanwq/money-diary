@@ -13,6 +13,7 @@ import {
 import type { LucideIcon } from "lucide-react";
 import type { RefObject } from "react";
 import type { GoalScreen, Page } from "../../../../types";
+import { MoneyDiaryLogo } from "./MoneyDiaryLogo";
 import { MoneySyncStatus } from "./MoneySyncStatus";
 
 type MoneyDesktopSidebarProps = {
@@ -95,7 +96,7 @@ export function MoneyDesktopSidebar({
   return (
     <aside className="money-desktop-sidebar">
       <div className="money-sidebar-brand">
-        <span className="money-brand-mark" aria-hidden="true">M</span>
+        <MoneyDiaryLogo />
         <div className="money-sidebar-brand-copy">
           <strong>Money Diary</strong>
           <span>Financial calm</span>

@@ -1,5 +1,6 @@
 import { CircleUserRound } from "lucide-react";
 import type { RefObject } from "react";
+import { MoneyDiaryLogo } from "./MoneyDiaryLogo";
 import { MoneySyncStatus } from "./MoneySyncStatus";
 
 type MoneyMobileAppBarProps = {
@@ -25,7 +26,7 @@ export function MoneyMobileAppBar({
         onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
         aria-label="Lên đầu trang Money Diary"
       >
-        <span className="money-brand-mark" aria-hidden="true">M</span>
+        <MoneyDiaryLogo />
         <span>Money Diary</span>
       </button>
 
