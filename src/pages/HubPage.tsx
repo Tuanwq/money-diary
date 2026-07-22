@@ -1,11 +1,9 @@
-import type { ReactNode } from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   DEFAULT_HUB_SETTINGS,
   DEFAULT_JOIN_PRICES,
   HUB_SHIFT_OPTIONS_BY_TYPE,
   HUB_TYPE_LABEL,
-  HUB_TYPES,
   STORAGE_HUB_CHANGE_LOGS_KEY,
   STORAGE_HUB_CALCULATOR_KEY,
   STORAGE_HUB_ENTRIES_KEY,
@@ -21,9 +19,6 @@ import {
   getWeekRangeFromDate,
   groupHubPerformance,
   summarizeHubRows,
-  type HubAnalyticsSummary,
-  type HubPerformanceItem,
-  type HubReport,
 } from "../utils/hubAnalytics";
 import { calculateHubIncome } from "../utils/hubIncome";
 import { formatMoney, formatMoneyInput, parseMoneyInput } from "../utils/money";
@@ -33,56 +28,30 @@ import type {
   HubEntry,
   HubJoinOrder,
   HubSettings,
-  HubType,
 } from "../types/hub";
 import { DeleteShiftDialog } from "../features/shifts/components/DeleteShiftDialog";
-import { ShiftResultCard } from "../features/shifts/components/ShiftResultCard";
-
-type HubTab = "add" | "calculator" | "dashboard" | "list" | "settings";
-type HubTypeFilter = "ALL" | HubType;
-type HubTimeFilter =
-  | "last3"
-  | "today"
-  | "previousWeek"
-  | "thisWeek"
-  | "thisMonth"
-  | "previousMonth"
-  | "custom";
-
-type HubJoinForm = {
-  id: string;
-  type: string;
-  quantity: string;
-  price: string;
-};
-
-type HubForm = {
-  date: string;
-  hubType: HubType;
-  shiftName: string;
-  order: string;
-  joins: HubJoinForm[];
-  isWellDone: boolean;
-  isHubShort: boolean;
-  extraIncome: string;
-  receivedMoney: string;
-  bonusMoney: string;
-  mood: Mood;
-  diary: string;
-  note: string;
-};
-
-type HubCalculatorForm = {
-  date: string;
-  negativeWallet: string;
-  target: string;
-};
-
-type HubMobileDateChip = {
-  date: string;
-  count: number;
-  workIncome: number;
-};
+import { CalculatorPage } from "../features/hub/components/calculator/CalculatorPage";
+import { HubSettingsPage } from "../features/hub/components/settings/HubSettingsPage";
+import { MyShiftsPage } from "../features/hub/components/shifts/MyShiftsPage";
+import { HubStatisticsPage } from "../features/hub/components/statistics/HubStatisticsPage";
+import {
+  DailyJournalSection,
+  HubDailySummary,
+  HubNavigation,
+  HubWorkHeader,
+  MatchedOrderSection,
+  OtherIncomeSection,
+  SaveShiftActionBar,
+  ShiftSummaryCard,
+  WorkShiftSection,
+  type HubForm,
+  type HubJoinForm,
+  type HubCalculatorForm,
+  type HubStatisticsRange,
+  type HubTab,
+  type HubTimeFilter,
+  type HubTypeFilter,
+} from "../features/hub/components/work";
 
 export type HubDiaryPayload = {
   receivedMoney: number;
@@ -101,17 +70,6 @@ export type HubDiaryContribution = {
   workHours: number;
 };
 
-const QUICK_JOIN_TYPES = [2, 3, 4, 5];
-const WEEKDAY_LABELS = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"];
-const HUB_TIME_FILTERS: Array<{ label: string; value: HubTimeFilter }> = [
-  { label: "3 ngày gần nhất", value: "last3" },
-  { label: "Hôm nay", value: "today" },
-  { label: "Tuần trước", value: "previousWeek" },
-  { label: "Tuần này", value: "thisWeek" },
-  { label: "Tháng này", value: "thisMonth" },
-  { label: "Tháng trước", value: "previousMonth" },
-  { label: "Tùy chỉnh", value: "custom" },
-];
 const HUB_CHANGE_LOG_PAGE_SIZE = 5;
 
 function loadJson<T>(key: string, fallback: T): T {
@@ -273,6 +231,15 @@ function getDateRangeForFilter(filter: HubTimeFilter, today: string) {
   return { fromDate: "", toDate: "" };
 }
 
+function getStatisticsDateRange(range: HubStatisticsRange, today: string) {
+  if (range === "last7") return { fromDate: addDays(today, -6), toDate: today };
+  if (range === "last14") return { fromDate: addDays(today, -13), toDate: today };
+  if (range === "last30") return { fromDate: addDays(today, -29), toDate: today };
+
+  const monthKey = today.slice(0, 7);
+  return { fromDate: `${monthKey}-01`, toDate: getMonthEnd(monthKey) };
+}
+
 function getCalendarDays(monthKey: string, markedDates: Set<string>) {
   const [year, month] = monthKey.split("-").map(Number);
   const firstDay = new Date(year, month - 1, 1);
@@ -291,15 +258,6 @@ function getCalendarDays(monthKey: string, markedDates: Set<string>) {
       hasEntry: markedDates.has(dateString),
     };
   });
-}
-
-function formatMonthLabel(monthKey: string) {
-  const [year, month] = monthKey.split("-").map(Number);
-
-  return new Intl.DateTimeFormat("vi-VN", {
-    month: "long",
-    year: "numeric",
-  }).format(new Date(year, month - 1, 1));
 }
 
 function formatDateLabel(dateString: string) {
@@ -537,7 +495,17 @@ export function HubPage({
   const [listCalendarMonth, setListCalendarMonth] = useState(
     getToday().slice(0, 7)
   );
+  const [statisticsRange, setStatisticsRange] =
+    useState<HubStatisticsRange>("last7");
+  const [statisticsHubFilter, setStatisticsHubFilter] =
+    useState<HubTypeFilter>("ALL");
+  const [statisticsCustomFromDate, setStatisticsCustomFromDate] =
+    useState(getToday());
+  const [statisticsCustomToDate, setStatisticsCustomToDate] =
+    useState(getToday());
   const [showIncomeDetails, setShowIncomeDetails] = useState(false);
+  const [isSavingShift, setIsSavingShift] = useState(false);
+  const saveShiftLockRef = useRef(false);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_HUB_ENTRIES_KEY, JSON.stringify(entries));
@@ -739,49 +707,6 @@ export function HubPage({
     });
   }, [listDateRange, listHubTypeFilter, sortedEntries]);
 
-  const filteredHubSummary = useMemo(() => {
-    return filteredHubEntries.reduce(
-      (summary, entry) => {
-        const income = calculateHubIncome(entry, settings);
-
-        return {
-          income: summary.income + income.total,
-          orders: summary.orders + entry.order,
-          joins: summary.joins + income.totalJoinChildOrders,
-          singles: summary.singles + income.remainingSingleOrders,
-        };
-      },
-      { income: 0, orders: 0, joins: 0, singles: 0 }
-    );
-  }, [filteredHubEntries, settings]);
-
-  const mobileDateChips = useMemo<HubMobileDateChip[]>(() => {
-    const groups = new Map<string, HubMobileDateChip>();
-
-    sortedEntries.forEach((entry) => {
-      if (listHubTypeFilter !== "ALL" && entry.hubType !== listHubTypeFilter) {
-        return;
-      }
-
-      const income = calculateHubIncome(entry, settings);
-      const current = groups.get(entry.date) ?? {
-        date: entry.date,
-        count: 0,
-        workIncome: 0,
-      };
-
-      groups.set(entry.date, {
-        date: entry.date,
-        count: current.count + 1,
-        workIncome: current.workIncome + income.workIncome,
-      });
-    });
-
-    return Array.from(groups.values())
-      .sort((a, b) => b.date.localeCompare(a.date))
-      .slice(0, 14);
-  }, [listHubTypeFilter, settings, sortedEntries]);
-
   const hubChangeLogTotalPages = Math.max(
     1,
     Math.ceil(changeLogs.length / HUB_CHANGE_LOG_PAGE_SIZE)
@@ -951,55 +876,90 @@ export function HubPage({
       ),
     [hubRows, thisMonthRange]
   );
-  const hubPerformance = useMemo(
-    () => groupHubPerformance(hubRows, "hub", "workIncome"),
-    [hubRows]
+  const statisticsDateRange = useMemo(() => {
+    if (statisticsRange === "custom") {
+      return {
+        fromDate: statisticsCustomFromDate,
+        toDate: statisticsCustomToDate,
+      };
+    }
+
+    return getStatisticsDateRange(statisticsRange, getToday());
+  }, [statisticsCustomFromDate, statisticsCustomToDate, statisticsRange]);
+  const statisticsHubRows = useMemo(() => {
+    return hubRows.filter((row) => {
+      return (
+        statisticsHubFilter === "ALL" ||
+        row.entry.hubType === statisticsHubFilter
+      );
+    });
+  }, [hubRows, statisticsHubFilter]);
+  const statisticsRows = useMemo(
+    () =>
+      filterHubRowsByDate(
+        statisticsHubRows,
+        statisticsDateRange.fromDate,
+        statisticsDateRange.toDate
+      ),
+    [statisticsDateRange, statisticsHubRows]
   );
-  const shiftPerformance = useMemo(
-    () => groupHubPerformance(hubRows, "shift"),
-    [hubRows]
+  const statisticsSummary = useMemo(
+    () => summarizeHubRows(statisticsRows),
+    [statisticsRows]
   );
-  const lowPerformanceShifts = useMemo(() => {
-    const average = summarizeHubRows(hubRows).incomePerHour;
+  const statisticsHubPerformance = useMemo(
+    () => groupHubPerformance(statisticsRows, "hub", "workIncome"),
+    [statisticsRows]
+  );
+  const statisticsShiftPerformance = useMemo(
+    () => groupHubPerformance(statisticsRows, "shift"),
+    [statisticsRows]
+  );
+  const statisticsLowPerformanceShifts = useMemo(() => {
+    const average = statisticsSummary.incomePerHour;
     if (average <= 0) return [];
 
-    return shiftPerformance
+    return statisticsShiftPerformance
       .filter((item) => item.shifts >= 2 && item.incomePerHour < average * 0.75)
       .slice(0, 5);
-  }, [hubRows, shiftPerformance]);
+  }, [statisticsShiftPerformance, statisticsSummary.incomePerHour]);
   const weeklyHubReport = useMemo(
     () =>
       buildHubReport({
         title: "Tổng kết tuần này",
-        rows: hubRows,
+        rows: statisticsHubRows,
         expenses,
         fromDate: thisWeekRange.fromDate,
         toDate: thisWeekRange.toDate,
         previousFromDate: previousWeekRange.fromDate,
         previousToDate: previousWeekRange.toDate,
       }),
-    [expenses, hubRows, previousWeekRange, thisWeekRange]
+    [expenses, previousWeekRange, statisticsHubRows, thisWeekRange]
   );
   const monthlyHubReport = useMemo(
     () =>
       buildHubReport({
         title: "Tổng kết tháng này",
-        rows: hubRows,
+        rows: statisticsHubRows,
         expenses,
         fromDate: thisMonthRange.fromDate,
         toDate: thisMonthRange.toDate,
         previousFromDate: previousMonthRange.fromDate,
         previousToDate: previousMonthRange.toDate,
       }),
-    [expenses, hubRows, previousMonthRange, thisMonthRange]
+    [expenses, previousMonthRange, statisticsHubRows, thisMonthRange]
   );
-  const currentShiftOptions = HUB_SHIFT_OPTIONS_BY_TYPE[form.hubType];
   const totalOrderCount = parseMoneyInput(form.order);
   const joinedOrderCount = getJoinChildOrderCount(toHubJoins(form.joins));
   const remainingSingleOrderCount = Math.max(
     totalOrderCount - joinedOrderCount,
     0
   );
+  const canSaveShift =
+    Boolean(form.date) &&
+    (totalOrderCount > 0 || form.joins.length > 0) &&
+    joinedOrderCount <= totalOrderCount;
+  const currentShiftHours = getShiftHours(form.shiftName);
 
   function canUseJoinType(type: number) {
     return remainingSingleOrderCount >= type;
@@ -1131,6 +1091,22 @@ export function HubPage({
         ? "Đã cập nhật ca hub thành công."
         : "Đã thêm ca hub và nhật kí thành công."
     );
+  }
+
+  function handleSaveHubEntry() {
+    if (saveShiftLockRef.current) return;
+
+    saveShiftLockRef.current = true;
+    setIsSavingShift(true);
+
+    try {
+      saveHubEntry();
+    } finally {
+      window.setTimeout(() => {
+        saveShiftLockRef.current = false;
+        setIsSavingShift(false);
+      }, 300);
+    }
   }
 
   function deleteHubEntry(id: string, deletionLog?: HubChangeLog) {
@@ -1333,1219 +1309,164 @@ export function HubPage({
   }
 
   return (
-    <>
-      <div className="rounded-3xl bg-gradient-to-br from-emerald-700 via-teal-700 to-cyan-700 p-4 text-white shadow-sm sm:p-5">
-        <p className="text-xs font-bold tracking-wide text-emerald-100">
-          Hub mobile
-        </p>
-        <h2 className="mt-1 text-2xl font-bold">Hub / Ca làm</h2>
-        <p className="mt-1 text-sm text-emerald-50">
-          Tính tiền ca hub theo logic Hà Nội, nhập nhanh và xem lịch sử theo ngày.
-        </p>
-      </div>
+    <div className="hub-work-page">
+      <HubWorkHeader date={form.date} isEditing={Boolean(editingHubEntryId)} />
 
-      <section className="app-card -mx-1 flex min-w-0 max-w-full gap-2 overflow-x-auto rounded-2xl p-2 sm:mx-0 lg:grid lg:grid-cols-5 lg:overflow-visible">
-        <TabButton active={tab === "add"} onClick={() => setTab("add")}>
-          Thêm ca
-        </TabButton>
-        <TabButton
-          active={tab === "calculator"}
-          onClick={() => setTab("calculator")}
-        >
-          Máy tính
-        </TabButton>
-        <TabButton
-          active={tab === "dashboard"}
-          onClick={() => setTab("dashboard")}
-        >
-          Thống kê
-        </TabButton>
-        <TabButton active={tab === "list"} onClick={() => setTab("list")}>
-          Ca của tôi
-        </TabButton>
-        <TabButton
-          active={tab === "settings"}
-          onClick={() => setTab("settings")}
-        >
-          Cài đặt
-        </TabButton>
-      </section>
+      <HubNavigation activeTab={tab} onChange={setTab} />
 
-      <section className="grid gap-2 sm:grid-cols-3">
-        <SummaryCard
-          label="Tiền làm được hôm nay"
-          value={formatMoney(todayHubSummary.workIncome)}
-        />
-        <SummaryCard
-          label="Tổng gross hub đã lưu"
-          value={formatMoney(totalHubIncome)}
-        />
-        <SummaryCard
-          label="Trạng thái Hub cloud"
-          value={hubCloudStatus}
-        />
-      </section>
+      <HubDailySummary
+        todayIncome={formatMoney(todayHubSummary.workIncome)}
+        totalGross={formatMoney(totalHubIncome)}
+        cloudStatus={hubCloudStatus}
+      />
 
       {tab === "add" && (
-        <section className="grid gap-5">
-          <div className="app-sticky-submit rounded-2xl p-3 lg:hidden">
-            <div className="flex items-center justify-between gap-3">
-              <div className="min-w-0">
-                <p className="text-xs font-bold tracking-wide text-slate-500">
-                  {editingHubEntryId ? "Đang cập nhật" : "Ca đang nhập"}
-                </p>
-                <p className="truncate text-lg font-bold text-emerald-700">
-                  {formatMoney(previewIncome.workIncome)}
-                </p>
-              </div>
-
-              <button
-                type="button"
-                onClick={saveHubEntry}
-                className="app-primary-button shrink-0 rounded-xl px-4 py-2 text-sm font-bold"
-              >
-                {editingHubEntryId ? "Cập nhật" : "Lưu ca"}
-              </button>
-            </div>
+        <section className="hub-add-layout" aria-label="Thêm ca Hub và nhật ký">
+          <div className="hub-add-layout__main">
+            <WorkShiftSection
+              form={form}
+              setForm={setForm}
+              settings={settings}
+              remainingSingleOrders={remainingSingleOrderCount}
+              joinedOrders={joinedOrderCount}
+            />
+            <MatchedOrderSection
+              joins={form.joins}
+              remainingSingleOrders={remainingSingleOrderCount}
+              canUseJoinType={canUseJoinType}
+              onAdd={addJoinRow}
+              onUpdate={updateJoinRow}
+              onDelete={deleteJoinRow}
+            />
+            <OtherIncomeSection value={form.extraIncome} setForm={setForm} />
           </div>
 
-          <div className="app-card rounded-2xl p-4 sm:p-5">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <h3 className="text-xl font-bold">
-                {editingHubEntryId ? "Cập nhật ca hub" : "Thêm ca hub và nhật kí"}
-              </h3>
-
-              {editingHubEntryId && (
-                <button
-                  type="button"
-                  onClick={cancelEditHubEntry}
-                  className="app-secondary-button rounded-xl px-4 py-2 text-sm font-bold"
-                >
-                  Hủy cập nhật
-                </button>
-              )}
-            </div>
-
-            <FormBlock title="Hiệu suất ca HUB">
-              <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
-                <ChoiceButton
-                  active={form.isWellDone}
-                  onClick={() => setForm((prev) => ({ ...prev, isWellDone: true }))}
-                >
-                  Đạt
-                </ChoiceButton>
-                <ChoiceButton
-                  active={!form.isWellDone}
-                  onClick={() => setForm((prev) => ({ ...prev, isWellDone: false }))}
-                >
-                  Không đạt
-                </ChoiceButton>
-              </div>
-            </FormBlock>
-
-            <FormBlock title="Loại HUB">
-              <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
-                {HUB_TYPES.map((hubType) => (
-                  <ChoiceButton
-                    key={hubType}
-                    active={form.hubType === hubType}
-                    onClick={() =>
-                      setForm((prev) => ({
-                        ...prev,
-                        hubType,
-                        shiftName: HUB_SHIFT_OPTIONS_BY_TYPE[hubType][0],
-                      }))
-                    }
-                  >
-                    {HUB_TYPE_LABEL[hubType]}
-                  </ChoiceButton>
-                ))}
-              </div>
-            </FormBlock>
-
-            <FormBlock title="Ngày làm việc">
-              <input
-                type="date"
-                value={form.date}
-                onChange={(event) =>
-                  setForm((prev) => ({ ...prev, date: event.target.value }))
-                }
-                className="app-input w-full rounded-xl border px-3 py-2"
-              />
-            </FormBlock>
-
-            <FormBlock title="Khung giờ">
-              <select
-                value={form.shiftName}
-                onChange={(event) =>
-                  setForm((prev) => ({ ...prev, shiftName: event.target.value }))
-                }
-                className="app-input w-full rounded-xl border px-3 py-2"
-              >
-                {currentShiftOptions.map((shift) => (
-                  <option key={shift} value={shift}>
-                    {shift}
-                  </option>
-                ))}
-              </select>
-            </FormBlock>
-
-            <FormBlock title="Tổng đơn trong ca">
-              <div className="grid gap-3 md:grid-cols-2">
-                <div>
-                  <label className="text-sm font-medium">Tổng số đơn</label>
-                  <input
-                    inputMode="numeric"
-                    value={form.order}
-                    onChange={(event) =>
-                      setForm((prev) => ({
-                        ...prev,
-                        order: formatMoneyInput(event.target.value),
-                      }))
-                    }
-                    placeholder="VD: 25"
-                    className="app-input mt-1 w-full rounded-xl border px-3 py-2"
-                  />
-                  <p className="mt-1 text-xs text-slate-500">
-                    Còn {remainingSingleOrderCount} đơn lẻ sau khi chuyển{" "}
-                    {joinedOrderCount} đơn sang ghép.
-                  </p>
-                </div>
-
-                <label className="flex items-center gap-2 rounded-xl bg-slate-100 px-3 py-2 text-sm font-medium">
-                  <input
-                    type="checkbox"
-                    checked={form.isHubShort}
-                    onChange={(event) =>
-                      setForm((prev) => ({
-                        ...prev,
-                        isHubShort: event.target.checked,
-                      }))
-                    }
-                  />
-                  Dùng giá hub ngắn {formatMoney(settings.hubShortPrice)} / đơn
-                </label>
-              </div>
-            </FormBlock>
-
-            <FormBlock title="Đơn ghép trong ca">
-              <div className="flex flex-wrap gap-2">
-                {QUICK_JOIN_TYPES.map((type) => (
-                  <button
-                    key={type}
-                    type="button"
-                    onClick={() => addJoinRow(type)}
-                    disabled={!canUseJoinType(type)}
-                    title={
-                      canUseJoinType(type)
-                        ? undefined
-                        : `Cần còn ít nhất ${type} đơn lẻ để thêm ghép ${type}`
-                    }
-                    className={`rounded-full px-3 py-1 text-sm font-bold ${
-                      canUseJoinType(type)
-                        ? "bg-slate-100 hover:bg-slate-200"
-                        : "cursor-not-allowed bg-slate-100 text-slate-400 opacity-50"
-                    }`}
-                  >
-                    + Ghép {type}
-                  </button>
-                ))}
-                <button
-                  type="button"
-                  onClick={() => addJoinRow()}
-                  disabled={!canUseJoinType(2)}
-                  title={
-                    canUseJoinType(2)
-                      ? undefined
-                      : "Cần còn ít nhất 2 đơn lẻ để thêm đơn ghép"
-                  }
-                  className={`rounded-full px-3 py-1 text-sm font-bold ${
-                    canUseJoinType(2)
-                      ? "bg-slate-900 text-white hover:bg-slate-700"
-                      : "cursor-not-allowed bg-slate-300 text-slate-500"
-                  }`}
-                >
-                  Thêm loại đơn ghép
-                </button>
-              </div>
-
-              <div className="mt-3 grid gap-3">
-                {form.joins.length === 0 ? (
-                  <p className="rounded-xl bg-slate-100 p-3 text-sm text-slate-500">
-                    Chưa có lượt ghép nào.
-                  </p>
-                ) : (
-                  form.joins.map((row) => (
-                    <div
-                      key={row.id}
-                      className="grid gap-2 rounded-xl border p-3 md:grid-cols-[1fr_1fr_1.3fr_auto]"
-                    >
-                      <div>
-                        <label className="text-xs font-medium text-slate-500">
-                          Loại ghép
-                        </label>
-                        <input
-                          inputMode="numeric"
-                          value={row.type}
-                          onChange={(event) =>
-                            updateJoinRow(row.id, {
-                              type: event.target.value.replace(/[^\d]/g, ""),
-                            })
-                          }
-                          className="app-input mt-1 w-full rounded-xl border px-3 py-2"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="text-xs font-medium text-slate-500">
-                          Số lượng
-                        </label>
-                        <input
-                          inputMode="numeric"
-                          value={row.quantity}
-                          onChange={(event) =>
-                            updateJoinRow(row.id, {
-                              quantity: formatMoneyInput(event.target.value),
-                            })
-                          }
-                          className="app-input mt-1 w-full rounded-xl border px-3 py-2"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="text-xs font-medium text-slate-500">
-                          Giá tiền
-                        </label>
-                        <input
-                          inputMode="numeric"
-                          value={row.price}
-                          onChange={(event) =>
-                            updateJoinRow(row.id, {
-                              price: formatMoneyInput(event.target.value),
-                            })
-                          }
-                          className="app-input mt-1 w-full rounded-xl border px-3 py-2"
-                        />
-                      </div>
-
-                      <div className="flex items-end">
-                        <button
-                          type="button"
-                          onClick={() => deleteJoinRow(row.id)}
-                          className="w-full rounded-xl bg-red-50 px-3 py-2 text-sm font-bold text-red-600 hover:bg-red-100"
-                        >
-                          Xóa
-                        </button>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </FormBlock>
-
-            <FormBlock title="Thu nhập khác">
-              <input
-                inputMode="numeric"
-                value={form.extraIncome}
-                onChange={(event) =>
-                  setForm((prev) => ({
-                    ...prev,
-                    extraIncome: formatMoneyInput(event.target.value),
-                  }))
-                }
-                placeholder="VD: tip, hỗ trợ, phí khác..."
-                className="app-input w-full rounded-xl border px-3 py-2"
-              />
-            </FormBlock>
-          </div>
-
-          <section className="app-card rounded-2xl p-4 sm:p-5">
-            <h3 className="text-xl font-bold">
-              {editingHubEntryId ? "Ghi chú ca hub" : "Nhật ký hôm nay"}
-            </h3>
-
-            {!editingHubEntryId && (
-              <>
-                <p className="text-sm text-slate-500">
-                  Nhật ký hôm nay sẽ được lưu vào mục nhật ký chung của bạn. Bạn có thể ghi lại những gì đã xảy ra trong ca làm, cảm xúc, hoặc bất kỳ ghi chú nào bạn muốn.
-                </p>
-
-                <div className="grid gap-3 md:grid-cols-2">
-                  <div>
-                    <label className="text-sm font-medium">Tiền nhận được</label>
-                    <input
-                      inputMode="numeric"
-                      value={form.receivedMoney}
-                      onChange={(event) =>
-                        setForm((prev) => ({
-                          ...prev,
-                          receivedMoney: formatMoneyInput(event.target.value),
-                        }))
-                      }
-                      placeholder="VD: 500.000"
-                      className="app-input mt-1 w-full rounded-xl border px-3 py-2"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-sm font-medium">Tiền thưởng</label>
-                    <input
-                      inputMode="numeric"
-                      value={form.bonusMoney}
-                      onChange={(event) =>
-                        setForm((prev) => ({
-                          ...prev,
-                          bonusMoney: formatMoneyInput(event.target.value),
-                        }))
-                      }
-                      placeholder="VD: 100.000"
-                      className="app-input mt-1 w-full rounded-xl border px-3 py-2"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-sm font-medium">Tâm trạng</label>
-                    <select
-                      value={form.mood}
-                      onChange={(event) =>
-                        setForm((prev) => ({
-                          ...prev,
-                          mood: event.target.value as Mood,
-                        }))
-                      }
-                      className="app-input mt-1 w-full rounded-xl border px-3 py-2"
-                    >
-                      <option value="good">Vui</option>
-                      <option value="normal">Bình thường</option>
-                      <option value="tired">Mệt</option>
-                      <option value="bad">Tệ</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="mt-3">
-                  <label className="text-sm font-medium">
-                    Hôm nay mình đã làm gì?
-                  </label>
-                  <textarea
-                    rows={4}
-                    value={form.diary}
-                    onChange={(event) =>
-                      setForm((prev) => ({ ...prev, diary: event.target.value }))
-                    }
-                    className="app-input mt-1 w-full rounded-xl border px-3 py-2"
-                    placeholder="VD: Chạy ca tối, nhiều đơn ghép, đường đông..."
-                  />
-                </div>
-              </>
-            )}
-
-              <div className="mt-3">
-                <label className="text-sm font-medium">Ghi chú thêm</label>
-                <textarea
-                  rows={3}
-                  value={form.note}
-                  onChange={(event) =>
-                    setForm((prev) => ({ ...prev, note: event.target.value }))
-                  }
-                  className="app-input mt-1 w-full rounded-xl border px-3 py-2"
-                  placeholder="VD: mưa, app lỗi, cần tối ưu khung giờ..."
-                />
-              </div>
-          </section>
-
-          <section className="rounded-2xl bg-white p-5 shadow-sm">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h3 className="text-xl font-bold">Thống kê</h3>
-                <p className="text-sm text-slate-500">
-                  Tạm tính theo dữ liệu đang nhập.
-                </p>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setShowIncomeDetails((prev) => !prev)}
-                className="app-secondary-button rounded-xl px-4 py-2 text-sm font-bold shadow-sm"
-              >
-                {showIncomeDetails ? "Thu gọn" : "Xem chi tiết"}
-              </button>
-            </div>
-
-            <div className="mt-4 rounded-xl bg-gradient-to-br from-emerald-700 to-cyan-700 p-4 text-white">
-              <p className="text-sm text-emerald-50">Tổng thu nhập</p>
-              <p className="mt-1 text-3xl font-bold">
-                {formatMoney(previewIncome.total)}
-              </p>
-            </div>
-
-            {showIncomeDetails && (
-              <div className="mt-4 grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-                <IncomeStat
-                  label="Thu nhập đơn lẻ còn lại"
-                  value={previewIncome.singleOrderIncome}
-                />
-                <IncomeStat label="Thu nhập đơn ghép" value={previewIncome.joinOrderIncome} />
-                <IncomeStat label="Thu nhập đơn vượt mốc" value={previewIncome.extraOrderReward} />
-                <IncomeStat
-                  label="Thu nhập đơn ghép vượt mốc"
-                  value={previewIncome.extraJoinOrderReward}
-                />
-                <IncomeStat
-                  label="Thưởng Chủ nhật"
-                  value={previewIncome.sundayReward}
-                />
-                <IncomeStat
-                  label="Thưởng khu vực"
-                  value={previewIncome.weekdayRegionReward}
-                />
-                <IncomeStat
-                  label="Tiền làm được ghi nhật ký"
-                  value={previewIncome.workIncome}
-                />
-                <IncomeStat label="Thu nhập khác" value={previewIncome.extraIncome} />
-                <IncomeStat
-                  label="Tăng/giảm do đơn ghép"
-                  value={previewIncome.joinDifference}
-                  signed
-                />
-              </div>
-            )}
-
-            <button
-              type="button"
-              onClick={saveHubEntry}
-              className="app-primary-button mt-4 w-full rounded-xl px-5 py-3 font-bold"
-            >
-              {editingHubEntryId ? "Cập nhật ca hub" : "Lưu ca hub và nhật kí"}
-            </button>
-          </section>
+          <aside className="hub-add-layout__sidebar">
+            <DailyJournalSection
+              form={form}
+              setForm={setForm}
+              isEditing={Boolean(editingHubEntryId)}
+            />
+            <ShiftSummaryCard
+              income={previewIncome}
+              hubType={form.hubType}
+              orderCount={totalOrderCount}
+              workHours={currentShiftHours}
+              showDetails={showIncomeDetails}
+              onToggleDetails={() => setShowIncomeDetails((current) => !current)}
+            />
+            <SaveShiftActionBar
+              isEditing={Boolean(editingHubEntryId)}
+              isSaving={isSavingShift}
+              canSave={canSaveShift}
+              onSave={handleSaveHubEntry}
+              onCancel={cancelEditHubEntry}
+            />
+          </aside>
         </section>
       )}
 
       {tab === "calculator" && (
-        <section className="grid gap-5">
-          <section className="rounded-2xl bg-white p-5 shadow-sm">
-            <h3 className="text-xl font-bold">Máy tính</h3>
-
-            <div className="mt-4 grid gap-3 md:grid-cols-3">
-              <div>
-                <label className="text-sm font-medium">Ngày tính</label>
-                <input
-                  type="date"
-                  value={calculatorForm.date}
-                  onChange={(event) =>
-                    setCalculatorForm((prev) => ({
-                      ...prev,
-                      date: event.target.value,
-                    }))
-                  }
-                  className="app-input mt-1 w-full rounded-xl border px-3 py-2"
-                />
-              </div>
-
-              <div>
-                <label className="text-sm font-medium">Tiền âm ví app</label>
-                <input
-                  type="text"
-                  inputMode="text"
-                  value={calculatorForm.negativeWallet}
-                  onChange={(event) =>
-                    setCalculatorForm((prev) => ({
-                      ...prev,
-                      negativeWallet: formatSignedMoneyInput(
-                        event.target.value
-                      ),
-                    }))
-                  }
-                  placeholder="VD: -200.000"
-                  className="app-input mt-1 w-full rounded-xl border px-3 py-2"
-                />
-              </div>
-
-              <div>
-                <label className="text-sm font-medium">Mốc cần về</label>
-                <input
-                  type="text"
-                  inputMode="text"
-                  value={calculatorForm.target}
-                  onChange={(event) =>
-                    setCalculatorForm((prev) => ({
-                      ...prev,
-                      target: formatSignedMoneyInput(event.target.value),
-                    }))
-                  }
-                  placeholder="VD: -1.000.000"
-                  className="app-input mt-1 w-full rounded-xl border px-3 py-2"
-                />
-              </div>
-            </div>
-          </section>
-
-          <section className="rounded-2xl bg-white p-5 shadow-sm">
-            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
-              <IncomeStat
-                label="Tổng thu nhập Hub"
-                value={calculatorTotals.totalIncome}
-              />
-              <IncomeStat
-                label="Khoản loại trừ"
-                value={calculatorTotals.excludedTotal}
-              />
-              <IncomeStat
-                label="Thu nhập tính mốc"
-                value={calculatorTotals.eligibleIncome}
-              />
-              <IncomeStat
-                label="Tiền âm ví app"
-                value={calculatorTotals.negativeWallet}
-              />
-              <IncomeStat
-                label="Sau khi trừ ví âm"
-                value={calculatorTotals.afterWalletDebt}
-              />
-              <IncomeStat label="Mốc cần về" value={calculatorTotals.target} />
-              <IncomeStat
-                label="Còn thiếu về mốc"
-                value={calculatorTotals.remainingToTarget}
-              />
-              <IncomeStat
-                label="Đã vượt mốc"
-                value={calculatorTotals.overTarget}
-              />
-            </div>
-
-            <div className="mt-4 grid gap-2 text-sm md:grid-cols-2">
-              <p>
-                Trừ thu nhập khác:{" "}
-                <strong>{formatMoney(calculatorTotals.excludedExtraIncome)}</strong>
-              </p>
-              <p>
-                Trừ ghép vượt mốc:{" "}
-                <strong>{formatMoney(calculatorTotals.excludedJoinReward)}</strong>
-              </p>
-              <p>
-                Trừ thưởng Chủ nhật:{" "}
-                <strong>{formatMoney(calculatorTotals.excludedSundayReward)}</strong>
-              </p>
-              <p>
-                Trừ thưởng khu vực:{" "}
-                <strong>{formatMoney(calculatorTotals.excludedRegionReward)}</strong>
-              </p>
-            </div>
-          </section>
-
-          <section className="rounded-2xl bg-white p-5 shadow-sm">
-            <h3 className="text-xl font-bold">Ca Hub trong ngày</h3>
-
-            <div className="mt-4 grid gap-3">
-              {calculatorRows.length === 0 ? (
-                <p className="rounded-xl bg-slate-100 p-4 text-sm text-slate-500">
-                  Chưa có ca hub nào trong ngày này.
-                </p>
-              ) : (
-                calculatorRows.map(({ entry, income }) => (
-                  <article key={entry.id} className="rounded-xl border p-3">
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div>
-                        <h4 className="font-bold">
-                          {HUB_TYPE_LABEL[entry.hubType]} · {entry.shiftName}
-                        </h4>
-                        <p className="mt-1 text-sm text-slate-500">
-                          {entry.order} tổng đơn · {income.totalJoinChildOrders} đơn ghép
-                        </p>
-                      </div>
-
-                      <p className="text-lg font-bold">
-                        {formatMoney(income.total)}
-                      </p>
-                    </div>
-                  </article>
-                ))
-              )}
-            </div>
-          </section>
-        </section>
+        <CalculatorPage
+          form={calculatorForm}
+          totals={calculatorTotals}
+          rows={calculatorRows}
+          settings={settings}
+          onDateChange={(date) =>
+            setCalculatorForm((current) => ({ ...current, date }))
+          }
+          onNegativeWalletChange={(value) =>
+            setCalculatorForm((current) => ({
+              ...current,
+              negativeWallet: formatSignedMoneyInput(value),
+            }))
+          }
+          onTargetChange={(value) =>
+            setCalculatorForm((current) => ({
+              ...current,
+              target: formatSignedMoneyInput(value),
+            }))
+          }
+          onApplyToNewShift={() => {
+            setForm((current) => ({ ...current, date: calculatorForm.date }));
+            setTab("add");
+          }}
+          onReset={() => setCalculatorForm(createCalculatorForm())}
+        />
       )}
-
       {tab === "dashboard" && (
-        <section className="grid gap-5">
-          <section className="rounded-2xl bg-white p-5 shadow-sm">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <h3 className="text-xl font-bold">Dashboard Hub</h3>
-                <p className="text-sm text-slate-500">
-                  Theo dõi tiền làm được thật, đơn, đơn ghép, giờ làm và tiền/giờ.
-                </p>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setTab("list")}
-                className="rounded-xl border bg-white px-4 py-2 text-sm font-bold shadow-sm hover:bg-slate-100"
-              >
-                Xem bảng lịch sử
-              </button>
-            </div>
-
-            <div className="mt-4 grid gap-3 lg:grid-cols-3">
-              <HubPeriodSummary title="Hôm nay" summary={todayHubSummary} />
-              <HubPeriodSummary title="Tuần này" summary={weekHubSummary} />
-              <HubPeriodSummary title="Tháng này" summary={monthHubSummary} />
-            </div>
-          </section>
-
-          <section className="grid gap-5 lg:grid-cols-2">
-            <PerformancePanel
-              title="Hub kiếm tốt nhất"
-              description="Sắp theo tổng tiền làm được thật."
-              items={hubPerformance.slice(0, 5)}
-              primaryMetric="workIncome"
-            />
-            <PerformancePanel
-              title="Ca hiệu quả nhất"
-              description="So sánh từng Hub và khung giờ."
-              items={shiftPerformance.slice(0, 8)}
-            />
-          </section>
-
-          <section className="rounded-2xl bg-white p-5 shadow-sm">
-            <h3 className="text-xl font-bold">Cảnh báo hiệu suất thấp</h3>
-            <p className="mt-1 text-sm text-slate-500">
-              Ca có ít nhất 2 lần làm và tiền/giờ thấp hơn 75% trung bình chung.
-            </p>
-
-            <div className="mt-4 grid gap-2">
-              {lowPerformanceShifts.length === 0 ? (
-                <p className="rounded-xl bg-green-50 p-4 text-sm font-medium text-green-700">
-                  Chưa phát hiện ca nào thấp bất thường.
-                </p>
-              ) : (
-                lowPerformanceShifts.map((item) => (
-                  <div
-                    key={item.key}
-                    className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-red-50 p-3"
-                  >
-                    <div>
-                      <p className="font-bold text-red-700">{item.label}</p>
-                      <p className="text-sm text-red-600">
-                        {item.shifts} ca · {item.orders} đơn · {item.hours} giờ
-                      </p>
-                    </div>
-                    <p className="text-lg font-bold text-red-700">
-                      {formatMoney(item.incomePerHour)}/giờ
-                    </p>
-                  </div>
-                ))
-              )}
-            </div>
-          </section>
-
-          <section className="grid gap-5 lg:grid-cols-2">
-            <HubReportPanel report={weeklyHubReport} />
-            <HubReportPanel report={monthlyHubReport} />
-          </section>
-
-          <section className="rounded-2xl bg-white p-5 shadow-sm">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h3 className="text-xl font-bold">Lịch sử thay đổi Hub</h3>
-                <p className="text-sm text-slate-500">
-                  Biết ca nào vừa thêm, sửa, xóa và có thể hoàn tác nhanh.
-                </p>
-              </div>
-              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold">
-                {changeLogs.length} thay đổi
-              </span>
-            </div>
-
-            <div className="mt-4 grid gap-2">
-              {changeLogs.length === 0 ? (
-                <p className="rounded-xl bg-slate-100 p-4 text-sm text-slate-500">
-                  Chưa có lịch sử thay đổi Hub.
-                </p>
-              ) : (
-                paginatedHubChangeLogs.map((log) => (
-                  <article
-                    key={log.id}
-                    className="flex flex-wrap items-center justify-between gap-3 rounded-xl border p-3"
-                  >
-                    <div>
-                      <p className="font-bold">{log.title}</p>
-                      <p className="mt-1 text-sm text-slate-500">
-                        {new Intl.DateTimeFormat("vi-VN", {
-                          dateStyle: "short",
-                          timeStyle: "short",
-                        }).format(new Date(log.createdAt))}{" "}
-                        · {log.description}
-                      </p>
-                    </div>
-
-                    <div className="flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        onClick={() => undoHubChange(log)}
-                        className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-bold text-white hover:bg-slate-700"
-                      >
-                        Hoàn tác
-                      </button>
-                      {log.action === "delete" && log.previousEntry && (
-                        <button
-                          type="button"
-                          onClick={() => restoreDeletedHubEntry(log.previousEntry!)}
-                          className="rounded-lg bg-green-50 px-3 py-2 text-sm font-bold text-green-700 hover:bg-green-100"
-                        >
-                          Khôi phục
-                        </button>
-                      )}
-                    </div>
-                  </article>
-                ))
-              )}
-            </div>
-
-            {changeLogs.length > HUB_CHANGE_LOG_PAGE_SIZE && (
-              <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-slate-50 p-3">
-                <p className="text-sm font-bold text-slate-600">
-                  Trang {safeHubChangeLogPage}/{hubChangeLogTotalPages} · mỗi
-                  trang {HUB_CHANGE_LOG_PAGE_SIZE} bản ghi
-                </p>
-
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setHubChangeLogPage((page) => Math.max(page - 1, 1))
-                    }
-                    disabled={safeHubChangeLogPage <= 1}
-                    className="app-secondary-button min-h-10 rounded-xl px-3 py-2 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    Trước
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setHubChangeLogPage((page) =>
-                        Math.min(page + 1, hubChangeLogTotalPages)
-                      )
-                    }
-                    disabled={safeHubChangeLogPage >= hubChangeLogTotalPages}
-                    className="app-primary-button min-h-10 rounded-xl px-3 py-2 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    Sau
-                  </button>
-                </div>
-              </div>
-            )}
-          </section>
-        </section>
+        <HubStatisticsPage
+          range={statisticsRange}
+          hubFilter={statisticsHubFilter}
+          customFromDate={statisticsCustomFromDate}
+          customToDate={statisticsCustomToDate}
+          rangeLabel={getRangeLabel(
+            statisticsDateRange.fromDate,
+            statisticsDateRange.toDate
+          )}
+          summary={statisticsSummary}
+          todaySummary={todayHubSummary}
+          weekSummary={weekHubSummary}
+          monthSummary={monthHubSummary}
+          hubPerformance={statisticsHubPerformance}
+          shiftPerformance={statisticsShiftPerformance}
+          lowPerformanceShifts={statisticsLowPerformanceShifts}
+          weeklyReport={weeklyHubReport}
+          monthlyReport={monthlyHubReport}
+          changeLogs={paginatedHubChangeLogs}
+          currentLogPage={safeHubChangeLogPage}
+          totalLogPages={hubChangeLogTotalPages}
+          pageSize={HUB_CHANGE_LOG_PAGE_SIZE}
+          onRangeChange={setStatisticsRange}
+          onHubFilterChange={setStatisticsHubFilter}
+          onCustomFromDateChange={setStatisticsCustomFromDate}
+          onCustomToDateChange={setStatisticsCustomToDate}
+          onOpenShifts={() => setTab("list")}
+          onUndoChange={undoHubChange}
+          onRestoreChange={restoreDeletedHubEntry}
+          onLogPageChange={setHubChangeLogPage}
+        />
       )}
-
       {tab === "list" && (
-        <section className="grid min-w-0 max-w-full gap-5 overflow-hidden">
-          <section className="app-card min-w-0 max-w-full overflow-hidden rounded-2xl p-4 sm:p-5">
-            <div className="grid gap-3 sm:flex sm:items-start sm:justify-between">
-              <div className="min-w-0">
-                <h3 className="text-xl font-bold">Hub của tôi</h3>
-                <p className="text-sm text-slate-500">
-                  Mobile xem theo ngày, desktop có lịch và bảng chi tiết.
-                </p>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setTab("add")}
-                className="app-primary-button w-full rounded-xl px-4 py-2 text-sm font-bold sm:w-auto"
-              >
-                Thêm ca mới
-              </button>
-            </div>
-
-            <div className="mt-4 grid min-w-0 max-w-full gap-4 lg:grid-cols-[minmax(280px,360px)_1fr]">
-              {/* Mobile filter gọn */}
-              <div className="grid min-w-0 max-w-full gap-4 overflow-hidden lg:hidden">
-                <div className="app-soft-card min-w-0 max-w-full rounded-2xl p-3">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="text-sm font-bold text-emerald-900">
-                      Chọn ngày nhanh
-                    </p>
-                    <span className="rounded-full bg-white px-3 py-1 text-xs font-bold text-emerald-700">
-                      {filteredHubEntries.length} ca
-                    </span>
-                  </div>
-
-                  <input
-                    type="date"
-                    value={listCustomFromDate}
-                    onChange={(event) => {
-                      const nextDate = event.target.value;
-
-                      setListTimeFilter("custom");
-                      setListCustomFromDate(nextDate);
-                      setListCustomToDate(nextDate);
-
-                      if (nextDate) {
-                        setListCalendarMonth(nextDate.slice(0, 7));
-                      }
-                    }}
-                    className="app-input mt-2 w-full rounded-xl border bg-white px-3 py-2"
-                  />
-
-                  <p className="mt-3 rounded-xl bg-white p-3 text-sm font-medium text-slate-600">
-                    Đang xem:{" "}
-                    <strong>
-                      {getRangeLabel(listDateRange.fromDate, listDateRange.toDate)}
-                    </strong>
-                  </p>
-                </div>
-
-                {mobileDateChips.length > 0 && (
-                  <div>
-                    <p className="text-sm font-bold text-slate-700">
-                      Ngày có ca gần nhất
-                    </p>
-
-                    <div className="mt-2 grid min-w-0 max-w-full grid-cols-2 gap-2">
-                      {mobileDateChips.map((item) => {
-                        const active =
-                          listTimeFilter === "custom" &&
-                          listCustomFromDate === item.date &&
-                          listCustomToDate === item.date;
-
-                        return (
-                          <button
-                            key={item.date}
-                            type="button"
-                            onClick={() => selectCalendarDate(item.date)}
-                            className={`min-w-0 rounded-2xl px-3 py-2 text-left text-sm font-bold ${
-                              active
-                                ? "bg-emerald-700 text-white"
-                                : "bg-white text-slate-700 shadow-sm"
-                            }`}
-                          >
-                            <span className="block truncate">
-                              {formatDateLabel(item.date)}
-                            </span>
-                            <span
-                              className={`mt-0.5 block break-words text-xs leading-snug ${
-                                active ? "text-emerald-50" : "text-slate-500"
-                              }`}
-                            >
-                              {item.count} ca · {formatMoney(item.workIncome)}
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                <div>
-                  <p className="text-sm font-bold text-slate-700">Lọc theo loại</p>
-
-                  <div className="mt-2 grid min-w-0 max-w-full grid-cols-3 gap-2">
-                    {(["ALL", ...HUB_TYPES] as HubTypeFilter[]).map((hubType) => (
-                      <button
-                        key={hubType}
-                        type="button"
-                        onClick={() => setListHubTypeFilter(hubType)}
-                        className={`min-w-0 rounded-xl px-2 py-2 text-sm font-bold ${
-                          listHubTypeFilter === hubType
-                            ? "bg-emerald-700 text-white"
-                            : "bg-white text-slate-700 shadow-sm hover:bg-emerald-50"
-                        }`}
-                      >
-                        <span className="block truncate">
-                          {hubType === "ALL" ? "Tất cả" : HUB_TYPE_LABEL[hubType]}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div>
-                  <p className="text-sm font-bold text-slate-700">Lọc theo thời gian</p>
-
-                  <div className="mt-2 grid min-w-0 max-w-full grid-cols-2 gap-2">
-                    {HUB_TIME_FILTERS.map((filter) => (
-                      <button
-                        key={filter.value}
-                        type="button"
-                        onClick={() => selectListTimeFilter(filter.value)}
-                        className={`min-w-0 rounded-xl px-2 py-2 text-sm font-bold ${
-                          listTimeFilter === filter.value
-                            ? "bg-emerald-700 text-white"
-                            : "bg-white text-slate-700 shadow-sm hover:bg-emerald-50"
-                        }`}
-                      >
-                        <span className="block leading-snug">{filter.label}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              {/* Desktop / tablet calendar */}
-              <div className="hidden rounded-2xl border bg-slate-50 p-4 lg:block">
-                <div className="flex items-center justify-between gap-3">
-                  <button
-                    type="button"
-                    onClick={() => changeCalendarMonth(-1)}
-                    className="h-9 w-9 rounded-full bg-white text-lg font-bold shadow-sm hover:bg-slate-100"
-                  >
-                    ‹
-                  </button>
-
-                  <h4 className="text-center font-bold">
-                    {formatMonthLabel(listCalendarMonth)}
-                  </h4>
-
-                  <button
-                    type="button"
-                    onClick={() => changeCalendarMonth(1)}
-                    className="h-9 w-9 rounded-full bg-white text-lg font-bold shadow-sm hover:bg-slate-100"
-                  >
-                    ›
-                  </button>
-                </div>
-
-                <div className="mt-4 grid grid-cols-7 gap-1 text-center text-xs font-bold text-slate-500">
-                  {WEEKDAY_LABELS.map((label) => (
-                    <span key={label}>{label}</span>
-                  ))}
-                </div>
-
-                <div className="mt-2 grid grid-cols-7 gap-1">
-                  {calendarDays.map((day) => {
-                    const isSelected = isDateSelectedOnCalendar(day.date);
-                    const isToday = day.date === getToday();
-
-                    return (
-                      <button
-                        key={day.date}
-                        type="button"
-                        onClick={() => selectCalendarDate(day.date)}
-                        className={`relative aspect-square rounded-xl text-sm font-bold ${
-                          isSelected
-                            ? "bg-slate-900 text-white"
-                            : day.isCurrentMonth
-                              ? "bg-white text-slate-900 hover:bg-slate-100"
-                              : "bg-transparent text-slate-300 hover:bg-white"
-                        } ${isToday && !isSelected ? "ring-2 ring-slate-300" : ""}`}
-                      >
-                        {day.day}
-
-                        {day.hasEntry && (
-                          <span
-                            className={`absolute bottom-1 left-1/2 h-1.5 w-1.5 -translate-x-1/2 rounded-full ${
-                              isSelected ? "bg-white" : "bg-emerald-500"
-                            }`}
-                          />
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Desktop / tablet filters */}
-              <div className="hidden content-start gap-4 lg:grid">
-                <div>
-                  <p className="text-sm font-bold text-slate-700">Lọc theo loại</p>
-
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {(["ALL", ...HUB_TYPES] as HubTypeFilter[]).map((hubType) => (
-                      <button
-                        key={hubType}
-                        type="button"
-                        onClick={() => setListHubTypeFilter(hubType)}
-                        className={`rounded-xl px-3 py-2 text-sm font-bold ${
-                          listHubTypeFilter === hubType
-                            ? "bg-slate-900 text-white"
-                            : "bg-slate-100 hover:bg-slate-200"
-                        }`}
-                      >
-                        {hubType === "ALL" ? "Tất cả" : HUB_TYPE_LABEL[hubType]}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div>
-                  <p className="text-sm font-bold text-slate-700">Lọc theo thời gian</p>
-
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {HUB_TIME_FILTERS.map((filter) => (
-                      <button
-                        key={filter.value}
-                        type="button"
-                        onClick={() => selectListTimeFilter(filter.value)}
-                        className={`rounded-xl px-3 py-2 text-sm font-bold ${
-                          listTimeFilter === filter.value
-                            ? "bg-slate-900 text-white"
-                            : "bg-slate-100 hover:bg-slate-200"
-                        }`}
-                      >
-                        {filter.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {listTimeFilter === "custom" && (
-                  <div className="grid gap-3 md:grid-cols-2">
-                    <div>
-                      <label className="text-sm font-medium">Từ ngày</label>
-                      <input
-                        type="date"
-                        value={listCustomFromDate}
-                        onChange={(event) => {
-                          setListCustomFromDate(event.target.value);
-                          setListTimeFilter("custom");
-
-                          if (event.target.value) {
-                            setListCalendarMonth(event.target.value.slice(0, 7));
-                          }
-                        }}
-                        className="app-input mt-1 w-full rounded-xl border px-3 py-2"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="text-sm font-medium">Đến ngày</label>
-                      <input
-                        type="date"
-                        value={listCustomToDate}
-                        onChange={(event) => {
-                          setListCustomToDate(event.target.value);
-                          setListTimeFilter("custom");
-
-                          if (event.target.value) {
-                            setListCalendarMonth(event.target.value.slice(0, 7));
-                          }
-                        }}
-                        className="app-input mt-1 w-full rounded-xl border px-3 py-2"
-                      />
-                    </div>
-                  </div>
-                )}
-
-                <p className="rounded-xl bg-slate-100 p-3 text-sm font-medium text-slate-600">
-                  Bạn đang xem dữ liệu{" "}
-                  {getRangeLabel(listDateRange.fromDate, listDateRange.toDate)} ·{" "}
-                  {listHubTypeFilter === "ALL"
-                    ? "tất cả hub"
-                    : HUB_TYPE_LABEL[listHubTypeFilter]}
-                  .
-                </p>
-              </div>
-            </div>
-          </section>
-
-          <section className="hub-filter-results-summary">
-            <div className="hub-filter-results-summary__heading">
-              <div>
-                <h3>Các ca phù hợp</h3>
-                <p>
-                  {filteredHubEntries.length} ca · {filteredHubSummary.orders} đơn · {formatMoney(filteredHubSummary.income)}
-                </p>
-              </div>
-              <span>{getRangeLabel(listDateRange.fromDate, listDateRange.toDate)}</span>
-            </div>
-            <dl>
-              <div><dt>Số ca</dt><dd>{filteredHubEntries.length}</dd></div>
-              <div><dt>Tổng số đơn</dt><dd>{filteredHubSummary.orders}</dd></div>
-              <div><dt>Đơn ghép</dt><dd>{filteredHubSummary.joins}</dd></div>
-              <div><dt>Đơn lẻ</dt><dd>{filteredHubSummary.singles}</dd></div>
-              <div><dt>Tổng thu nhập</dt><dd>{formatMoney(filteredHubSummary.income)}</dd></div>
-            </dl>
-          </section>
-
-          <section className="hub-filter-results" aria-label="Các ca phù hợp">
-            <div className="hub-filter-results__list">
-              {filteredHubEntries.length === 0 ? (
-                <div className="hub-filter-results__empty">
-                  <h3>Không tìm thấy ca phù hợp</h3>
-                  <p>Hãy thay đổi bộ lọc hoặc thêm một ca làm mới.</p>
-                  <button type="button" onClick={() => setTab("add")}>
-                    Thêm ca mới
-                  </button>
-                </div>
-              ) : (
-                filteredHubEntries.map((entry) => {
-                  const income = calculateHubIncome(entry, settings);
-
-                  return (
-                    <ShiftResultCard
-                      key={entry.id}
-                      durationHours={getShiftHours(entry.shiftName)}
-                      entry={entry}
-                      income={income}
-                      isExpanded={expandedShiftIds.has(entry.id)}
-                      onEdit={editHubEntry}
-                      onRequestDelete={requestDeleteShift}
-                      onToggle={toggleShiftDetails}
-                    />
-                  );
-                })
-              )}
-            </div>
-          </section>
-        </section>
+        <MyShiftsPage
+          entries={filteredHubEntries}
+          settings={settings}
+          expandedShiftIds={expandedShiftIds}
+          hubTypeFilter={listHubTypeFilter}
+          timeFilter={listTimeFilter}
+          customFromDate={listCustomFromDate}
+          customToDate={listCustomToDate}
+          calendarMonth={listCalendarMonth}
+          calendarDays={calendarDays}
+          rangeLabel={getRangeLabel(listDateRange.fromDate, listDateRange.toDate)}
+          onAdd={() => setTab("add")}
+          onEdit={editHubEntry}
+          onRequestDelete={requestDeleteShift}
+          onToggle={toggleShiftDetails}
+          onHubTypeFilterChange={setListHubTypeFilter}
+          onTimeFilterChange={selectListTimeFilter}
+          onCustomFromDateChange={(value) => {
+            setListCustomFromDate(value);
+            setListTimeFilter("custom");
+            if (value) setListCalendarMonth(value.slice(0, 7));
+          }}
+          onCustomToDateChange={(value) => {
+            setListCustomToDate(value);
+            setListTimeFilter("custom");
+            if (value) setListCalendarMonth(value.slice(0, 7));
+          }}
+          onSelectDate={selectCalendarDate}
+          onCalendarMonthChange={changeCalendarMonth}
+          isDateSelected={isDateSelectedOnCalendar}
+          getDurationHours={getShiftHours}
+        />
       )}
-
       {tab === "settings" && (
-        <section className="rounded-2xl bg-white p-5 shadow-sm">
-          <h3 className="text-xl font-bold">Cài đặt hub</h3>
-          <p className="mt-1 text-sm text-slate-500">
-            Khu vực đang cố định: <strong>Hà Nội</strong>
-          </p>
-
-          <div className="mt-4 grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-            <SettingMoneyInput
-              label="Giá đơn thường"
-              value={settings.orderPrice}
-              onChange={(value) =>
-                setSettings((prev) => ({ ...prev, orderPrice: value }))
-              }
-            />
-            <SettingMoneyInput
-              label="Giá hub ngắn"
-              value={settings.hubShortPrice}
-              onChange={(value) =>
-                setSettings((prev) => ({ ...prev, hubShortPrice: value }))
-              }
-            />
-            <SettingMoneyInput
-              label="Giá ghép 2"
-              value={settings.join2Price}
-              onChange={(value) =>
-                setSettings((prev) => ({ ...prev, join2Price: value }))
-              }
-            />
-            <SettingMoneyInput
-              label="Giá ghép 3"
-              value={settings.join3Price}
-              onChange={(value) =>
-                setSettings((prev) => ({ ...prev, join3Price: value }))
-              }
-            />
-            <SettingMoneyInput
-              label="Giá ghép 4"
-              value={settings.join4Price}
-              onChange={(value) =>
-                setSettings((prev) => ({ ...prev, join4Price: value }))
-              }
-            />
-            <SettingMoneyInput
-              label="Giá ghép 5"
-              value={settings.join5Price}
-              onChange={(value) =>
-                setSettings((prev) => ({ ...prev, join5Price: value }))
-              }
-            />
-          </div>
-        </section>
+        <HubSettingsPage
+          settings={settings}
+          cloudStatus={hubCloudStatus}
+          onChange={setSettings}
+        />
       )}
 
       <DeleteShiftDialog
@@ -2559,256 +1480,6 @@ export function HubPage({
           }
         }}
         onConfirm={confirmDeleteShift}
-      />
-    </>
-  );
-}
-
-type ButtonProps = {
-  active: boolean;
-  children: string;
-  onClick: () => void;
-};
-
-function TabButton({ active, children, onClick }: ButtonProps) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`flex min-h-11 w-auto shrink-0 items-center justify-center rounded-xl px-3 py-2 text-center text-xs font-bold leading-snug sm:text-sm lg:w-full lg:whitespace-nowrap lg:px-3 ${
-        active
-          ? "bg-emerald-700 text-white"
-          : "bg-emerald-50 text-emerald-800 hover:bg-emerald-100"
-      }`}
-    >
-      {children}
-    </button>
-  );
-}
-
-function ChoiceButton({ active, children, onClick }: ButtonProps) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`rounded-xl px-4 py-2 text-sm font-bold ${
-        active ? "bg-emerald-700 text-white" : "bg-emerald-50 text-emerald-800 hover:bg-emerald-100"
-      }`}
-    >
-      {children}
-    </button>
-  );
-}
-
-function FormBlock({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <div className="mt-5">
-      <h4 className="text-sm font-bold text-slate-700">{title}</h4>
-      <div className="mt-2">{children}</div>
-    </div>
-  );
-}
-
-function SummaryCard({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="app-card min-w-0 rounded-2xl p-3 sm:p-4">
-      <p className="text-sm text-slate-500">{label}</p>
-      <p className="mt-1 break-words text-xl font-bold leading-tight text-emerald-800 sm:text-2xl">
-        {value}
-      </p>
-    </div>
-  );
-}
-
-function HubPeriodSummary({
-  title,
-  summary,
-}: {
-  title: string;
-  summary: HubAnalyticsSummary;
-}) {
-  return (
-    <article className="rounded-2xl border bg-slate-50 p-4">
-      <p className="text-sm font-bold text-slate-500">{title}</p>
-      <p className="mt-2 text-2xl font-bold text-slate-900">
-        {formatMoney(summary.workIncome)}
-      </p>
-      <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
-        <p>
-          Ca: <strong>{summary.shifts}</strong>
-        </p>
-        <p>
-          Đơn: <strong>{summary.orders}</strong>
-        </p>
-        <p>
-          Ghép: <strong>{summary.joinOrders}</strong>
-        </p>
-        <p>
-          Giờ: <strong>{summary.hours}</strong>
-        </p>
-      </div>
-      <p className="mt-3 rounded-xl bg-white px-3 py-2 text-sm font-bold">
-        {formatMoney(summary.incomePerHour)}/giờ
-      </p>
-    </article>
-  );
-}
-
-function PerformancePanel({
-  title,
-  description,
-  items,
-  primaryMetric = "incomePerHour",
-}: {
-  title: string;
-  description: string;
-  items: HubPerformanceItem[];
-  primaryMetric?: "workIncome" | "incomePerHour";
-}) {
-  return (
-    <section className="rounded-2xl bg-white p-5 shadow-sm">
-      <h3 className="text-xl font-bold">{title}</h3>
-      <p className="mt-1 text-sm text-slate-500">{description}</p>
-
-      <div className="mt-4 grid gap-2">
-        {items.length === 0 ? (
-          <p className="rounded-xl bg-slate-100 p-4 text-sm text-slate-500">
-            Chưa có đủ dữ liệu.
-          </p>
-        ) : (
-          items.map((item) => (
-            <article key={item.key} className="rounded-xl border p-3">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <h4 className="font-bold">{item.label}</h4>
-                  <p className="mt-1 text-sm text-slate-500">
-                    {item.shifts} ca · {item.orders} đơn · {item.joinOrders} ghép ·{" "}
-                    {item.hours} giờ
-                  </p>
-                </div>
-                <div className="text-right">
-                  <p className="text-lg font-bold">
-                    {primaryMetric === "workIncome"
-                      ? formatMoney(item.workIncome)
-                      : `${formatMoney(item.incomePerHour)}/giờ`}
-                  </p>
-                  <p className="text-xs text-slate-500">
-                    {primaryMetric === "workIncome"
-                      ? `${formatMoney(item.incomePerHour)}/giờ`
-                      : `TB ca ${formatMoney(item.averageIncome)}`}
-                  </p>
-                </div>
-              </div>
-            </article>
-          ))
-        )}
-      </div>
-    </section>
-  );
-}
-
-function HubReportPanel({ report }: { report: HubReport }) {
-  const changeText =
-    report.changePercent === null
-      ? "Chưa có kỳ trước để so sánh"
-      : `${report.changePercent >= 0 ? "Tăng" : "Giảm"} ${Math.abs(
-          report.changePercent
-        )}% so với kỳ trước`;
-
-  return (
-    <section className="rounded-2xl bg-white p-5 shadow-sm">
-      <h3 className="text-xl font-bold">{report.title}</h3>
-      <p className="mt-1 text-sm text-slate-500">
-        {formatDateLabel(report.fromDate)} - {formatDateLabel(report.toDate)}
-      </p>
-
-      <div className="mt-4 rounded-xl bg-slate-900 p-4 text-white">
-        <p className="text-sm text-slate-300">Tiền làm được</p>
-        <p className="mt-1 text-3xl font-bold">
-          {formatMoney(report.summary.workIncome)}
-        </p>
-        <p className="mt-2 text-sm text-slate-300">{changeText}</p>
-      </div>
-
-      <div className="mt-4 grid gap-2 text-sm">
-        <p>
-          Tuần/tháng này: <strong>{report.summary.shifts} ca</strong> ·{" "}
-          <strong>{report.summary.orders} đơn</strong> ·{" "}
-          <strong>{report.summary.hours} giờ</strong>
-        </p>
-        <p>
-          Ngày tốt nhất:{" "}
-          <strong>
-            {report.bestDay
-              ? `${report.bestDay.date} (${formatMoney(report.bestDay.workIncome)})`
-              : "Chưa có"}
-          </strong>
-        </p>
-        <p>
-          Ngày tệ nhất:{" "}
-          <strong>
-            {report.worstDay
-              ? `${report.worstDay.date} (${formatMoney(
-                  report.worstDay.workIncome
-                )})`
-              : "Chưa có"}
-          </strong>
-        </p>
-      </div>
-
-      <div className="mt-4 grid gap-2">
-        {report.notes.map((note) => (
-          <p
-            key={note}
-            className="rounded-lg bg-slate-100 px-3 py-2 text-sm text-slate-600"
-          >
-            {note}
-          </p>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function IncomeStat({
-  label,
-  value,
-  signed = false,
-}: {
-  label: string;
-  value: number;
-  signed?: boolean;
-}) {
-  const isNegative = value < 0;
-  const displayValue = signed
-    ? `${isNegative ? "Giảm" : "Tăng"} ${formatMoney(Math.abs(value))}`
-    : formatMoney(value);
-
-  return (
-    <div className={`rounded-xl p-3 ${isNegative ? "bg-red-50" : "bg-slate-100"}`}>
-      <p className="text-sm text-slate-500">{label}</p>
-      <p className={`font-bold ${isNegative ? "text-red-600" : "text-slate-900"}`}>
-        {displayValue}
-      </p>
-    </div>
-  );
-}
-
-type SettingMoneyInputProps = {
-  label: string;
-  value: number;
-  onChange: (value: number) => void;
-};
-
-function SettingMoneyInput({ label, value, onChange }: SettingMoneyInputProps) {
-  return (
-    <div>
-      <label className="text-sm font-medium">{label}</label>
-      <input
-        inputMode="numeric"
-        value={formatMoneyInput(String(value))}
-        onChange={(event) => onChange(parseMoneyInput(event.target.value))}
-        className="app-input mt-1 w-full rounded-xl border px-3 py-2"
       />
     </div>
   );

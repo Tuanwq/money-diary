@@ -13,12 +13,12 @@ export function GoalDeadlineOption({ option }: GoalDeadlineOptionProps) {
     <article
       className={`money-goal-deadline-option ${
         isMainGoal
-          ? "is-main"
+          ? `is-main ${option.status === "behind" ? "is-behind" : "is-on-track"}`
           : `is-sub ${option.status === "behind" ? "is-behind" : "is-on-track"}`
       }`}
       role="listitem"
       title={option.name}
-      aria-label={`${isMainGoal ? "Mục tiêu chính" : "Mục tiêu phụ"}: ${option.name}, ${option.daysLeft} ngày${isMainGoal ? "" : `, ${statusLabel}`}`}
+      aria-label={`${isMainGoal ? "Mục tiêu chính" : "Mục tiêu phụ"}: ${option.name}, ${option.daysLeft} ngày, ${statusLabel}`}
     >
       <span className="money-goal-deadline-option-heading">
         <span>{isMainGoal ? "Mục tiêu chính" : "Phụ"}</span>

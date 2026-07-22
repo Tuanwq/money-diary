@@ -35,6 +35,8 @@ export function JournalDayCard({ entry, onDelete, onEdit, onView }: JournalDayCa
       <dl className="journal-day-card__money">
         <div><dt>Tiền làm được</dt><dd>{formatMoney(mainIncome)}</dd></div>
         <div><dt>Thưởng/nhận thêm</dt><dd>{formatMoney(extraIncome)}</dd></div>
+        <div><dt>Số giờ làm</dt><dd>{entry.workHours} giờ</dd></div>
+        <div><dt>Số đơn</dt><dd>{entry.orderCount ?? 0} đơn</dd></div>
       </dl>
 
       {preview.length > 0 && <div className="journal-day-card__preview">{preview.map((text, index) => <p key={`${entry.id}-preview-${index}`}>{text}</p>)}</div>}

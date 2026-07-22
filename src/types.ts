@@ -98,6 +98,7 @@ export type AppHistoryState = {
   goalId?: string;
   page: Page;
   goalScreen: GoalScreen;
+  scrollTop?: number;
 };
 
 export type CompletedGoal = {

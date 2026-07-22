@@ -1,5 +1,12 @@
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { AppHistoryState, GoalScreen, Page } from "../types";
+
+type NavigationOptions = {
+  replace?: boolean;
+  scrollTop?: number;
+};
+
+type MoneyNavigationTarget = Pick<AppHistoryState, "page" | "goalScreen">;
 
 const moneyPagePaths: Record<Page, string> = {
   balanceChecks: "/money/history/balance-checks",
@@ -33,6 +40,20 @@ export function getGoalScreenPath(screen: GoalScreen, goalId?: string) {
   }
 
   return basePath;
+}
+
+export function getNavigationScrollTop(
+  current: MoneyNavigationTarget,
+  next: MoneyNavigationTarget,
+  currentScrollTop: number,
+  requestedScrollTop?: number
+) {
+  if (typeof requestedScrollTop === "number") return requestedScrollTop;
+
+  const staysOnSameScreen =
+    current.page === next.page && current.goalScreen === next.goalScreen;
+
+  return staysOnSameScreen ? currentScrollTop : 0;
 }
 
 export function getMoneyStateFromPath(pathname: string): AppHistoryState {
@@ -93,45 +114,104 @@ export function useAppNavigation() {
     initialState.goalScreen
   );
   const [goalId, setGoalId] = useState<string | undefined>(initialState.goalId);
+  const [navigationVersion, setNavigationVersion] = useState(0);
+  const pendingScrollTopRef = useRef<number | null>(null);
+
+  useLayoutEffect(() => {
+    const scrollTop = pendingScrollTopRef.current ?? 0;
+
+    pendingScrollTopRef.current = null;
+    window.scrollTo({ top: scrollTop, left: 0, behavior: "auto" });
+  }, [goalId, goalScreen, navigationVersion, page]);
 
   useEffect(() => {
     const initialState = getMoneyStateFromPath(window.location.pathname);
 
-    window.history.replaceState(initialState, "", window.location.href);
+    const currentHistoryState = window.history.state as
+      | Partial<AppHistoryState>
+      | null;
+
+    window.history.replaceState(
+      {
+        ...initialState,
+        scrollTop:
+          typeof currentHistoryState?.scrollTop === "number"
+            ? currentHistoryState.scrollTop
+            : window.scrollY,
+      } satisfies AppHistoryState,
+      "",
+      window.location.href
+    );
+
+    let scrollFrame = 0;
+
+    function persistCurrentScrollPosition() {
+      if (scrollFrame) window.cancelAnimationFrame(scrollFrame);
+
+      scrollFrame = window.requestAnimationFrame(() => {
+        const state = window.history.state as Partial<AppHistoryState> | null;
+
+        if (!state?.page) return;
+
+        window.history.replaceState(
+          { ...state, scrollTop: window.scrollY },
+          "",
+          window.location.href
+        );
+        scrollFrame = 0;
+      });
+    }
 
     function handleBrowserBack(event: PopStateEvent) {
       const state = event.state as AppHistoryState | null;
 
       if (state?.page) {
+        pendingScrollTopRef.current = state.scrollTop ?? 0;
         setPage(state.page);
         setGoalScreen(state.goalScreen ?? "menu");
         setGoalId(state.goalId);
+        setNavigationVersion((current) => current + 1);
         return;
       }
 
       const nextState = getMoneyStateFromPath(window.location.pathname);
 
+      pendingScrollTopRef.current = nextState.scrollTop ?? 0;
       setPage(nextState.page);
       setGoalScreen(nextState.goalScreen);
       setGoalId(nextState.goalId);
+      setNavigationVersion((current) => current + 1);
     }
 
     window.addEventListener("popstate", handleBrowserBack);
+    window.addEventListener("scroll", persistCurrentScrollPosition, {
+      passive: true,
+    });
 
     return () => {
+      if (scrollFrame) window.cancelAnimationFrame(scrollFrame);
       window.removeEventListener("popstate", handleBrowserBack);
+      window.removeEventListener("scroll", persistCurrentScrollPosition);
     };
   }, []);
 
   function navigateTo(
     nextPage: Page,
     nextGoalScreen: GoalScreen = "menu",
-    nextGoalId?: string
+    nextGoalId?: string,
+    options?: NavigationOptions
   ) {
+    const nextScrollTop = getNavigationScrollTop(
+      { page, goalScreen },
+      { page: nextPage, goalScreen: nextGoalScreen },
+      window.scrollY,
+      options?.scrollTop
+    );
     const nextState: AppHistoryState = {
       page: nextPage,
       goalScreen: nextGoalScreen,
       goalId: nextGoalId,
+      scrollTop: nextScrollTop,
     };
     const nextPath = window.location.pathname.startsWith("/money")
       ? nextPage === "goals"
@@ -139,17 +219,36 @@ export function useAppNavigation() {
         : moneyPagePaths[nextPage]
       : window.location.href;
 
-    window.history.pushState(nextState, "", nextPath);
+    if (options?.replace) {
+      window.history.replaceState(nextState, "", nextPath);
+    } else {
+      const currentState = window.history.state as
+        | Partial<AppHistoryState>
+        | null;
 
+      if (currentState?.page) {
+        window.history.replaceState(
+          { ...currentState, scrollTop: window.scrollY },
+          "",
+          window.location.href
+        );
+      }
+      window.history.pushState(nextState, "", nextPath);
+    }
+
+    pendingScrollTopRef.current = nextScrollTop;
     setPage(nextPage);
     setGoalScreen(nextGoalScreen);
     setGoalId(nextGoalId);
+    setNavigationVersion((current) => current + 1);
   }
 
   function resetMoneyNavigation() {
+    pendingScrollTopRef.current = 0;
     setPage("home");
     setGoalScreen("menu");
     setGoalId(undefined);
+    setNavigationVersion((current) => current + 1);
   }
 
   return {

@@ -7,18 +7,20 @@ import { GoalDeadlineOption } from "./GoalDeadlineOption";
 
 type GoalDeadlineOptionsProps = {
   goals: Goals;
+  mainGoalSaved: number;
   onOpenGoals: () => void;
   selectedDate: string;
 };
 
 export function GoalDeadlineOptions({
   goals,
+  mainGoalSaved,
   onOpenGoals,
   selectedDate,
 }: GoalDeadlineOptionsProps) {
   const options = useMemo(
-    () => buildDailyGoalOptions(goals, selectedDate),
-    [goals, selectedDate]
+    () => buildDailyGoalOptions(goals, selectedDate, mainGoalSaved),
+    [goals, mainGoalSaved, selectedDate]
   );
   const selectedDateLabel =
     selectedDate === getToday() ? "Hôm nay" : formatReportDate(selectedDate);

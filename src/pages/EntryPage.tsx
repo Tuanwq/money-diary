@@ -1,33 +1,24 @@
-import type { Dispatch, FormEvent, SetStateAction } from "react";
-import { OtherExpenseItemsInput } from "../components/OtherExpenseItemsInput";
-import type { GoalScreen, Mood, Page } from "../types";
-import { getToday } from "../utils/date";
-import { formatMoney, formatMoneyInput, parseMoneyInput } from "../utils/money";
 import {
-  getOtherExpenseItemsTotal,
-  type OtherExpenseItemForm,
-} from "../utils/otherExpenseForms";
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type Dispatch,
+  type FormEvent,
+  type SetStateAction,
+} from "react";
+import {
+  DailyJournalForm,
+  DetailedJournalHeader,
+  DetailedJournalTabs,
+  ExpenseJournalForm,
+  type DailyEntryForm,
+  type DetailedJournalTab,
+  type ExpenseEntryForm,
+} from "../features/money-diary/components/detailed-journal";
+import { parseMoneyInput } from "../utils/money";
 
-export type DailyEntryForm = {
-  date: string;
-  diary: string;
-  income: string;
-  receivedMoney: string;
-  bonusMoney: string;
-  orderCount: string;
-  workHours: string;
-  mood: Mood;
-  note: string;
-};
-
-export type ExpenseEntryForm = {
-  date: string;
-  breakfast: string;
-  lunch: string;
-  dinner: string;
-  otherItems: OtherExpenseItemForm[];
-  note: string;
-};
+export type { DailyEntryForm, ExpenseEntryForm };
 
 type EntryPageProps = {
   editingDate: string | null;
@@ -38,11 +29,41 @@ type EntryPageProps = {
   setExpenseForm: Dispatch<SetStateAction<ExpenseEntryForm>>;
   handleSubmit: (event: FormEvent<HTMLFormElement>) => void;
   handleExpenseSubmit: (event: FormEvent<HTMLFormElement>) => void;
-  setEditingDate: (date: string | null) => void;
-  setEditingExpenseDate: (date: string | null) => void;
+  cancelEditEntry: () => void;
+  cancelEditExpense: () => void;
+  onReturnToQuickEntry?: () => void;
   todayString: string;
-  navigateTo: (nextPage: Page, nextGoalScreen?: GoalScreen) => void;
 };
+
+function useLockedSubmit(
+  submit: (event: FormEvent<HTMLFormElement>) => void
+) {
+  const lockedRef = useRef(false);
+  const timerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current !== null) window.clearTimeout(timerRef.current);
+    };
+  }, []);
+
+  return useCallback(
+    (event: FormEvent<HTMLFormElement>) => {
+      if (lockedRef.current) {
+        event.preventDefault();
+        return;
+      }
+
+      lockedRef.current = true;
+      submit(event);
+      timerRef.current = window.setTimeout(() => {
+        lockedRef.current = false;
+        timerRef.current = null;
+      }, 700);
+    },
+    [submit]
+  );
+}
 
 export function EntryPage({
   editingDate,
@@ -53,413 +74,78 @@ export function EntryPage({
   setExpenseForm,
   handleSubmit,
   handleExpenseSubmit,
-  setEditingDate,
-  setEditingExpenseDate,
+  cancelEditEntry,
+  cancelEditExpense,
+  onReturnToQuickEntry,
   todayString,
 }: EntryPageProps) {
+  const [activeTab, setActiveTab] = useState<DetailedJournalTab>(() =>
+    editingDate && !editingExpenseDate ? "journal" : "expense"
+  );
+  const lockedDiarySubmit = useLockedSubmit(handleSubmit);
+  const lockedExpenseSubmit = useLockedSubmit(handleExpenseSubmit);
+  const expenseHasData = Boolean(
+    parseMoneyInput(expenseForm.breakfast) ||
+      parseMoneyInput(expenseForm.lunch) ||
+      parseMoneyInput(expenseForm.dinner) ||
+      expenseForm.otherItems.some(
+        (item) => parseMoneyInput(item.amount) > 0 || item.label.trim()
+      ) ||
+      expenseForm.note.trim()
+  );
+  const journalHasData = Boolean(
+    parseMoneyInput(form.income) ||
+      parseMoneyInput(form.receivedMoney) ||
+      parseMoneyInput(form.bonusMoney) ||
+      Number(form.orderCount) ||
+      Number(form.workHours) ||
+      form.diary.trim() ||
+      form.note.trim()
+  );
+
   return (
-    <>
-      <div className="rounded-3xl bg-gradient-to-br from-emerald-700 via-teal-700 to-cyan-700 p-4 text-white shadow-sm sm:p-5">
-        <div>
-          <p className="text-xs font-bold tracking-wide text-emerald-100">
-            Form đầy đủ
-          </p>
-          <h2 className="mt-1 text-2xl font-bold">
-            {editingDate ? "Sửa nhật kí" : "Ghi nhật kí"}
-          </h2>
-          <p className="mt-1 text-sm text-emerald-50">
-            Ghi chi tiết chi tiêu, thu nhập, đơn, giờ làm và ghi chú.
-          </p>
+    <div className="detailed-journal-page">
+      <DetailedJournalHeader
+        expenseDate={expenseForm.date}
+        journalDate={form.date}
+        onReturnToQuickEntry={onReturnToQuickEntry}
+      />
+
+      <DetailedJournalTabs
+        activeTab={activeTab}
+        expenseHasData={expenseHasData}
+        journalHasData={journalHasData}
+        onChange={setActiveTab}
+      />
+
+      <section className="detailed-journal-layout">
+        <div
+          id="detailed-expense-panel"
+          className={`detailed-journal-panel${activeTab === "expense" ? " is-active" : ""}`}
+        >
+          <ExpenseJournalForm
+            editingExpenseDate={editingExpenseDate}
+            form={expenseForm}
+            setForm={setExpenseForm}
+            onSubmit={lockedExpenseSubmit}
+            onCancelEdit={cancelEditExpense}
+            todayString={todayString}
+          />
         </div>
-      </div>
 
-      <section className="grid gap-4 lg:grid-cols-2">
-        <ExpenseForm
-          editingExpenseDate={editingExpenseDate}
-          expenseForm={expenseForm}
-          setExpenseForm={setExpenseForm}
-          handleExpenseSubmit={handleExpenseSubmit}
-          setEditingExpenseDate={setEditingExpenseDate}
-          todayString={todayString}
-        />
-
-        <DiaryForm
-          editingDate={editingDate}
-          form={form}
-          setForm={setForm}
-          handleSubmit={handleSubmit}
-          setEditingDate={setEditingDate}
-        />
-
+        <div
+          id="detailed-journal-panel"
+          className={`detailed-journal-panel${activeTab === "journal" ? " is-active" : ""}`}
+        >
+          <DailyJournalForm
+            editingDate={editingDate}
+            form={form}
+            setForm={setForm}
+            onSubmit={lockedDiarySubmit}
+            onCancelEdit={cancelEditEntry}
+          />
+        </div>
       </section>
-    </>
-  );
-}
-
-function ExpenseForm({
-  editingExpenseDate,
-  expenseForm,
-  setExpenseForm,
-  handleExpenseSubmit,
-  setEditingExpenseDate,
-  todayString,
-}: {
-  editingExpenseDate: string | null;
-  expenseForm: ExpenseEntryForm;
-  setExpenseForm: Dispatch<SetStateAction<ExpenseEntryForm>>;
-  handleExpenseSubmit: (event: FormEvent<HTMLFormElement>) => void;
-  setEditingExpenseDate: (date: string | null) => void;
-  todayString: string;
-}) {
-  const draftTotal =
-    parseMoneyInput(expenseForm.breakfast) +
-    parseMoneyInput(expenseForm.lunch) +
-    parseMoneyInput(expenseForm.dinner) +
-    getOtherExpenseItemsTotal(expenseForm.otherItems);
-
-  return (
-    <form
-      onSubmit={handleExpenseSubmit}
-      className="app-card rounded-2xl p-4 shadow-sm sm:p-5"
-    >
-      <SectionHeading
-        title={editingExpenseDate ? "Sửa chi tiêu" : "Chi tiêu hôm nay"}
-        description="Nhập chi tiêu ăn uống và các khoản phát sinh trong ngày."
-      />
-
-      <div className="mt-4 grid gap-4 md:grid-cols-2">
-        <div>
-          <label className="text-sm font-medium">Ngày</label>
-          <input
-            type="date"
-            value={expenseForm.date}
-            max={todayString}
-            onChange={(e) =>
-              setExpenseForm((prev) => ({ ...prev, date: e.target.value }))
-            }
-            className="app-input mt-1 w-full rounded-xl border px-3 py-2"
-          />
-        </div>
-
-        <MoneyInput
-          label="Ăn sáng"
-          value={expenseForm.breakfast}
-          placeholder="VD: 30.000"
-          onChange={(value) =>
-            setExpenseForm((prev) => ({ ...prev, breakfast: value }))
-          }
-        />
-        <MoneyInput
-          label="Ăn trưa"
-          value={expenseForm.lunch}
-          placeholder="VD: 50.000"
-          onChange={(value) =>
-            setExpenseForm((prev) => ({ ...prev, lunch: value }))
-          }
-        />
-        <MoneyInput
-          label="Ăn tối"
-          value={expenseForm.dinner}
-          placeholder="VD: 40.000"
-          onChange={(value) =>
-            setExpenseForm((prev) => ({ ...prev, dinner: value }))
-          }
-        />
-        <OtherExpenseItemsInput
-          items={expenseForm.otherItems}
-          onChange={(otherItems) =>
-            setExpenseForm((prev) => ({ ...prev, otherItems }))
-          }
-        />
-
-        <div className="app-soft-card rounded-xl p-3 text-sm">
-          <p className="text-emerald-800">Tổng chi tiêu đang nhập</p>
-          <p className="mt-1 text-lg font-bold text-emerald-900">
-            {formatMoney(draftTotal)}
-          </p>
-        </div>
-      </div>
-
-      <div className="mt-4">
-        <label className="text-sm font-medium">Ghi chú chi tiêu</label>
-        <textarea
-          rows={3}
-          value={expenseForm.note}
-          onChange={(e) =>
-            setExpenseForm((prev) => ({ ...prev, note: e.target.value }))
-          }
-          placeholder="VD: Ăn trưa với bạn, mua nước, gửi xe..."
-          className="app-input mt-1 min-h-28 w-full rounded-xl border px-3 py-2"
-        />
-      </div>
-
-      <div className="mt-4 grid gap-2 sm:flex sm:flex-wrap">
-        <button
-          type="submit"
-          className="app-primary-button rounded-xl px-5 py-2 font-bold sm:w-fit"
-        >
-          {editingExpenseDate ? "Cập nhật chi tiêu" : "Lưu chi tiêu"}
-        </button>
-
-        {editingExpenseDate && (
-          <button
-            type="button"
-            onClick={() => {
-              setEditingExpenseDate(null);
-              setExpenseForm({
-                date: getToday(),
-                breakfast: "",
-                lunch: "",
-                dinner: "",
-                otherItems: [],
-                note: "",
-              });
-            }}
-            className="app-secondary-button rounded-xl px-5 py-2 font-medium"
-          >
-            Hủy sửa
-          </button>
-        )}
-      </div>
-    </form>
-  );
-}
-
-function DiaryForm({
-  editingDate,
-  form,
-  setForm,
-  handleSubmit,
-  setEditingDate,
-}: {
-  editingDate: string | null;
-  form: DailyEntryForm;
-  setForm: Dispatch<SetStateAction<DailyEntryForm>>;
-  handleSubmit: (event: FormEvent<HTMLFormElement>) => void;
-  setEditingDate: (date: string | null) => void;
-}) {
-  return (
-    <form
-      onSubmit={handleSubmit}
-      className="app-card rounded-2xl p-4 shadow-sm sm:p-5"
-    >
-      <SectionHeading
-        title={
-          editingDate ? `Sửa nhật ký ngày ${editingDate}` : "Ghi nhật ký hôm nay"
-        }
-        description="Ghi lại tiền, số đơn, giờ làm và cảm nhận trong ngày."
-      />
-
-      <div className="mt-4 grid gap-4 md:grid-cols-2">
-        <div>
-          <label className="text-sm font-medium">Ngày</label>
-          <input
-            type="date"
-            value={form.date}
-            onChange={(e) =>
-              setForm((prev) => ({ ...prev, date: e.target.value }))
-            }
-            className="app-input mt-1 w-full rounded-xl border px-3 py-2"
-          />
-        </div>
-
-        <div>
-          <label className="text-sm font-medium">Tâm trạng</label>
-          <select
-            value={form.mood}
-            onChange={(e) =>
-              setForm((prev) => ({
-                ...prev,
-                mood: e.target.value as Mood,
-              }))
-            }
-            className="app-input mt-1 w-full rounded-xl border px-3 py-2"
-          >
-            <option value="good">Vui</option>
-            <option value="normal">Bình thường</option>
-            <option value="tired">Mệt</option>
-            <option value="bad">Tệ</option>
-          </select>
-        </div>
-
-        <MoneyInput
-          label="Tiền kiếm được"
-          value={form.income}
-          placeholder="VD: 250.000"
-          onChange={(value) => setForm((prev) => ({ ...prev, income: value }))}
-        />
-
-        <NumberInput
-          label="Tiền nhận được"
-          value={form.receivedMoney}
-          placeholder="VD: 800000"
-          onChange={(value) =>
-            setForm((prev) => ({ ...prev, receivedMoney: value }))
-          }
-        />
-
-        <NumberInput
-          label="Tiền thưởng"
-          value={form.bonusMoney}
-          placeholder="VD: 100000"
-          onChange={(value) =>
-            setForm((prev) => ({ ...prev, bonusMoney: value }))
-          }
-        />
-
-        <div>
-          <label className="text-sm font-medium">Số lượng đơn</label>
-          <input
-            type="text"
-            inputMode="numeric"
-            placeholder="VD: 12"
-            value={form.orderCount}
-            onChange={(e) => {
-              const onlyDigits = e.target.value.replace(/[^\d]/g, "");
-              setForm((prev) => ({ ...prev, orderCount: onlyDigits }));
-            }}
-            className="app-input mt-1 w-full rounded-xl border px-3 py-2"
-          />
-        </div>
-
-        <NumberInput
-          label="Số giờ làm việc"
-          value={form.workHours}
-          placeholder="VD: 4"
-          step="0.5"
-          onChange={(value) =>
-            setForm((prev) => ({ ...prev, workHours: value }))
-          }
-        />
-      </div>
-
-      <div className="mt-4">
-        <label className="text-sm font-medium">Hôm nay mình đã làm gì?</label>
-        <textarea
-          rows={4}
-          value={form.diary}
-          onChange={(e) =>
-            setForm((prev) => ({ ...prev, diary: e.target.value }))
-          }
-          placeholder="VD: Hôm nay chạy đơn buổi sáng, hơi mệt nhưng vẫn cố hoàn thành..."
-          className="app-input mt-1 min-h-32 w-full rounded-xl border px-3 py-2"
-        />
-      </div>
-
-      <div className="mt-4">
-        <label className="text-sm font-medium">Ghi chú thêm</label>
-        <textarea
-          rows={3}
-          value={form.note}
-          onChange={(e) =>
-            setForm((prev) => ({ ...prev, note: e.target.value }))
-          }
-          placeholder="VD: Mai cần dậy sớm hơn, tối ưu khung giờ làm việc..."
-          className="app-input mt-1 min-h-28 w-full rounded-xl border px-3 py-2"
-        />
-      </div>
-
-      <div className="mt-4 flex flex-wrap gap-2">
-        <button
-          type="submit"
-          className="app-primary-button w-full rounded-xl px-5 py-2 font-bold sm:w-fit"
-        >
-          {editingDate ? "Cập nhật nhật ký" : "Lưu nhật ký"}
-        </button>
-
-        {editingDate && (
-          <button
-            type="button"
-            onClick={() => {
-              setEditingDate(null);
-              setForm({
-                date: getToday(),
-                diary: "",
-                income: "",
-                receivedMoney: "",
-                bonusMoney: "",
-                orderCount: "",
-                workHours: "",
-                mood: "normal",
-                note: "",
-              });
-            }}
-            className="app-secondary-button w-full rounded-xl px-5 py-2 font-medium sm:w-fit"
-          >
-            Hủy sửa
-          </button>
-        )}
-      </div>
-    </form>
-  );
-}
-
-function MoneyInput({
-  label,
-  value,
-  placeholder,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  placeholder: string;
-  onChange: (value: string) => void;
-}) {
-  return (
-    <div>
-      <label className="text-sm font-medium">{label}</label>
-      <input
-        type="text"
-        inputMode="numeric"
-        placeholder={placeholder}
-        value={value}
-        onChange={(e) => onChange(formatMoneyInput(e.target.value))}
-        className="app-input mt-1 w-full rounded-xl border px-3 py-2"
-      />
-    </div>
-  );
-}
-
-function NumberInput({
-  label,
-  value,
-  placeholder,
-  step,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  placeholder: string;
-  step?: string;
-  onChange: (value: string) => void;
-}) {
-  return (
-    <div>
-      <label className="text-sm font-medium">{label}</label>
-      <input
-        type="number"
-        step={step}
-        placeholder={placeholder}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="app-input mt-1 w-full rounded-xl border px-3 py-2"
-      />
-      <p className="mt-1 text-xs text-slate-500" />
-    </div>
-  );
-}
-
-function SectionHeading({
-  description,
-  title,
-}: {
-  description: string;
-  title: string;
-}) {
-  return (
-    <div>
-      <h3 className="text-lg font-bold text-slate-900">{title}</h3>
-      <p className="mt-1 text-sm text-slate-500">{description}</p>
     </div>
   );
 }

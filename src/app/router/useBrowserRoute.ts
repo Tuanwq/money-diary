@@ -1,12 +1,26 @@
-import { useCallback, useEffect, useState } from "react";
-import { parseAppRoute, type AppRoute } from "./routes";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { parseAppRoute, shouldResetAppScroll, type AppRoute } from "./routes";
 
 export function useBrowserRoute() {
   const [route, setRoute] = useState<AppRoute>(() =>
     parseAppRoute(window.location.pathname)
   );
+  const previousRouteRef = useRef(route);
+
+  useLayoutEffect(() => {
+    const previousRoute = previousRouteRef.current;
+
+    if (shouldResetAppScroll(previousRoute, route)) {
+      window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    }
+
+    previousRouteRef.current = route;
+  }, [route]);
 
   useEffect(() => {
+    const previousScrollRestoration = window.history.scrollRestoration;
+    window.history.scrollRestoration = "manual";
+
     function handlePopState() {
       setRoute(parseAppRoute(window.location.pathname));
     }
@@ -14,6 +28,7 @@ export function useBrowserRoute() {
     window.addEventListener("popstate", handlePopState);
 
     return () => {
+      window.history.scrollRestoration = previousScrollRestoration;
       window.removeEventListener("popstate", handlePopState);
     };
   }, []);

@@ -36,6 +36,7 @@ import type { HubEntry, HubSettings } from "./types/hub";
 import type {
   BalanceCheckEntry,
   BalanceSnapshot,
+  AppHistoryState,
   AppChangeLog,
   AppChangePatch,
   AppDataKey,
@@ -161,6 +162,10 @@ type AppDataSnapshot = {
   balanceChecks: BalanceCheckEntry[];
   goals: Goals;
   completedGoals: CompletedGoal[];
+};
+
+type ActionReturnLocation = AppHistoryState & {
+  scrollTop: number;
 };
 
 const APP_DATA_LABELS: Record<AppDataKey, string> = {
@@ -469,10 +474,12 @@ export default function App() {
   const [editingDate, setEditingDate] = useState<string | null>(null);
   const [editingExpenseDate, setEditingExpenseDate] = useState<string | null>(
   null
-);
+  );
+  const [isCloseDayDetailedMode, setIsCloseDayDetailedMode] = useState(false);
   const { route, navigateApp } = useBrowserRoute();
   const { page, goalId, goalScreen, navigateTo, resetMoneyNavigation } =
     useAppNavigation();
+  const actionReturnLocationRef = useRef<ActionReturnLocation | null>(null);
   const [chartDays, setChartDays] = useState(7);
   const [forecastDays, setForecastDays] = useState(14);
   const [balanceChartDays, setBalanceChartDays] = useState<"all" | number>(
@@ -509,6 +516,12 @@ export default function App() {
   });
   const hubDiaryMigrationDoneRef = useRef(false);
   const balanceCheckDraftDirtyRef = useRef(false);
+
+  useEffect(() => {
+    if (page !== "entry" && page !== "closeDay") {
+      actionReturnLocationRef.current = null;
+    }
+  }, [page]);
 
   useEffect(() => {
     if (!session) {
@@ -1284,6 +1297,10 @@ const goalForecast = buildGoalForecast({
   }
 
 function goToTodayEntryForm() {
+  rememberActionReturnLocation();
+  setIsCloseDayDetailedMode(false);
+  setEditingDate(null);
+  setEditingExpenseDate(null);
   setSelectedDate(todayString);
   setForm((prev) => ({
     ...prev,
@@ -1294,6 +1311,62 @@ function goToTodayEntryForm() {
     date: todayString,
   }));
   navigateTo("entry");
+}
+
+function rememberActionReturnLocation() {
+  actionReturnLocationRef.current = {
+    page,
+    goalScreen,
+    goalId,
+    scrollTop: window.scrollY,
+  };
+}
+
+function returnToActionSource() {
+  const returnLocation = actionReturnLocationRef.current;
+
+  actionReturnLocationRef.current = null;
+
+  if (!returnLocation) return;
+
+  navigateTo(
+    returnLocation.page,
+    returnLocation.goalScreen,
+    returnLocation.goalId,
+    {
+      replace: true,
+      scrollTop: returnLocation.scrollTop,
+    }
+  );
+}
+
+function cancelEditEntry() {
+  setEditingDate(null);
+  setForm({
+    date: getToday(),
+    diary: "",
+    income: "",
+    receivedMoney: "",
+    bonusMoney: "",
+    orderCount: "",
+    workHours: "",
+    mood: "normal",
+    note: "",
+  });
+  returnToActionSource();
+}
+
+function cancelEditExpense() {
+  setEditingExpenseDate(null);
+  setExpenseForm({
+    date: getToday(),
+    breakfast: "",
+    lunch: "",
+    dinner: "",
+    otherItems: [createOtherExpenseItemForm()],
+    note: "",
+  });
+  returnToActionSource();
 }
 
 function buildCloseDayForm(date: string): CloseDayForm {
@@ -1337,6 +1410,10 @@ function buildCloseDayForm(date: string): CloseDayForm {
 function openCloseDay(date = todayString) {
   const safeDate = date > todayString ? todayString : date;
 
+  setIsCloseDayDetailedMode(false);
+  if (page !== "closeDay") {
+    rememberActionReturnLocation();
+  }
   setSelectedDate(safeDate);
   setCloseDayForm(buildCloseDayForm(safeDate));
   navigateTo("closeDay");
@@ -1386,7 +1463,6 @@ function openBalanceCheckOverlay(
     isOpen: true,
     mode: mode === "details" && !existing ? "edit" : mode,
   });
-  navigateTo("home", "menu");
 }
 
 function closeBalanceCheckOverlay() {
@@ -1479,6 +1555,7 @@ function handleExpenseSubmit(event: React.FormEvent) {
   });
 
   setSyncStatus(editingExpenseDate ? "Đã cập nhật chi tiêu" : "Đã lưu chi tiêu");
+  returnToActionSource();
 }
 
 function handleCloseDaySubmit(event: React.FormEvent) {
@@ -1618,12 +1695,13 @@ function handleCloseDaySubmit(event: React.FormEvent) {
     );
 
   if (shouldOpenSubGoalAllocation) {
+    actionReturnLocationRef.current = null;
     setSubGoalAllocationDateHint(savedDate);
     navigateTo("goals", "subGoals");
     return;
   }
 
-  navigateTo("home", "menu");
+  returnToActionSource();
 }
 
 function handleBalanceCheckSubmit(event: React.FormEvent) {
@@ -1807,10 +1885,13 @@ function editBalanceCheck(item: BalanceCheckEntry) {
     });
   setEditingDate(null);
   setSelectedDate(savedDate);
-  navigateTo("home", "menu");
+  returnToActionSource();
   }
 
   function editEntry(entry: DailyEntry) {
+  rememberActionReturnLocation();
+  setIsCloseDayDetailedMode(false);
+  setEditingExpenseDate(null);
   setForm({
     date: entry.date,
     diary: entry.diary,
@@ -1834,6 +1915,9 @@ function editBalanceCheck(item: BalanceCheckEntry) {
 }
 
 function editExpense(expense: ExpenseEntry) {
+  rememberActionReturnLocation();
+  setIsCloseDayDetailedMode(false);
+  setEditingDate(null);
   setExpenseForm({
     date: expense.date,
     breakfast: formatMoneyInput(String(expense.breakfast ?? 0)),
@@ -3097,11 +3181,21 @@ if (route.kind === "daymark") {
           {page === "closeDay" && (
             <CloseDayPage
               form={closeDayForm}
+              hasExistingData={Boolean(
+                entries.some((item) => item.date === closeDayForm.date) ||
+                  expenses.some((item) => item.date === closeDayForm.date)
+              )}
               setForm={setCloseDayForm}
+              onCancel={
+                actionReturnLocationRef.current ? returnToActionSource : undefined
+              }
               onDateChange={handleCloseDayDateChange}
+              onOpenDetailed={() => {
+                setIsCloseDayDetailedMode(true);
+                navigateTo("entry");
+              }}
               onSubmit={handleCloseDaySubmit}
               todayString={todayString}
-              navigateTo={navigateTo}
             />
           )}
   {page === "entry" && (
@@ -3114,10 +3208,17 @@ if (route.kind === "daymark") {
       setExpenseForm={setExpenseForm}
       handleSubmit={handleSubmit}
       handleExpenseSubmit={handleExpenseSubmit}
-      setEditingDate={setEditingDate}
-      setEditingExpenseDate={setEditingExpenseDate}
+      cancelEditEntry={cancelEditEntry}
+      cancelEditExpense={cancelEditExpense}
+      onReturnToQuickEntry={
+        isCloseDayDetailedMode
+          ? () => {
+              setIsCloseDayDetailedMode(false);
+              navigateTo("closeDay");
+            }
+          : undefined
+      }
       todayString={todayString}
-      navigateTo={navigateTo}
     />
   )}
 

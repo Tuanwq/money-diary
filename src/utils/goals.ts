@@ -1,5 +1,6 @@
 import type { GoalProgressSnapshot, SubGoal } from "../types";
 import { getDateString, getDaysLeft, getToday, toDate } from "./date";
+import { isProgressBehind } from "./progressStatus";
 
 export function getProgress(current: number, target: number) {
   if (target <= 0) return 0;
@@ -32,9 +33,17 @@ export function getDailyNeedForGoal(
 }
 
 export function getGoalTimeProgress(startDate: string, deadline: string) {
+  return getGoalTimeProgressAtDate(startDate, deadline, getToday());
+}
+
+export function getGoalTimeProgressAtDate(
+  startDate: string,
+  deadline: string,
+  currentDate: string
+) {
   const start = toDate(startDate);
   const end = toDate(deadline);
-  const today = toDate(getToday());
+  const today = toDate(currentDate);
 
   const totalDays = Math.max(
     Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)),
@@ -56,7 +65,7 @@ export function isGoalBehind(goal: SubGoal) {
   const moneyProgress = getProgress(getSubGoalSaved(goal), goal.target);
   const timeProgress = getGoalTimeProgress(goal.startDate, goal.deadline);
 
-  return moneyProgress + 5 < timeProgress;
+  return isProgressBehind(moneyProgress, timeProgress);
 }
 
 export function buildSubGoalProgressData(

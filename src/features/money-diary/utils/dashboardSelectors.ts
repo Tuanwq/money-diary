@@ -1,6 +1,12 @@
 import type { Goals } from "../../../types";
 import { getDaysLeftFromDate } from "../../../utils/date";
-import { getSubGoalSaved, isGoalBehind } from "../../../utils/goals";
+import {
+  getGoalTimeProgressAtDate,
+  getProgress,
+  getSubGoalSaved,
+  isGoalBehind,
+} from "../../../utils/goals";
+import { isProgressBehind } from "../../../utils/progressStatus";
 
 export type DailyGoalOption = {
   daysLeft: number;
@@ -12,7 +18,8 @@ export type DailyGoalOption = {
 
 export function buildDailyGoalOptions(
   goals: Goals,
-  selectedDate: string
+  selectedDate: string,
+  mainGoalSaved = goals.bigGoalSaved
 ): DailyGoalOption[] {
   const options: DailyGoalOption[] = [];
   const mainStartDate = goals.bigGoalStartDate || selectedDate;
@@ -28,7 +35,12 @@ export function buildDailyGoalOptions(
       id: "main",
       kind: "main",
       name: goals.bigGoalName || "Mục tiêu chính",
-      status: "onTrack",
+      status: isProgressBehind(
+        getProgress(mainGoalSaved, goals.bigGoalTarget),
+        getGoalTimeProgressAtDate(mainStartDate, mainEndDate, selectedDate)
+      )
+          ? "behind"
+          : "onTrack",
     });
   }
 

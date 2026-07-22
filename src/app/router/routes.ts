@@ -14,6 +14,15 @@ export type AppRoute = {
   path: string;
 };
 
+export function shouldResetAppScroll(previous: AppRoute, next: AppRoute) {
+  if (previous.kind !== next.kind) return true;
+
+  return (
+    next.kind === "daymark" &&
+    previous.dayMarkRoute !== next.dayMarkRoute
+  );
+}
+
 const dayMarkRoutes = new Set<DayMarkRoute>([
   "today",
   "calendar",

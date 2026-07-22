@@ -99,6 +99,7 @@ export function MainGoalCard({
 
           <GoalDeadlineOptions
             goals={goals}
+            mainGoalSaved={saved}
             onOpenGoals={onOpenGoals}
             selectedDate={selectedDate}
           />

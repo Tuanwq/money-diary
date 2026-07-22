@@ -1,8 +1,11 @@
 import assert from "node:assert/strict";
 import {
   getGoalScreenPath,
+  getNavigationScrollTop,
   getMoneyStateFromPath,
 } from "../src/hooks/useAppNavigation.ts";
+import { shouldResetAppScroll } from "../src/app/router/routes.ts";
+import { isProgressBehind } from "../src/utils/progressStatus.ts";
 
 assert.deepEqual(getMoneyStateFromPath("/money/goals"), {
   page: "goals",
@@ -47,6 +50,50 @@ assert.equal(getMoneyStateFromPath("/money/expenses").page, "expenses");
 assert.equal(
   getMoneyStateFromPath("/money/balance-checks").page,
   "balanceChecks"
+);
+
+assert.equal(isProgressBehind(31, 42), true);
+assert.equal(isProgressBehind(40, 42), false);
+
+assert.equal(
+  getNavigationScrollTop(
+    { page: "goals", goalScreen: "subGoals" },
+    { page: "goals", goalScreen: "subGoals" },
+    860
+  ),
+  860
+);
+assert.equal(
+  getNavigationScrollTop(
+    { page: "goals", goalScreen: "subGoals" },
+    { page: "goals", goalScreen: "completed" },
+    860
+  ),
+  0
+);
+assert.equal(
+  getNavigationScrollTop(
+    { page: "goals", goalScreen: "subGoals" },
+    { page: "goals", goalScreen: "subGoals" },
+    860,
+    120
+  ),
+  120
+);
+
+assert.equal(
+  shouldResetAppScroll(
+    { kind: "money", path: "/money/goals/secondary", dayMarkRoute: "today" },
+    { kind: "money", path: "/money/goals/secondary/goal-1", dayMarkRoute: "today" }
+  ),
+  false
+);
+assert.equal(
+  shouldResetAppScroll(
+    { kind: "money", path: "/money", dayMarkRoute: "today" },
+    { kind: "daymark", path: "/daymark/today", dayMarkRoute: "today" }
+  ),
+  true
 );
 
 console.log("Goal navigation tests passed.");
