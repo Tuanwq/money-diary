@@ -1,5 +1,9 @@
 import { Settings2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import {
+  loadDayMarkNotificationSettings,
+  showLocalAppNotification,
+} from "../../notifications/notificationService";
 import { getToday } from "../../../utils/date";
 import { recordPomodoroSession } from "../services/daymarkPomodoroService";
 import { updateDayMarkTask } from "../services/daymarkTasksService";
@@ -235,6 +239,29 @@ export function PomodoroPage({ onNavigate, userId }: PomodoroPageProps) {
     }
 
     if (timer.state.mode === "focus") {
+      if (completed) {
+        const notificationSettings =
+          await loadDayMarkNotificationSettings(userId);
+
+        if (notificationSettings.pomodoroCompletedEnabled) {
+          await showLocalAppNotification("daymark", {
+            body: selectedTask
+              ? `Bạn vừa hoàn thành một phiên tập trung cho “${selectedTask.title}”.`
+              : "Bạn vừa hoàn thành một phiên tập trung tự do.",
+            data: {
+              targetUrl: `/daymark/pomodoro?date=${timer.state.taskDate}${
+                timer.state.taskId ? `&taskId=${timer.state.taskId}` : ""
+              }`,
+              type: "pomodoro_completed",
+            },
+            soundEnabled: notificationSettings.soundEnabled,
+            tag: `daymark-pomodoro-${timer.state.taskId ?? "free"}-${endedAt}`,
+            title: "DayMark - Hoàn thành Pomodoro",
+            vibrationEnabled: notificationSettings.vibrationEnabled,
+          });
+        }
+      }
+
       timer.completeFocusSession();
       return;
     }

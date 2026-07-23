@@ -1,4 +1,5 @@
 import {
+  Bell,
   Bot,
   BookCheck,
   ClipboardCheck,
@@ -16,6 +17,7 @@ import { MoneyBottomSheet } from "./MoneyBottomSheet";
 type MoneyMoreSheetProps = {
   email?: string;
   isOpen: boolean;
+  mode?: "account" | "more";
   onClose: () => void;
   onExportReport: () => void;
   onLogout: () => void;
@@ -23,6 +25,7 @@ type MoneyMoreSheetProps = {
   onOpenBalanceChecks: () => void;
   onOpenChangeLog: () => void;
   onOpenCloseDay: () => void;
+  onOpenNotificationSettings: () => void;
   onSwitchApp: () => void;
   returnFocusRef?: RefObject<HTMLButtonElement | null>;
   themeMode: ThemeMode;
@@ -32,6 +35,7 @@ type MoneyMoreSheetProps = {
 export function MoneyMoreSheet({
   email,
   isOpen,
+  mode = "more",
   onClose,
   onExportReport,
   onLogout,
@@ -39,6 +43,7 @@ export function MoneyMoreSheet({
   onOpenBalanceChecks,
   onOpenChangeLog,
   onOpenCloseDay,
+  onOpenNotificationSettings,
   onSwitchApp,
   returnFocusRef,
   themeMode,
@@ -46,6 +51,15 @@ export function MoneyMoreSheet({
 }: MoneyMoreSheetProps) {
   const actions = [
     { icon: BookCheck, label: "Chốt ngày", onClick: onOpenCloseDay },
+    ...(mode === "more"
+      ? [
+          {
+            icon: Bell,
+            label: "Thông báo tài chính",
+            onClick: onOpenNotificationSettings,
+          },
+        ]
+      : []),
     {
       icon: Bot,
       label: "Phân tích tài chính",
@@ -71,8 +85,12 @@ export function MoneyMoreSheet({
       isOpen={isOpen}
       onClose={onClose}
       returnFocusRef={returnFocusRef}
-      title="Thêm"
-      description="Báo cáo, tài khoản và các công cụ ít dùng hơn."
+      title={mode === "account" ? "Tài khoản" : "Thêm"}
+      description={
+        mode === "account"
+          ? "Giao diện, báo cáo và các công cụ tài khoản."
+          : "Báo cáo, tài khoản và các công cụ ít dùng hơn."
+      }
     >
       <div className="money-account-summary">
         <span className="money-account-summary-icon" aria-hidden="true">

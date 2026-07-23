@@ -83,7 +83,8 @@ export type Page =
   | "expenses"
   | "balanceChecks"
   | "changes"
-  | "hub";
+  | "hub"
+  | "settings";
 
 export type GoalScreen =
   | "menu"

@@ -1,12 +1,48 @@
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import {
+  mkdtemp,
+  mkdir,
+  readFile,
+  readdir,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import ts from "typescript";
 
 const rootDir = dirname(dirname(fileURLToPath(import.meta.url)));
 const tempDir = await mkdtemp(join(tmpdir(), "money-streak-"));
+const ts = await loadTypeScript();
+
+async function loadTypeScript() {
+  try {
+    return (await import("typescript")).default;
+  } catch {
+    const pnpmDirectory = join(rootDir, "node_modules", ".pnpm");
+    const entries = await readdir(pnpmDirectory);
+    const typescriptDirectory = entries.find((entry) =>
+      entry.startsWith("typescript@")
+    );
+
+    if (!typescriptDirectory) throw new Error("Không tìm thấy TypeScript.");
+
+    return (
+      await import(
+        pathToFileURL(
+          join(
+            pnpmDirectory,
+            typescriptDirectory,
+            "node_modules",
+            "typescript",
+            "lib",
+            "typescript.js"
+          )
+        ).href
+      )
+    ).default;
+  }
+}
 
 async function transpile(sourcePath, targetPath, replacements = []) {
   const source = await readFile(sourcePath, "utf8");
@@ -248,6 +284,27 @@ try {
   );
   assert.equal(noCredits.restoreCredits, 0);
   assert.equal(noCredits.eligibleRestoreDate, null);
+
+  const refreshedNextMonth = calculateMoneyStreak(
+    [shift("2026-07-31", "month-boundary")],
+    {
+      ...settings,
+      streakRestoredDates: [
+        "2026-07-01",
+        "2026-07-05",
+        "2026-07-09",
+        "2026-07-13",
+        "2026-07-17",
+      ],
+    },
+    new Date("2026-08-01T12:00:00")
+  );
+  assert.equal(
+    refreshedNextMonth.restoreCredits,
+    5,
+    "Sang tháng mới phải tự khôi phục đủ 5 lượt"
+  );
+  assert.equal(refreshedNextMonth.restoreLimit, 5);
 
   const recalculated = calculateMoneyStreak(
     [shift("2026-07-20", "only")],

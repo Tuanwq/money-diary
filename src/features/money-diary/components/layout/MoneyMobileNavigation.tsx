@@ -52,7 +52,7 @@ export function MoneyMobileNavigation({
       onClick: () => navigateTo("history"),
     },
     {
-      active: currentPage === "changes",
+      active: currentPage === "changes" || currentPage === "settings",
       icon: CircleEllipsis,
       label: "Thêm",
       onClick: onOpenMore,

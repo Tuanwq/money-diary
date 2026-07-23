@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { configurePwaForPath } from "../../pwa/appPwa";
 import { parseAppRoute, shouldResetAppScroll, type AppRoute } from "./routes";
 
 export function useBrowserRoute() {
@@ -16,6 +17,10 @@ export function useBrowserRoute() {
 
     previousRouteRef.current = route;
   }, [route]);
+
+  useEffect(() => {
+    void configurePwaForPath(route.path);
+  }, [route.path]);
 
   useEffect(() => {
     const previousScrollRestoration = window.history.scrollRestoration;

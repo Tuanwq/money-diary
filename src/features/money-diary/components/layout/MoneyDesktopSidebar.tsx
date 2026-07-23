@@ -1,6 +1,7 @@
 import {
   BookOpenText,
   ChartNoAxesCombined,
+  ChevronRight,
   FileText,
   Goal,
   History,
@@ -22,8 +23,10 @@ type MoneyDesktopSidebarProps = {
   email?: string;
   isCloudRefreshing: boolean;
   navigateTo: (page: Page, goalScreen?: GoalScreen) => void;
+  accountButtonRef: RefObject<HTMLButtonElement | null>;
   onExportReport: () => void;
   onLogout: () => void;
+  onOpenAccount: () => void;
   onOpenAdd: () => void;
   onOpenSettings: () => void;
   onRetrySync: () => void;
@@ -40,6 +43,7 @@ type SidebarItem = {
 };
 
 export function MoneyDesktopSidebar({
+  accountButtonRef,
   addButtonRef,
   currentPage,
   email,
@@ -47,6 +51,7 @@ export function MoneyDesktopSidebar({
   navigateTo,
   onExportReport,
   onLogout,
+  onOpenAccount,
   onOpenAdd,
   onOpenSettings,
   onRetrySync,
@@ -115,7 +120,13 @@ export function MoneyDesktopSidebar({
       </nav>
 
       <div className="money-sidebar-footer">
-        <button ref={settingsButtonRef} type="button" className="money-sidebar-link" onClick={onOpenSettings}>
+        <button
+          ref={settingsButtonRef}
+          type="button"
+          className={`money-sidebar-link ${currentPage === "settings" ? "is-active" : ""}`}
+          onClick={onOpenSettings}
+          aria-current={currentPage === "settings" ? "page" : undefined}
+        >
           <Settings aria-hidden="true" size={19} />
           <span>Cài đặt</span>
         </button>
@@ -128,7 +139,14 @@ export function MoneyDesktopSidebar({
           <span>Đăng xuất</span>
         </button>
 
-        <div className="money-sidebar-account" title={email}>
+        <button
+          ref={accountButtonRef}
+          type="button"
+          className="money-sidebar-account"
+          title={email ? `Mở tài khoản ${email}` : "Mở tài khoản"}
+          aria-label="Mở tài khoản và công cụ"
+          onClick={onOpenAccount}
+        >
           <span className="money-sidebar-avatar" aria-hidden="true">
             <ChartNoAxesCombined size={18} />
           </span>
@@ -136,7 +154,12 @@ export function MoneyDesktopSidebar({
             <small>Tài khoản</small>
             <strong>{email ?? "Money Diary"}</strong>
           </span>
-        </div>
+          <ChevronRight
+            className="money-sidebar-account-chevron"
+            aria-hidden="true"
+            size={17}
+          />
+        </button>
         <MoneySyncStatus
           isRefreshing={isCloudRefreshing}
           onRetry={onRetrySync}

@@ -7,6 +7,10 @@ type DayMarkTaskInsert = Omit<
   "created_at" | "id" | "updated_at"
 >;
 
+function notifyTasksChanged() {
+  window.dispatchEvent(new Event("daymark:tasks-changed"));
+}
+
 function buildTaskInsert(
   userId: string,
   input: DayMarkTaskInput
@@ -100,6 +104,7 @@ export async function createDayMarkTask(
 
   if (error) throw error;
 
+  notifyTasksChanged();
   return data as DayMarkTask;
 }
 
@@ -116,6 +121,7 @@ export async function createDayMarkTasks(
 
   if (error) throw error;
 
+  notifyTasksChanged();
   return (data ?? []) as DayMarkTask[];
 }
 
@@ -132,6 +138,7 @@ export async function updateDayMarkTask(
 
   if (error) throw error;
 
+  notifyTasksChanged();
   return data as DayMarkTask;
 }
 
@@ -139,4 +146,5 @@ export async function deleteDayMarkTask(taskId: string) {
   const { error } = await supabase.from("daymark_tasks").delete().eq("id", taskId);
 
   if (error) throw error;
+  notifyTasksChanged();
 }

@@ -6,6 +6,7 @@ import {
   type BalanceCheckOverlayMode,
 } from "./features/money-diary/components/balance-check/BalanceCheckOverlay";
 import { MoneyPageShell } from "./features/money-diary/components/layout/MoneyPageShell";
+import { useMoneyDiaryNotificationScheduler } from "./features/notifications/useNotificationScheduler";
 import { exportWordReport } from "./features/report/exportWordReport";
 import { useAppNavigation } from "./hooks/useAppNavigation";
 import { useCloudSync } from "./hooks/useCloudSync";
@@ -20,6 +21,7 @@ import { ExpensesPage } from "./pages/ExpensesPage";
 import { GoalsPage } from "./pages/GoalsPage";
 import { HistoryPage } from "./pages/HistoryPage";
 import { HomePage } from "./pages/HomePage";
+import { MoneyDiarySettingsPage } from "./pages/MoneyDiarySettingsPage";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ITEMS_PER_PAGE, STORAGE_APP_CHANGE_LOGS_KEY } from "./constants";
 import {
@@ -136,6 +138,13 @@ function createCloseDayForm(date = getToday()): CloseDayForm {
     note: "",
     mood: "normal",
   };
+}
+
+function getInitialSelectedDate() {
+  const date = new URLSearchParams(window.location.search).get("date");
+
+  if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return getToday();
+  return date > getToday() ? getToday() : date;
 }
 
 function roundWorkHours(value: number) {
@@ -470,7 +479,7 @@ export default function App() {
     mode: BalanceCheckOverlayMode;
   }>({ isOpen: false, mode: "edit" });
   const [isBalanceCheckSubmitting, setIsBalanceCheckSubmitting] = useState(false);
-  const [selectedDate, setSelectedDate] = useState(getToday());
+  const [selectedDate, setSelectedDate] = useState(getInitialSelectedDate);
   const [editingDate, setEditingDate] = useState<string | null>(null);
   const [editingExpenseDate, setEditingExpenseDate] = useState<string | null>(
   null
@@ -513,6 +522,15 @@ export default function App() {
     setGoals,
     completedGoals,
     setCompletedGoals,
+  });
+  useMoneyDiaryNotificationScheduler({
+    balanceChecks,
+    completedGoals,
+    entries,
+    expenses,
+    goals,
+    syncStatus,
+    userId: session?.user.id,
   });
   const hubDiaryMigrationDoneRef = useRef(false);
   const balanceCheckDraftDirtyRef = useRef(false);
@@ -3406,6 +3424,9 @@ if (route.kind === "daymark") {
       navigateTo={navigateTo}
       restoreChangeLog={restoreChangeLog}
     />
+  )}
+  {page === "settings" && (
+    <MoneyDiarySettingsPage userId={session.user.id} />
   )}
   <BalanceCheckOverlay
     appMoney={getAppMoneyAtDate(balanceCheckForm.date)}

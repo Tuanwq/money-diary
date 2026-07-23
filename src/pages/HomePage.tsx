@@ -1,4 +1,3 @@
-import { useEffect } from "react";
 import { AiFinanceInsight } from "../components/AiFinanceInsight";
 import { HUB_INITIAL_TAB_SESSION_KEY } from "../constants/hanoiHub";
 import { BalanceCheckSummaryCard } from "../features/money-diary/components/dashboard/BalanceCheckSummaryCard";
@@ -91,9 +90,6 @@ export function HomePage({
   todayGoalPaceRemaining,
   needPerDay,
   todayActualIncome,
-  todayEntry,
-  todayExpense,
-  todayBalanceCheck,
   dataWarnings,
   goToTodayEntryForm,
   goToTodayBalanceCheck,
@@ -121,31 +117,11 @@ export function HomePage({
   const moneyStreak = useMoneyStreak();
   const mainGoalProgress = getProgress(actualMoney, goals.bigGoalTarget);
   const mainGoalRemaining = Math.max(goals.bigGoalTarget - actualMoney, 0);
-  const missingTodayItems = [
-    !todayEntry ? "thu nhập" : "",
-    !todayExpense ? "chi tiêu" : "",
-    !todayBalanceCheck ? "kiểm kê" : "",
-  ].filter(Boolean);
-  const shouldShowEndOfDayReminder =
-    isSelectedToday && new Date().getHours() >= 18 && missingTodayItems.length > 0;
   const hasSuggestionData = Boolean(
     goals.bigGoalTarget > 0 &&
       (entries.some((entry) => entry.date <= selectedDate) ||
         expenses.some((expense) => expense.date <= selectedDate))
   );
-
-  useEffect(() => {
-    if (!shouldShowEndOfDayReminder || !("Notification" in window)) return;
-    if (Notification.permission !== "granted") return;
-
-    const storageKey = `money-diary-end-day-reminder-${todayString}`;
-    if (localStorage.getItem(storageKey)) return;
-
-    new Notification("Nhắc chốt ngày", {
-      body: `Bạn còn thiếu: ${missingTodayItems.join(", ")}.`,
-    });
-    localStorage.setItem(storageKey, "1");
-  }, [missingTodayItems, shouldShowEndOfDayReminder, todayString]);
 
   const openIncome = () => navigateTo("hub");
   const openHistory = () => navigateTo("history");
@@ -156,12 +132,7 @@ export function HomePage({
   };
 
   function requestNotificationPermission() {
-    if (!("Notification" in window)) {
-      alert("Trình duyệt này chưa hỗ trợ thông báo hệ thống.");
-      return;
-    }
-
-    void Notification.requestPermission();
+    navigateTo("settings");
   }
 
   return (

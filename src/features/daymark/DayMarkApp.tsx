@@ -7,6 +7,7 @@ import { NotesPage } from "./pages/NotesPage";
 import { PomodoroPage } from "./pages/PomodoroPage";
 import { StatisticsPage } from "./pages/StatisticsPage";
 import { TodayPage } from "./pages/TodayPage";
+import { useDayMarkNotificationScheduler } from "../notifications/useNotificationScheduler";
 
 type DayMarkAppProps = {
   currentRoute: DayMarkRoute;
@@ -29,6 +30,8 @@ export function DayMarkApp({
   toggleThemeMode,
   userId,
 }: DayMarkAppProps) {
+  useDayMarkNotificationScheduler(userId);
+
   return (
     <DayMarkLayout
       currentRoute={currentRoute}
@@ -47,7 +50,9 @@ export function DayMarkApp({
       )}
       {currentRoute === "statistics" && <StatisticsPage userId={userId} />}
       {currentRoute === "notes" && <NotesPage userId={userId} />}
-      {currentRoute === "settings" && <DayMarkSettingsPage />}
+      {currentRoute === "settings" && (
+        <DayMarkSettingsPage userId={userId} />
+      )}
       {currentRoute === "pomodoro" && (
         <PomodoroPage onNavigate={onNavigate} userId={userId} />
       )}

@@ -50,19 +50,20 @@ export function MoneyPageShell({
   const [addReturnTarget, setAddReturnTarget] = useState<"desktop" | "mobile">("mobile");
   const [isMoreSheetOpen, setIsMoreSheetOpen] = useState(false);
   const [moreReturnTarget, setMoreReturnTarget] = useState<
-    "account" | "desktop" | "navigation"
+    "desktopAccount" | "mobileAccount" | "navigation"
   >("navigation");
   const addButtonRef = useRef<HTMLButtonElement | null>(null);
   const desktopAddButtonRef = useRef<HTMLButtonElement | null>(null);
+  const desktopAccountButtonRef = useRef<HTMLButtonElement | null>(null);
   const desktopSettingsButtonRef = useRef<HTMLButtonElement | null>(null);
   const moreButtonRef = useRef<HTMLButtonElement | null>(null);
-  const accountButtonRef = useRef<HTMLButtonElement | null>(null);
+  const mobileAccountButtonRef = useRef<HTMLButtonElement | null>(null);
   const moreReturnFocusRef =
-    moreReturnTarget === "account"
-      ? accountButtonRef
-      : moreReturnTarget === "navigation"
-        ? moreButtonRef
-        : desktopSettingsButtonRef;
+    moreReturnTarget === "desktopAccount"
+      ? desktopAccountButtonRef
+      : moreReturnTarget === "mobileAccount"
+        ? mobileAccountButtonRef
+        : moreButtonRef;
   const addReturnFocusRef =
     addReturnTarget === "desktop" ? desktopAddButtonRef : addButtonRef;
 
@@ -77,6 +78,7 @@ export function MoneyPageShell({
     <div className="money-shell">
       <div className="money-app-layout">
         <MoneyDesktopSidebar
+          accountButtonRef={desktopAccountButtonRef}
           addButtonRef={desktopAddButtonRef}
           currentPage={currentPage}
           email={email}
@@ -84,13 +86,16 @@ export function MoneyPageShell({
           navigateTo={navigateTo}
           onExportReport={onExportReport}
           onLogout={onLogout}
+          onOpenAccount={() => {
+            setMoreReturnTarget("desktopAccount");
+            setIsMoreSheetOpen(true);
+          }}
           onOpenAdd={() => {
             setAddReturnTarget("desktop");
             setIsAddSheetOpen(true);
           }}
           onOpenSettings={() => {
-            setMoreReturnTarget("desktop");
-            setIsMoreSheetOpen(true);
+            navigateTo("settings");
           }}
           onRetrySync={onRetrySync}
           onSwitchApp={onSwitchApp}
@@ -100,10 +105,10 @@ export function MoneyPageShell({
 
         <div className="money-workspace">
           <MoneyMobileAppBar
-            accountButtonRef={accountButtonRef}
+            accountButtonRef={mobileAccountButtonRef}
             isCloudRefreshing={isCloudRefreshing}
             onOpenAccount={() => {
-              setMoreReturnTarget("account");
+              setMoreReturnTarget("mobileAccount");
               setIsMoreSheetOpen(true);
             }}
             onRetrySync={onRetrySync}
@@ -141,6 +146,9 @@ export function MoneyPageShell({
       <MoneyMoreSheet
         email={email}
         isOpen={isMoreSheetOpen}
+        mode={
+          moreReturnTarget === "navigation" ? "more" : "account"
+        }
         onClose={() => setIsMoreSheetOpen(false)}
         onExportReport={onExportReport}
         onLogout={onLogout}
@@ -148,6 +156,7 @@ export function MoneyPageShell({
         onOpenBalanceChecks={() => navigateTo("balanceChecks")}
         onOpenChangeLog={onOpenChangeLog}
         onOpenCloseDay={onOpenCloseDay}
+        onOpenNotificationSettings={() => navigateTo("settings")}
         onSwitchApp={onSwitchApp}
         returnFocusRef={moreReturnFocusRef}
         themeMode={themeMode}
