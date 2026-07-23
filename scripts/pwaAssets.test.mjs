@@ -121,4 +121,9 @@ await assertAppAssets({
 const viteConfig = await readFile(join(rootDir, "vite.config.ts"), "utf8");
 assert.doesNotMatch(viteConfig, /VitePWA|manifest\s*:/);
 
+const legacyWorker = await readFile(join(publicDir, "sw.js"), "utf8");
+assert.match(legacyWorker, /self\.registration\.unregister\(\)/);
+assert.match(legacyWorker, /client\.navigate\(client\.url\)/);
+assert.match(legacyWorker, /workbox/);
+
 console.log("Separate Money Diary and DayMark PWA assets passed.");

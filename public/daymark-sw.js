@@ -1,7 +1,7 @@
 const APP = {
   app: "daymark",
   badge: "/icons/daymark-badge-96.png",
-  cache: "daymark-shell-3",
+  cache: "daymark-shell-4",
   icon: "/icons/daymark-192.png",
   scopePath: "/daymark",
   startUrl: "/daymark/today",

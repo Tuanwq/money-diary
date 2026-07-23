@@ -1,7 +1,7 @@
 const APP = {
   app: "money_diary",
   badge: "/icons/money-diary-badge-v2-96.png",
-  cache: "money-diary-v2-shell-1",
+  cache: "money-diary-v2-shell-2",
   icon: "/icons/money-diary-v2-192.png",
   scopePath: "/money",
   startUrl: "/money",
@@ -135,4 +135,3 @@ self.addEventListener("notificationclick", (event) => {
       })
   );
 });
-
