@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { HUB_TYPE_LABEL } from "../../../../constants/hanoiHub";
 import type { HubEntry, HubSettings } from "../../../../types/hub";
 import { calculateHubIncome } from "../../../../utils/hubIncome";
+import { getHubOperatingCostTotal } from "../../../../utils/hubProfit";
 import { ShiftResultCard } from "../../../shifts/components/ShiftResultCard";
 import { HubEmptyState, HubTabHeader } from "../shared";
 import type {
@@ -51,12 +52,21 @@ export function MyShiftsPage(props: MyShiftsPageProps) {
   }, [entries, searchQuery]);
   const summary = useMemo(() => visibleEntries.reduce((total, entry) => {
     const income = calculateHubIncome(entry, settings);
+    const operatingCost = getHubOperatingCostTotal(entry);
     return {
       income: total.income + income.total,
+      operatingCost: total.operatingCost + operatingCost,
+      actualProfit: total.actualProfit + income.total - operatingCost,
       orders: total.orders + entry.order,
       hours: total.hours + getDurationHours(entry.shiftName),
     };
-  }, { income: 0, orders: 0, hours: 0 }), [getDurationHours, settings, visibleEntries]);
+  }, {
+    income: 0,
+    operatingCost: 0,
+    actualProfit: 0,
+    orders: 0,
+    hours: 0,
+  }), [getDurationHours, settings, visibleEntries]);
 
   return (
     <section className="hub-feature-page hub-my-shifts-page">
@@ -80,6 +90,8 @@ export function MyShiftsPage(props: MyShiftsPageProps) {
         calendarDays={props.calendarDays}
         resultCount={visibleEntries.length}
         resultIncome={summary.income}
+        resultOperatingCost={summary.operatingCost}
+        resultActualProfit={summary.actualProfit}
         resultOrders={summary.orders}
         resultHours={summary.hours}
         rangeLabel={props.rangeLabel}

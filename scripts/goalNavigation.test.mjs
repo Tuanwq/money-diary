@@ -48,6 +48,10 @@ assert.equal(
 );
 assert.equal(getMoneyStateFromPath("/money/expenses").page, "expenses");
 assert.equal(
+  getMoneyStateFromPath("/money/cash-flow").page,
+  "cashFlow"
+);
+assert.equal(
   getMoneyStateFromPath("/money/balance-checks").page,
   "balanceChecks"
 );

@@ -25,6 +25,21 @@ export type HubJoinOrder = {
   price: number;
 };
 
+export type HubOperatingCostCategory =
+  | "fuel"
+  | "parking"
+  | "food"
+  | "maintenance"
+  | "phone"
+  | "other";
+
+export type HubOperatingCost = {
+  id: string;
+  category: HubOperatingCostCategory;
+  amount: number;
+  note: string;
+};
+
 export type HubEntry = {
   id: string;
   date: string;
@@ -35,6 +50,7 @@ export type HubEntry = {
   isWellDone: boolean;
   isHubShort: boolean;
   extraIncome: number;
+  operatingCosts?: HubOperatingCost[];
   note: string;
   diaryIncomeAmount?: number;
   diaryOrderCount?: number;

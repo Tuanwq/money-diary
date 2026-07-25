@@ -210,8 +210,12 @@ function buildReport({
     toDate
   );
   const hubSummary = summarizeHubRows(hubRows);
-  const bestHub = groupHubPerformance(hubRows, "hub", "workIncome")[0];
-  const bestShift = groupHubPerformance(hubRows, "shift", "incomePerHour")[0];
+  const bestHub = groupHubPerformance(hubRows, "hub", "actualProfit")[0];
+  const bestShift = groupHubPerformance(
+    hubRows,
+    "shift",
+    "actualProfitPerHour"
+  )[0];
   const otherExpenseBreakdown = buildOtherExpenseBreakdown(expenses, {
     fromDate,
     toDate,
@@ -242,21 +246,27 @@ function buildReport({
 
   if (hubSummary.shifts > 0) {
     lines.push(
-      `Hub: ${hubSummary.shifts} ca, ${hubSummary.orders} đơn, làm thật ${formatMoney(
-        hubSummary.workIncome
-      )}.`
+      `Hub: ${hubSummary.shifts} ca, ${hubSummary.orders} đơn, tổng thu ${formatMoney(
+        hubSummary.grossIncome
+      )}, chi phí vận hành ${formatMoney(
+        hubSummary.operatingCost
+      )}, lợi nhuận thực ${formatMoney(hubSummary.actualProfit)}.`
     );
   }
 
   if (bestHub) {
-    lines.push(`Hub kiếm tốt nhất: ${bestHub.label}, ${formatMoney(bestHub.workIncome)}.`);
+    lines.push(
+      `Hub có lợi nhuận tốt nhất: ${bestHub.label}, ${formatMoney(
+        bestHub.actualProfit
+      )}.`
+    );
   }
 
   if (bestShift) {
     lines.push(
       `Ca hiệu quả nhất: ${bestShift.label}, ${formatMoney(
-        bestShift.incomePerHour
-      )}/giờ.`
+        bestShift.actualProfitPerHour
+      )} lợi nhuận/giờ.`
     );
   }
 
@@ -308,8 +318,12 @@ function buildTomorrowPlan(options: AiAutomationOptions) {
     last30FromDate,
     today
   );
-  const bestShift = groupHubPerformance(hubRows, "shift", "incomePerHour")[0];
-  const bestHub = groupHubPerformance(hubRows, "hub", "workIncome")[0];
+  const bestShift = groupHubPerformance(
+    hubRows,
+    "shift",
+    "actualProfitPerHour"
+  )[0];
+  const bestHub = groupHubPerformance(hubRows, "hub", "actualProfit")[0];
   const topOtherExpense = buildOtherExpenseBreakdown(expenses, {
     fromDate: last7FromDate,
     toDate: today,
@@ -332,8 +346,8 @@ function buildTomorrowPlan(options: AiAutomationOptions) {
   if (bestShift) {
     plan.push(
       `Ưu tiên ca ${bestShift.label} vì trung bình ${formatMoney(
-        bestShift.incomePerHour
-      )}/giờ trong 30 ngày gần nhất.`
+        bestShift.actualProfitPerHour
+      )} lợi nhuận/giờ trong 30 ngày gần nhất.`
     );
   } else if (bestHub) {
     plan.push(`Ưu tiên ${bestHub.label} vì đang là Hub kiếm tốt nhất gần đây.`);
@@ -500,14 +514,14 @@ export function answerAiFinanceQuestion({
       thisWeek.fromDate,
       thisWeek.toDate
     );
-    const bestHub = groupHubPerformance(rows, "hub", "workIncome")[0];
+    const bestHub = groupHubPerformance(rows, "hub", "actualProfit")[0];
 
     return bestHub
       ? `Tuần này ${bestHub.label} kiếm tốt nhất: ${formatMoney(
-          bestHub.workIncome
+          bestHub.actualProfit
         )}, ${bestHub.shifts} ca, ${bestHub.orders} đơn, trung bình ${formatMoney(
-          bestHub.incomePerHour
-        )}/giờ.`
+          bestHub.actualProfitPerHour
+        )} lợi nhuận/giờ.`
       : "Tuần này chưa có dữ liệu Hub đủ để xếp hạng.";
   }
 
@@ -517,15 +531,19 @@ export function answerAiFinanceQuestion({
       addDaysToDateString(options.today, -29),
       options.today
     );
-    const bestShift = groupHubPerformance(rows, "shift", "incomePerHour")[0];
+    const bestShift = groupHubPerformance(
+      rows,
+      "shift",
+      "actualProfitPerHour"
+    )[0];
 
     return bestShift
       ? `Ca hiệu quả nhất gần đây là ${bestShift.label}: ${formatMoney(
-          bestShift.incomePerHour
-        )}/giờ, ${bestShift.shifts} ca, làm thật ${formatMoney(
-          bestShift.workIncome
+          bestShift.actualProfitPerHour
+        )} lợi nhuận/giờ, ${bestShift.shifts} ca, lợi nhuận thực ${formatMoney(
+          bestShift.actualProfit
         )}.`
-      : "Chưa có đủ dữ liệu ca Hub để so sánh tiền/giờ.";
+      : "Chưa có đủ dữ liệu ca Hub để so sánh lợi nhuận/giờ.";
   }
 
   if (normalized.includes("cham") || normalized.includes("deadline")) {

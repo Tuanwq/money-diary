@@ -1,18 +1,24 @@
 {
   "name": "money-diary",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "test:cloud-sync": "node --experimental-strip-types scripts/cloudSyncState.test.mjs",
+    "test:account-ledger": "node --experimental-strip-types scripts/accountLedger.test.mjs",
+    "test:automation": "node --experimental-strip-types scripts/automationRules.test.mjs",
+    "test:backup": "node --experimental-strip-types scripts/backupModel.test.mjs",
+    "test:cash-flow": "node --experimental-strip-types scripts/cashFlowForecast.test.mjs",
     "test:goals": "node --experimental-strip-types scripts/goalNavigation.test.mjs",
+    "test:hub-profit": "node --experimental-strip-types scripts/hubProfit.test.mjs",
     "test:money-streak": "node scripts/moneyStreak.test.mjs",
     "test:notifications": "node scripts/moneyNotifications.test.mjs",
     "test:pwa": "node scripts/pwaAssets.test.mjs",
     "test:streak": "node scripts/daymarkStreak.test.mjs",
+    "test:update": "node --experimental-strip-types scripts/appUpdate.test.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

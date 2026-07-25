@@ -75,6 +75,9 @@ export type Goals = {
 };
 
 export type Page =
+  | "accounts"
+  | "automation"
+  | "cashFlow"
   | "home"
   | "goals"
   | "entry"

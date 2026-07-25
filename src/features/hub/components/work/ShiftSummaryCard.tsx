@@ -10,6 +10,8 @@ type ShiftSummaryCardProps = {
   hubType: HubType;
   orderCount: number;
   workHours: number;
+  operatingCost: number;
+  actualProfit: number;
   showDetails: boolean;
   onToggleDetails: () => void;
 };
@@ -34,6 +36,8 @@ export function ShiftSummaryCard({
   hubType,
   orderCount,
   workHours,
+  operatingCost,
+  actualProfit,
   showDetails,
   onToggleDetails,
 }: ShiftSummaryCardProps) {
@@ -55,11 +59,20 @@ export function ShiftSummaryCard({
         <span>Tiền ca <strong>{formatMoney(income.basePrice)}</strong></span>
         <span>Thưởng <strong>{formatMoney(reward)}</strong></span>
         <span>Thu nhập khác <strong>{formatMoney(income.extraIncome)}</strong></span>
+        <span>Chi phí <strong>−{formatMoney(operatingCost)}</strong></span>
       </div>
 
-      <div className="hub-shift-summary__total">
-        <span>Tổng thu nhập</span>
+      <div className="hub-shift-summary__gross">
+        <span>Tổng thu nhập ca</span>
         <strong className="money-value">{formatMoney(income.total)}</strong>
+      </div>
+      <div className="hub-shift-summary__total">
+        <span>Lợi nhuận thực</span>
+        <strong
+          className={`money-value${actualProfit < 0 ? " is-negative" : ""}`}
+        >
+          {formatMoney(actualProfit)}
+        </strong>
       </div>
 
       <button
@@ -89,6 +102,14 @@ export function ShiftSummaryCard({
               </div>
             );
           })}
+          <div>
+            <dt>Chi phí vận hành</dt>
+            <dd className="money-value">−{formatMoney(operatingCost)}</dd>
+          </div>
+          <div>
+            <dt>Lợi nhuận thực</dt>
+            <dd className="money-value">{formatMoney(actualProfit)}</dd>
+          </div>
         </dl>
       )}
     </section>

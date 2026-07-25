@@ -103,6 +103,7 @@ async function assertAppAssets({
   const worker = await readFile(join(publicDir, `${app}-sw.js`), "utf8");
   assert.match(worker, new RegExp(`app: "${app === "daymark" ? "daymark" : "money_diary"}"`));
   assert.match(worker, new RegExp(`scopePath: "${expectedScope}"`));
+  assert.match(worker, /SKIP_WAITING/);
 }
 
 await assertAppAssets({
@@ -120,6 +121,8 @@ await assertAppAssets({
 
 const viteConfig = await readFile(join(rootDir, "vite.config.ts"), "utf8");
 assert.doesNotMatch(viteConfig, /VitePWA|manifest\s*:/);
+assert.match(viteConfig, /app-version\.json/);
+assert.match(viteConfig, /__APP_BUILD_INFO__/);
 
 const legacyWorker = await readFile(join(publicDir, "sw.js"), "utf8");
 assert.match(legacyWorker, /self\.registration\.unregister\(\)/);

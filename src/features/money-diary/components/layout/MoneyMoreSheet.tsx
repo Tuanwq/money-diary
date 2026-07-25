@@ -7,7 +7,10 @@ import {
   FileText,
   LogOut,
   RefreshCcw,
+  TrendingUp,
   UserRound,
+  WalletCards,
+  Workflow,
 } from "lucide-react";
 import type { RefObject } from "react";
 import { ThemeToggle } from "../../../../components/ThemeToggle";
@@ -22,6 +25,9 @@ type MoneyMoreSheetProps = {
   onExportReport: () => void;
   onLogout: () => void;
   onOpenAnalysis: () => void;
+  onOpenAccountLedger: () => void;
+  onOpenAutomation: () => void;
+  onOpenCashFlow: () => void;
   onOpenBalanceChecks: () => void;
   onOpenChangeLog: () => void;
   onOpenCloseDay: () => void;
@@ -40,6 +46,9 @@ export function MoneyMoreSheet({
   onExportReport,
   onLogout,
   onOpenAnalysis,
+  onOpenAccountLedger,
+  onOpenAutomation,
+  onOpenCashFlow,
   onOpenBalanceChecks,
   onOpenChangeLog,
   onOpenCloseDay,
@@ -51,6 +60,21 @@ export function MoneyMoreSheet({
 }: MoneyMoreSheetProps) {
   const actions = [
     { icon: BookCheck, label: "Chốt ngày", onClick: onOpenCloseDay },
+    {
+      icon: WalletCards,
+      label: "Sổ tài khoản",
+      onClick: onOpenAccountLedger,
+    },
+    {
+      icon: Workflow,
+      label: "Tự động hóa",
+      onClick: onOpenAutomation,
+    },
+    {
+      icon: TrendingUp,
+      label: "Dự báo dòng tiền",
+      onClick: onOpenCashFlow,
+    },
     ...(mode === "more"
       ? [
           {

@@ -4,6 +4,7 @@ export { HubNavigation } from "./HubNavigation";
 export { HubWorkHeader } from "./HubWorkHeader";
 export { MatchedOrderSection } from "./MatchedOrderSection";
 export { OtherIncomeSection } from "./OtherIncomeSection";
+export { OperatingCostsSection } from "./OperatingCostsSection";
 export { SaveShiftActionBar } from "./SaveShiftActionBar";
 export { ShiftSummaryCard } from "./ShiftSummaryCard";
 export { WorkShiftSection } from "./WorkShiftSection";
@@ -14,6 +15,7 @@ export type {
   HubForm,
   HubFormSetter,
   HubJoinForm,
+  HubOperatingCostForm,
   HubStatisticsRange,
   HubTab,
   HubTimeFilter,

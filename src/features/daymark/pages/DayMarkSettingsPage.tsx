@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { AppUpdateCenter } from "../../app-update/AppUpdateCenter";
 import { DayMarkNotificationSettingsCard } from "../../notifications/components/DayMarkNotificationSettingsCard";
 import { useDayMarkStreakSettings } from "../hooks/useDayMarkStreakSettings";
 import { clampStreakCompletionRate } from "../utils/daymarkStreak";
@@ -91,6 +92,7 @@ export function DayMarkSettingsPage({ userId }: { userId?: string }) {
           </div>
         </section>
       </section>
+      <AppUpdateCenter />
       <DayMarkNotificationSettingsCard userId={userId} />
     </div>
   );

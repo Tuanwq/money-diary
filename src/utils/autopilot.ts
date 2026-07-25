@@ -361,20 +361,22 @@ function buildTomorrowPlan({
   );
   const hubSummary = summarizeHubRows(hubRows);
   const recommendedShift =
-    groupHubPerformance(hubRows, "shift", "incomePerHour").find(
+    groupHubPerformance(hubRows, "shift", "actualProfitPerHour").find(
       (item) => item.shifts >= 2
-    ) ?? groupHubPerformance(hubRows, "shift", "incomePerHour")[0] ?? null;
+    ) ??
+    groupHubPerformance(hubRows, "shift", "actualProfitPerHour")[0] ??
+    null;
   const recommendedHub =
-    groupHubPerformance(hubRows, "hub", "workIncome")[0] ?? null;
+    groupHubPerformance(hubRows, "hub", "actualProfit")[0] ?? null;
   const incomePerHour =
-    recommendedShift?.incomePerHour ||
-    hubSummary.incomePerHour ||
+    recommendedShift?.actualProfitPerHour ||
+    hubSummary.actualProfitPerHour ||
     getFallbackIncomePerHour(entries);
   const incomePerOrder =
     recommendedShift && recommendedShift.orders > 0
-      ? Math.round(recommendedShift.workIncome / recommendedShift.orders)
+      ? Math.round(recommendedShift.actualProfit / recommendedShift.orders)
       : hubSummary.orders > 0
-        ? Math.round(hubSummary.workIncome / hubSummary.orders)
+        ? Math.round(hubSummary.actualProfit / hubSummary.orders)
         : 13500;
   const gapVsRecentPace = Math.max(targetNet - recentWindow.averageNet, 0);
   const estimatedOrders =
@@ -394,9 +396,9 @@ function buildTomorrowPlan({
       ? `Ưu tiên mục tiêu "${priorityGoal.name}" vì đang ${priorityGoal.statusLabel.toLowerCase()}.`
       : "Chưa có mục tiêu nào cần ưu tiên đặc biệt.",
     recommendedShift
-      ? `Ưu tiên ${recommendedShift.label} vì đang đạt khoảng ${recommendedShift.incomePerHour.toLocaleString(
+      ? `Ưu tiên ${recommendedShift.label} vì đang đạt khoảng ${recommendedShift.actualProfitPerHour.toLocaleString(
           "vi-VN"
-        )} đ/giờ.`
+        )} đ lợi nhuận/giờ.`
       : "Chưa đủ dữ liệu Hub để chọn ca tốt nhất.",
     `Giữ chi tiêu dưới ${expenseCap.toLocaleString("vi-VN")} đ để không làm chậm nhịp mục tiêu.`,
   ];

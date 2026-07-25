@@ -1,6 +1,15 @@
 import { useBrowserRoute } from "./app/router/useBrowserRoute";
 import { DayMarkApp } from "./features/daymark/DayMarkApp";
 import { HubSelectionPage } from "./features/hub/pages/HubSelectionPage";
+import { AccountLedgerPage } from "./features/account-ledger/AccountLedgerPage";
+import { calculateAccountBalance } from "./features/account-ledger/accountLedgerModel";
+import { useAccountLedger } from "./features/account-ledger/useAccountLedger";
+import { AutomationRulesPage } from "./features/automation/AutomationRulesPage";
+import type { AutomationExecution } from "./features/automation/automationModel";
+import { useAutomationEngine } from "./features/automation/useAutomationEngine";
+import { useAutomationRules } from "./features/automation/useAutomationRules";
+import { CashFlowForecastPage } from "./features/cash-flow/CashFlowForecastPage";
+import { useCashFlowPlans } from "./features/cash-flow/useCashFlowPlans";
 import {
   BalanceCheckOverlay,
   type BalanceCheckOverlayMode,
@@ -8,10 +17,17 @@ import {
 import { MoneyPageShell } from "./features/money-diary/components/layout/MoneyPageShell";
 import { useMoneyDiaryNotificationScheduler } from "./features/notifications/useNotificationScheduler";
 import { exportWordReport } from "./features/report/exportWordReport";
+import type {
+  BackupSection,
+  BackupSnapshot,
+} from "./features/backup/backupModel";
+import { buildBackupSourceData } from "./features/backup/backupSource";
+import { useAutomaticBackups } from "./features/backup/useAutomaticBackups";
 import { useAppNavigation } from "./hooks/useAppNavigation";
 import { useCloudSync } from "./hooks/useCloudSync";
 import { useMoneyDiaryData } from "./hooks/useMoneyDiaryData";
 import { useThemeMode } from "./hooks/useThemeMode";
+import { supabase } from "./lib/supabase";
 import { AppChangeLogPage } from "./pages/AppChangeLogPage";
 import { AuthPage } from "./pages/AuthPage";
 import { BalanceChecksPage } from "./pages/BalanceChecksPage";
@@ -23,9 +39,15 @@ import { HistoryPage } from "./pages/HistoryPage";
 import { HomePage } from "./pages/HomePage";
 import { MoneyDiarySettingsPage } from "./pages/MoneyDiarySettingsPage";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ITEMS_PER_PAGE, STORAGE_APP_CHANGE_LOGS_KEY } from "./constants";
+import {
+  ITEMS_PER_PAGE,
+  STORAGE_APP_CHANGE_LOGS_KEY,
+  STORAGE_OTHER_EXPENSE_LABELS_KEY,
+} from "./constants";
 import {
   DEFAULT_HUB_SETTINGS,
+  STORAGE_HUB_CALCULATOR_KEY,
+  STORAGE_HUB_CHANGE_LOGS_KEY,
   STORAGE_HUB_ENTRIES_KEY,
   STORAGE_HUB_SETTINGS_KEY,
 } from "./constants/hanoiHub";
@@ -523,6 +545,95 @@ export default function App() {
     completedGoals,
     setCompletedGoals,
   });
+  const {
+    accounts: financialAccounts,
+    archiveAccount,
+    cloudStatus: accountLedgerCloudStatus,
+    deleteTransaction: deleteAccountTransaction,
+    replaceLedger,
+    saveAccount,
+    saveTransaction: saveAccountTransaction,
+    transactions: accountTransactions,
+  } = useAccountLedger(session?.user.id);
+  const {
+    cloudStatus: automationCloudStatus,
+    commitExecutions,
+    deleteRule: deleteAutomationRule,
+    logs: automationLogs,
+    processedKeys: automationProcessedKeys,
+    replaceAutomationState,
+    rules: automationRules,
+    saveRule: saveAutomationRule,
+    toggleRule: toggleAutomationRule,
+  } = useAutomationRules(session?.user.id);
+  const {
+    cloudStatus: cashFlowCloudStatus,
+    deletePlan: deleteCashFlowPlan,
+    plans: cashFlowPlans,
+    replaceCashFlowState,
+    savePlan: saveCashFlowPlan,
+    togglePlan: toggleCashFlowPlan,
+  } = useCashFlowPlans(session?.user.id);
+  const backupSource = useMemo(
+    () =>
+      buildBackupSourceData({
+        accountTransactions,
+        appChangeLogs,
+        automationLogs,
+        automationProcessedKeys,
+        automationRules,
+        balanceChecks,
+        cashFlowPlans,
+        completedGoals,
+        entries,
+        expenses,
+        financialAccounts,
+        goals,
+      }),
+    [
+      accountTransactions,
+      appChangeLogs,
+      automationLogs,
+      automationProcessedKeys,
+      automationRules,
+      balanceChecks,
+      cashFlowPlans,
+      completedGoals,
+      entries,
+      expenses,
+      financialAccounts,
+      goals,
+    ]
+  );
+  useAutomaticBackups({
+    source: backupSource,
+    syncStatus,
+    userId: session?.user.id,
+  });
+  const automationAccountIds = useMemo(
+    () =>
+      financialAccounts
+        .filter((account) => !account.archivedAt)
+        .map((account) => account.id),
+    [financialAccounts]
+  );
+  const automationSubGoalIds = useMemo(
+    () => (goals.subGoals ?? []).map((goal) => goal.id),
+    [goals.subGoals]
+  );
+  useAutomationEngine({
+    balanceChecks,
+    commitExecutions,
+    entries,
+    expenses,
+    hubEntries: backupSource.hub.entries,
+    onLedgerTransaction: saveAccountTransaction,
+    onSubGoalContribution: handleAutomationSubGoalContribution,
+    processedKeys: automationProcessedKeys,
+    rules: automationRules,
+    validAccountIds: automationAccountIds,
+    validSubGoalIds: automationSubGoalIds,
+  });
   useMoneyDiaryNotificationScheduler({
     balanceChecks,
     completedGoals,
@@ -790,6 +901,130 @@ function restoreChangeLog(id: string) {
 
   markLocalChanged("Đã khôi phục dữ liệu từ lịch sử thay đổi, đang lưu cloud...");
   setSyncStatus("Đã khôi phục dữ liệu");
+}
+
+async function restoreBackup(
+  snapshot: BackupSnapshot,
+  sections: BackupSection[]
+) {
+  const restoreJournal = sections.includes("journal");
+  const restoreGoals = sections.includes("goals");
+  const restoreHub = sections.includes("hub");
+  const restoreAccounts = sections.includes("accounts");
+  const restoreAutomation = sections.includes("automation");
+  const restoreCashFlow = sections.includes("cashFlow");
+
+  if (restoreHub && session?.user.id) {
+    const { error } = await supabase.from("money_diary_state").upsert({
+      hub_change_logs: snapshot.data.hub.changeLogs.slice(0, 200),
+      hub_entries: snapshot.data.hub.entries,
+      hub_settings: snapshot.data.hub.settings,
+      updated_at: new Date().toISOString(),
+      user_id: session.user.id,
+    });
+
+    if (error) throw error;
+  }
+
+  if (restoreJournal) {
+    setEntries(snapshot.data.journal.entries);
+    setExpenses(snapshot.data.journal.expenses);
+    setBalanceChecks(snapshot.data.journal.balanceChecks);
+    setAppChangeLogs(snapshot.data.journal.appChangeLogs);
+    localStorage.setItem(
+      STORAGE_OTHER_EXPENSE_LABELS_KEY,
+      JSON.stringify(snapshot.data.journal.otherExpenseLabels)
+    );
+  }
+
+  if (restoreGoals) {
+    setGoals(snapshot.data.goals.goals);
+    setCompletedGoals(snapshot.data.goals.completedGoals);
+  }
+
+  if (restoreHub) {
+    localStorage.setItem(
+      STORAGE_HUB_ENTRIES_KEY,
+      JSON.stringify(snapshot.data.hub.entries)
+    );
+    localStorage.setItem(
+      STORAGE_HUB_SETTINGS_KEY,
+      JSON.stringify(snapshot.data.hub.settings)
+    );
+    localStorage.setItem(
+      STORAGE_HUB_CHANGE_LOGS_KEY,
+      JSON.stringify(snapshot.data.hub.changeLogs)
+    );
+    localStorage.setItem(
+      STORAGE_HUB_CALCULATOR_KEY,
+      JSON.stringify(snapshot.data.hub.calculator)
+    );
+  }
+
+  if (restoreAccounts) {
+    replaceLedger(
+      snapshot.data.accounts.accounts,
+      snapshot.data.accounts.transactions
+    );
+  }
+
+  if (restoreAutomation) {
+    replaceAutomationState(snapshot.data.automation);
+  }
+
+  if (restoreCashFlow) {
+    replaceCashFlowState(snapshot.data.cashFlow.plans);
+  }
+
+  if (restoreJournal || restoreGoals) {
+    markLocalChanged("Đã khôi phục backup, đang lưu cloud...");
+    setSyncStatus("Đã khôi phục backup, đang lưu cloud...");
+  } else {
+    setSyncStatus("Đã khôi phục backup");
+  }
+}
+
+function handleAutomationSubGoalContribution(
+  execution: AutomationExecution
+) {
+  const now = new Date().toISOString();
+  const contributionId = `automation:${execution.idempotencyKey}`;
+
+  setGoals((current) => ({
+    ...current,
+    subGoals: (current.subGoals ?? []).map((goal) => {
+      if (
+        goal.id !== execution.targetId ||
+        goal.contributions.some(
+          (contribution) => contribution.id === contributionId
+        )
+      ) {
+        return goal;
+      }
+
+      const remaining = Math.max(goal.target - getSubGoalSaved(goal), 0);
+      const amount = Math.min(execution.amount, remaining);
+
+      if (amount <= 0) return goal;
+
+      return {
+        ...goal,
+        contributions: [
+          ...goal.contributions,
+          {
+            amount,
+            createdAt: now,
+            date: execution.date,
+            id: contributionId,
+            note: `Tự động · ${execution.ruleName}`,
+            updatedAt: now,
+          },
+        ],
+        updatedAt: now,
+      };
+    }),
+  }));
+  markLocalChanged("Tự động góp mục tiêu phụ, đang lưu cloud...");
 }
 
   const [form, setForm] = useState({
@@ -1228,6 +1463,23 @@ const balanceChartTitle =
     : `${balanceChartDays} ngày gần nhất`;
 
 const actualMoney = goals.bigGoalSaved + totalIncome - totalExpense;
+const activeFinancialAccounts = financialAccounts.filter(
+  (account) => !account.archivedAt
+);
+const hasAccountLedgerData =
+  accountTransactions.length > 0 ||
+  activeFinancialAccounts.some((account) => account.openingBalance !== 0);
+const accountLedgerBalance = activeFinancialAccounts.reduce(
+  (total, account) =>
+    total + calculateAccountBalance(account, accountTransactions),
+  0
+);
+const cashFlowCurrentBalance = hasAccountLedgerData
+  ? accountLedgerBalance
+  : actualMoney;
+const cashFlowBalanceSource = hasAccountLedgerData
+  ? "Tổng từ Sổ tài khoản"
+  : "Số dư Money Diary đang tính";
 
 const totalJourneyMoney = totalIncome;
 
@@ -3073,6 +3325,9 @@ if (route.kind === "daymark") {
       onExportReport={exportToWord}
       onLogout={handleLogout}
       onOpenBalanceCheck={goToTodayBalanceCheck}
+      onOpenAccountLedger={() => navigateTo("accounts")}
+      onOpenAutomation={() => navigateTo("automation")}
+      onOpenCashFlow={() => navigateTo("cashFlow")}
       onOpenChangeLog={() => navigateTo("changes")}
       onOpenCloseDay={() => openCloseDay()}
       onOpenExpense={goToTodayEntryForm}
@@ -3083,6 +3338,45 @@ if (route.kind === "daymark") {
       themeMode={themeMode}
       toggleThemeMode={toggleThemeMode}
     >
+          {page === "accounts" && (
+            <AccountLedgerPage
+              accounts={financialAccounts}
+              archiveAccount={archiveAccount}
+              cloudStatus={accountLedgerCloudStatus}
+              deleteTransaction={deleteAccountTransaction}
+              saveAccount={saveAccount}
+              saveTransaction={saveAccountTransaction}
+              transactions={accountTransactions}
+            />
+          )}
+          {page === "automation" && (
+            <AutomationRulesPage
+              accounts={financialAccounts.filter(
+                (account) => !account.archivedAt
+              )}
+              cloudStatus={automationCloudStatus}
+              deleteRule={deleteAutomationRule}
+              expenseLabels={expenseLabelOptions}
+              logs={automationLogs}
+              rules={automationRules}
+              saveRule={saveAutomationRule}
+              subGoals={goals.subGoals ?? []}
+              toggleRule={toggleAutomationRule}
+            />
+          )}
+          {page === "cashFlow" && (
+            <CashFlowForecastPage
+              balanceSource={cashFlowBalanceSource}
+              cloudStatus={cashFlowCloudStatus}
+              currentBalance={cashFlowCurrentBalance}
+              deletePlan={deleteCashFlowPlan}
+              entries={entries}
+              expenses={expenses}
+              plans={cashFlowPlans}
+              savePlan={saveCashFlowPlan}
+              togglePlan={toggleCashFlowPlan}
+            />
+          )}
           {page === "home" && (
             <HomePage
               entries={entries}
@@ -3426,7 +3720,12 @@ if (route.kind === "daymark") {
     />
   )}
   {page === "settings" && (
-    <MoneyDiarySettingsPage userId={session.user.id} />
+    <MoneyDiarySettingsPage
+      backupSource={backupSource}
+      onRestoreBackup={restoreBackup}
+      syncStatus={syncStatus}
+      userId={session.user.id}
+    />
   )}
   <BalanceCheckOverlay
     appMoney={getAppMoneyAtDate(balanceCheckForm.date)}

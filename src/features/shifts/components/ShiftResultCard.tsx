@@ -3,6 +3,11 @@ import { HUB_TYPE_LABEL } from "../../../constants/hanoiHub";
 import type { HubEntry } from "../../../types/hub";
 import { formatReportDate } from "../../../utils/date";
 import type { calculateHubIncome } from "../../../utils/hubIncome";
+import {
+  getHubOperatingCosts,
+  getHubOperatingCostTotal,
+  HUB_OPERATING_COST_LABELS,
+} from "../../../utils/hubProfit";
 import { formatMoney } from "../../../utils/money";
 
 type HubIncome = ReturnType<typeof calculateHubIncome>;
@@ -58,10 +63,17 @@ export function ShiftResultCard({
   const recordedIncome = entry.diaryIncomeAmount ?? income.workIncome;
   const thresholdIncome = income.extraOrderReward + income.extraJoinOrderReward;
   const shiftDuration = formatHours(durationHours);
+  const operatingCosts = getHubOperatingCosts(entry);
+  const operatingCost = getHubOperatingCostTotal(entry);
+  const actualProfit = income.total - operatingCost;
+  const actualProfitPerHour =
+    durationHours > 0 ? Math.round(actualProfit / durationHours) : 0;
   const metrics = [
     { label: "Tiền từ đơn", value: income.basePrice, always: true },
     { label: "Vượt mốc", value: thresholdIncome, always: false },
     { label: "Thu nhập khác", value: income.extraIncome, always: false },
+    { label: "Chi phí vận hành", value: operatingCost, always: true },
+    { label: "Lợi nhuận thực", value: actualProfit, always: true },
     { label: "Ghi vào nhật ký", value: recordedIncome, always: true },
   ].filter((metric) => metric.always || metric.value !== 0);
 
@@ -83,8 +95,11 @@ export function ShiftResultCard({
 
         <div className="shift-result-card__headline">
           <div>
-            <span>Tổng thu nhập ca</span>
-            <strong>{formatMoney(income.total)}</strong>
+            <span>Lợi nhuận thực</span>
+            <strong className={actualProfit < 0 ? "is-negative" : ""}>
+              {formatMoney(actualProfit)}
+            </strong>
+            <small>Tổng thu {formatMoney(income.total)}</small>
           </div>
           <span className={`shift-performance${entry.isWellDone ? " is-good" : " is-warning"}`}>
             {entry.isWellDone ? "Đạt mục tiêu" : "Chưa đạt"}
@@ -174,10 +189,29 @@ export function ShiftResultCard({
                 <IncomeRow label="Tiền ghi vào nhật ký" value={recordedIncome} />
               </dl>
             </section>
+
+            <section>
+              <h4>Lợi nhuận thực</h4>
+              <dl>
+                <IncomeRow label="Tổng thu nhập ca" tone="income" value={income.total} />
+                <IncomeRow label="Chi phí vận hành" tone="expense" value={operatingCost} />
+                <IncomeRow
+                  label="Còn lại sau chi phí"
+                  tone={actualProfit >= 0 ? "income" : "expense"}
+                  value={Math.abs(actualProfit)}
+                />
+                <IncomeRow
+                  label="Lợi nhuận mỗi giờ"
+                  tone={actualProfitPerHour >= 0 ? "income" : "expense"}
+                  value={Math.abs(actualProfitPerHour)}
+                />
+              </dl>
+            </section>
           </div>
 
           <div className="shift-income-explanation">
             <p><strong>Tổng thu nhập ca:</strong> tiền đơn, các khoản thưởng và thu nhập khác.</p>
+            <p><strong>Lợi nhuận thực:</strong> tổng thu nhập ca trừ các chi phí vận hành đã nhập.</p>
             <p><strong>Thu nhập ghi nhận:</strong> số tiền thực tế được cộng vào nhật ký của ngày.</p>
             <p>Chênh lệch giá ghép dùng để so sánh với giá đơn lẻ, không được cộng thêm lần nữa.</p>
           </div>
@@ -199,6 +233,23 @@ export function ShiftResultCard({
                     </div>
                   );
                 })}
+              </div>
+            </section>
+          )}
+
+          {operatingCosts.length > 0 && (
+            <section className="shift-operating-cost-breakdown">
+              <h4>Chi phí vận hành</h4>
+              <div className="shift-operating-cost-breakdown__rows">
+                {operatingCosts.map((cost) => (
+                  <div key={cost.id}>
+                    <span>
+                      <strong>{HUB_OPERATING_COST_LABELS[cost.category]}</strong>
+                      {cost.note && <small>{cost.note}</small>}
+                    </span>
+                    <strong>−{formatMoney(cost.amount)}</strong>
+                  </div>
+                ))}
               </div>
             </section>
           )}

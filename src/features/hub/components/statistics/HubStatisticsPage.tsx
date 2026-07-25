@@ -6,6 +6,7 @@ import {
   BriefcaseBusiness,
   Clock3,
   Filter,
+  Fuel,
   PackageCheck,
   RotateCcw,
   TrendingUp,
@@ -37,6 +38,7 @@ type HubStatisticsPageProps = {
   hubPerformance: HubPerformanceItem[];
   shiftPerformance: HubPerformanceItem[];
   lowPerformanceShifts: HubPerformanceItem[];
+  costBreakdown: Array<{ label: string; amount: number }>;
   weeklyReport: HubReport;
   monthlyReport: HubReport;
   changeLogs: HubChangeLog[];
@@ -162,8 +164,11 @@ function PeriodComparison({
       {periods.map(({ label, summary }) => (
         <div key={label}>
           <span>{label}</span>
-          <strong>{formatMoney(summary.workIncome)}</strong>
-          <small>{summary.shifts} ca · {summary.orders} đơn · {formatHours(summary.hours)}</small>
+          <strong>{formatMoney(summary.actualProfit)}</strong>
+          <small>
+            {summary.shifts} ca · Chi {formatMoney(summary.operatingCost)} ·{" "}
+            {formatHours(summary.hours)}
+          </small>
         </div>
       ))}
     </section>
@@ -179,7 +184,7 @@ function PerformanceChart({
   title: string;
   description: string;
   items: HubPerformanceItem[];
-  metric: "workIncome" | "incomePerHour";
+  metric: "actualProfit" | "actualProfitPerHour";
 }) {
   const visibleItems = items.slice(0, 6);
   const maxValue = Math.max(...visibleItems.map((item) => item[metric]), 1);
@@ -204,7 +209,10 @@ function PerformanceChart({
               <div key={item.key} role="listitem">
                 <div className="hub-performance-chart__label">
                   <span>{item.label}</span>
-                  <strong>{formatMoney(value)}{metric === "incomePerHour" ? "/giờ" : ""}</strong>
+                  <strong>
+                    {formatMoney(value)}
+                    {metric === "actualProfitPerHour" ? "/giờ" : ""}
+                  </strong>
                 </div>
                 <div className="hub-performance-chart__track" aria-hidden="true">
                   <span style={{ width }} />
@@ -247,7 +255,7 @@ function StatisticsInsights({
         <dl className="hub-statistics-insights__grid">
           <div><dt>Hub hiệu quả nhất</dt><dd>{bestHub?.label ?? "Chưa đủ dữ liệu"}</dd></div>
           <div><dt>Khung giờ hiệu quả nhất</dt><dd>{bestShift?.label ?? "Chưa đủ dữ liệu"}</dd></div>
-          <div><dt>Ngày tốt nhất tuần</dt><dd>{report.bestDay ? `${report.bestDay.date} · ${formatMoney(report.bestDay.workIncome)}` : "Chưa đủ dữ liệu"}</dd></div>
+          <div><dt>Ngày lợi nhuận tốt nhất</dt><dd>{report.bestDay ? `${report.bestDay.date} · ${formatMoney(report.bestDay.actualProfit)}` : "Chưa đủ dữ liệu"}</dd></div>
           <div>
             <dt>Xu hướng tuần</dt>
             <dd className={trend === null || trend === 0 ? "" : trend > 0 ? "is-positive" : "is-negative"}>
@@ -273,12 +281,17 @@ function ReportPanel({ report }: { report: HubReport }) {
         <div><h3>{report.title}</h3><p>{report.fromDate} - {report.toDate}</p></div>
         <TrendIcon size={20} aria-hidden="true" />
       </div>
-      <strong className="hub-report-panel__income">{formatMoney(report.summary.workIncome)}</strong>
+      <strong className="hub-report-panel__income">{formatMoney(report.summary.actualProfit)}</strong>
+      <small className="hub-report-panel__formula">
+        Tổng thu {formatMoney(report.summary.grossIncome)} − Chi phí{" "}
+        {formatMoney(report.summary.operatingCost)}
+      </small>
       <p className="hub-report-panel__trend">{changeText}</p>
       <dl>
         <div><dt>Số ca</dt><dd>{report.summary.shifts}</dd></div>
         <div><dt>Số đơn</dt><dd>{report.summary.orders}</dd></div>
         <div><dt>Số giờ</dt><dd>{formatHours(report.summary.hours)}</dd></div>
+        <div><dt>Biên lợi nhuận</dt><dd>{report.summary.profitMargin}%</dd></div>
       </dl>
       <div className="hub-report-panel__notes">
         {report.notes.map((note) => <p key={note}>{note}</p>)}
@@ -343,6 +356,48 @@ function HubChangeHistory({
   );
 }
 
+function OperatingCostBreakdown({
+  items,
+}: {
+  items: HubStatisticsPageProps["costBreakdown"];
+}) {
+  const maxValue = Math.max(...items.map((item) => item.amount), 1);
+
+  return (
+    <section className="hub-feature-section hub-cost-breakdown">
+      <div className="hub-feature-section__heading">
+        <Fuel size={19} aria-hidden="true" />
+        <div>
+          <h3>Cơ cấu chi phí vận hành</h3>
+          <p>Các khoản chi trực tiếp đã gắn với ca trong phạm vi lọc.</p>
+        </div>
+      </div>
+      {items.length === 0 ? (
+        <HubEmptyState
+          title="Chưa ghi chi phí vận hành"
+          description="Thêm xăng, gửi xe hoặc chi phí khác khi lưu ca để xem lợi nhuận chính xác hơn."
+        />
+      ) : (
+        <div className="hub-cost-breakdown__rows">
+          {items.map((item) => (
+            <div key={item.label}>
+              <span>
+                <strong>{item.label}</strong>
+                <small>{formatMoney(item.amount)}</small>
+              </span>
+              <div aria-hidden="true">
+                <span
+                  style={{ width: `${Math.max((item.amount / maxValue) * 100, 3)}%` }}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
 export function HubStatisticsPage(props: HubStatisticsPageProps) {
   const {
     summary,
@@ -361,7 +416,7 @@ export function HubStatisticsPage(props: HubStatisticsPageProps) {
       <HubTabHeader
         icon={BarChart3}
         title="Thống kê Hub"
-        description="Theo dõi thu nhập, số ca, đơn hàng và hiệu suất theo thời gian."
+        description="Theo dõi tổng thu, chi phí vận hành và lợi nhuận thực theo thời gian."
         action={<button type="button" className="hub-secondary-action" onClick={props.onOpenShifts}>Xem ca của tôi</button>}
       />
       <StatisticsFilters {...props} />
@@ -369,30 +424,32 @@ export function HubStatisticsPage(props: HubStatisticsPageProps) {
       <HubMetricStrip
         ariaLabel="Tổng quan thống kê Hub"
         items={[
-          { label: "Tổng thu nhập", value: formatMoney(summary.workIncome), icon: Banknote, tone: "income" },
+          { label: "Tổng thu Hub", value: formatMoney(summary.grossIncome), icon: Banknote },
+          { label: "Chi phí vận hành", value: formatMoney(summary.operatingCost), icon: Fuel, tone: summary.operatingCost > 0 ? "warning" : "default" },
+          { label: "Lợi nhuận thực", value: formatMoney(summary.actualProfit), icon: TrendingUp, tone: summary.actualProfit >= 0 ? "income" : "danger" },
           { label: "Tổng số ca", value: `${summary.shifts} ca`, icon: BriefcaseBusiness },
           { label: "Tổng giờ", value: formatHours(summary.hours), icon: Clock3 },
-          { label: "Tổng đơn", value: `${summary.orders} đơn`, icon: PackageCheck },
-          { label: "Trung bình mỗi giờ", value: `${formatMoney(summary.incomePerHour)}/giờ`, icon: TrendingUp },
+          { label: "Lợi nhuận mỗi giờ", value: `${formatMoney(summary.actualProfitPerHour)}/giờ`, icon: PackageCheck, tone: summary.actualProfitPerHour >= 0 ? "income" : "danger" },
         ]}
       />
       <PeriodComparison today={todaySummary} week={weekSummary} month={monthSummary} />
       <div className="hub-statistics-charts">
-        <PerformanceChart title="Thu nhập theo Hub" description="So sánh tiền làm được thật trong phạm vi lọc." items={hubPerformance} metric="workIncome" />
-        <PerformanceChart title="Hiệu suất theo ca" description="So sánh thu nhập trung bình mỗi giờ theo Hub và khung giờ." items={shiftPerformance} metric="incomePerHour" />
+        <PerformanceChart title="Lợi nhuận theo Hub" description="So sánh số tiền còn lại sau chi phí vận hành." items={hubPerformance} metric="actualProfit" />
+        <PerformanceChart title="Lợi nhuận theo giờ" description="So sánh lợi nhuận thực mỗi giờ theo Hub và khung giờ." items={shiftPerformance} metric="actualProfitPerHour" />
       </div>
+      <OperatingCostBreakdown items={props.costBreakdown} />
       <StatisticsInsights hubPerformance={hubPerformance} shiftPerformance={shiftPerformance} report={weeklyReport} />
       <section className="hub-feature-section hub-low-performance">
         <div className="hub-feature-section__heading">
           <TrendingUp size={19} aria-hidden="true" />
-          <div><h3>Cảnh báo hiệu suất thấp</h3><p>Ca có ít nhất hai lần làm và tiền/giờ thấp hơn 75% trung bình chung.</p></div>
+          <div><h3>Cảnh báo hiệu suất thấp</h3><p>Ca có ít nhất hai lần làm và lợi nhuận/giờ thấp hơn 75% trung bình chung.</p></div>
         </div>
         {lowPerformanceShifts.length === 0 ? (
           <p className="hub-status-message is-success">Chưa phát hiện ca nào thấp bất thường.</p>
         ) : (
           <div className="hub-low-performance__list">
             {lowPerformanceShifts.map((item) => (
-              <div key={item.key}><span><strong>{item.label}</strong><small>{item.shifts} ca · {item.orders} đơn · {formatHours(item.hours)}</small></span><strong>{formatMoney(item.incomePerHour)}/giờ</strong></div>
+              <div key={item.key}><span><strong>{item.label}</strong><small>{item.shifts} ca · {item.orders} đơn · {formatHours(item.hours)}</small></span><strong>{formatMoney(item.actualProfitPerHour)}/giờ</strong></div>
             ))}
           </div>
         )}

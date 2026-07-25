@@ -23,6 +23,10 @@ import {
 } from "../utils/hubAnalytics";
 import { calculateHubIncome } from "../utils/hubIncome";
 import {
+  calculateHubActualProfit,
+  summarizeHubOperatingCosts,
+} from "../utils/hubProfit";
+import {
   mergeHubChangeLogs,
   mergeHubEntries,
   mergeHubSettings,
@@ -33,6 +37,7 @@ import type {
   HubChangeLog,
   HubEntry,
   HubJoinOrder,
+  HubOperatingCost,
   HubSettings,
   StreakDayStatus,
 } from "../types/hub";
@@ -48,12 +53,14 @@ import {
   HubNavigation,
   HubWorkHeader,
   MatchedOrderSection,
+  OperatingCostsSection,
   OtherIncomeSection,
   SaveShiftActionBar,
   ShiftSummaryCard,
   WorkShiftSection,
   type HubForm,
   type HubJoinForm,
+  type HubOperatingCostForm,
   type HubCalculatorForm,
   type HubStatisticsRange,
   type HubTab,
@@ -109,6 +116,19 @@ function createJoinForm(type = 2, price = DEFAULT_JOIN_PRICES[2]): HubJoinForm {
   };
 }
 
+function toHubOperatingCosts(
+  rows: HubOperatingCostForm[]
+): HubOperatingCost[] {
+  return rows
+    .map((row) => ({
+      amount: parseMoneyInput(row.amount),
+      category: row.category,
+      id: row.id,
+      note: row.note.trim(),
+    }))
+    .filter((cost) => cost.amount > 0);
+}
+
 function createForm(): HubForm {
   return {
     date: getToday(),
@@ -119,6 +139,7 @@ function createForm(): HubForm {
     isWellDone: true,
     isHubShort: false,
     extraIncome: "",
+    operatingCosts: [],
     receivedMoney: "",
     bonusMoney: "",
     mood: "normal",
@@ -142,6 +163,12 @@ function createFormFromEntry(entry: HubEntry): HubForm {
     isWellDone: entry.isWellDone,
     isHubShort: entry.isHubShort,
     extraIncome: formatMoneyInput(String(entry.extraIncome)),
+    operatingCosts: (entry.operatingCosts ?? []).map((cost) => ({
+      amount: formatMoneyInput(String(cost.amount)),
+      category: cost.category,
+      id: cost.id ?? crypto.randomUUID(),
+      note: cost.note ?? "",
+    })),
     receivedMoney: "",
     bonusMoney: "",
     mood: "normal",
@@ -738,6 +765,11 @@ export function HubPage({
       return sum + calculateHubIncome(entry, settings).total;
     }, 0);
   }, [entries, settings]);
+  const totalHubActualProfit = useMemo(() => {
+    return entries.reduce((sum, entry) => {
+      return sum + calculateHubActualProfit(entry, settings).actualProfit;
+    }, 0);
+  }, [entries, settings]);
 
   const calculatorRows = useMemo(() => {
     return entries
@@ -807,6 +839,7 @@ export function HubPage({
       isWellDone: form.isWellDone,
       isHubShort: form.isHubShort,
       extraIncome: parseMoneyInput(form.extraIncome),
+      operatingCosts: toHubOperatingCosts(form.operatingCosts),
       note: form.note.trim(),
       createdAt: new Date().toISOString(),
     };
@@ -815,6 +848,10 @@ export function HubPage({
   const previewIncome = useMemo(() => {
     return calculateHubIncome(previewEntry, settings);
   }, [previewEntry, settings]);
+  const previewProfit = useMemo(
+    () => calculateHubActualProfit(previewEntry, settings),
+    [previewEntry, settings]
+  );
   const hubRows = useMemo(
     () => buildHubAnalyticsRows(entries, settings),
     [entries, settings]
@@ -894,21 +931,36 @@ export function HubPage({
     [statisticsRows]
   );
   const statisticsHubPerformance = useMemo(
-    () => groupHubPerformance(statisticsRows, "hub", "workIncome"),
+    () => groupHubPerformance(statisticsRows, "hub", "actualProfit"),
     [statisticsRows]
   );
   const statisticsShiftPerformance = useMemo(
-    () => groupHubPerformance(statisticsRows, "shift"),
+    () =>
+      groupHubPerformance(
+        statisticsRows,
+        "shift",
+        "actualProfitPerHour"
+      ),
     [statisticsRows]
   );
   const statisticsLowPerformanceShifts = useMemo(() => {
-    const average = statisticsSummary.incomePerHour;
+    const average = statisticsSummary.actualProfitPerHour;
     if (average <= 0) return [];
 
     return statisticsShiftPerformance
-      .filter((item) => item.shifts >= 2 && item.incomePerHour < average * 0.75)
+      .filter(
+        (item) =>
+          item.shifts >= 2 && item.actualProfitPerHour < average * 0.75
+      )
       .slice(0, 5);
-  }, [statisticsShiftPerformance, statisticsSummary.incomePerHour]);
+  }, [statisticsShiftPerformance, statisticsSummary.actualProfitPerHour]);
+  const statisticsCostBreakdown = useMemo(
+    () =>
+      summarizeHubOperatingCosts(
+        statisticsRows.map((row) => row.entry)
+      ),
+    [statisticsRows]
+  );
   const weeklyHubReport = useMemo(
     () =>
       buildHubReport({
@@ -1018,6 +1070,7 @@ export function HubPage({
       isWellDone: form.isWellDone,
       isHubShort: form.isHubShort,
       extraIncome,
+      operatingCosts: toHubOperatingCosts(form.operatingCosts),
       note: form.note.trim(),
       createdAt: existingEntry?.createdAt ?? now,
       updatedAt: now,
@@ -1302,7 +1355,11 @@ export function HubPage({
 
       <HubDailySummary
         todayIncome={formatMoney(todayHubSummary.workIncome)}
+        todayProfit={formatMoney(todayHubSummary.actualProfit)}
+        todayProfitNegative={todayHubSummary.actualProfit < 0}
         totalGross={formatMoney(totalHubIncome)}
+        totalProfit={formatMoney(totalHubActualProfit)}
+        totalProfitNegative={totalHubActualProfit < 0}
         cloudStatus={hubCloudStatus}
       />
 
@@ -1325,6 +1382,10 @@ export function HubPage({
               onDelete={deleteJoinRow}
             />
             <OtherIncomeSection value={form.extraIncome} setForm={setForm} />
+            <OperatingCostsSection
+              costs={form.operatingCosts}
+              setForm={setForm}
+            />
           </div>
 
           <aside className="hub-add-layout__sidebar">
@@ -1338,6 +1399,8 @@ export function HubPage({
               hubType={form.hubType}
               orderCount={totalOrderCount}
               workHours={currentShiftHours}
+              operatingCost={previewProfit.operatingCost}
+              actualProfit={previewProfit.actualProfit}
               showDetails={showIncomeDetails}
               onToggleDetails={() => setShowIncomeDetails((current) => !current)}
             />
@@ -1397,6 +1460,7 @@ export function HubPage({
           hubPerformance={statisticsHubPerformance}
           shiftPerformance={statisticsShiftPerformance}
           lowPerformanceShifts={statisticsLowPerformanceShifts}
+          costBreakdown={statisticsCostBreakdown}
           weeklyReport={weeklyHubReport}
           monthlyReport={monthlyHubReport}
           changeLogs={paginatedHubChangeLogs}

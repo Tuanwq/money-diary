@@ -19,7 +19,10 @@ self.addEventListener("install", (event) => {
   event.waitUntil(
     caches.open(APP.cache).then((cache) => cache.addAll(SHELL_ASSETS))
   );
-  self.skipWaiting();
+});
+
+self.addEventListener("message", (event) => {
+  if (event.data?.type === "SKIP_WAITING") self.skipWaiting();
 });
 
 self.addEventListener("activate", (event) => {

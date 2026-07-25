@@ -1,4 +1,5 @@
 import { APP_NOTIFICATION_CONFIG } from "../features/notifications/config";
+import { APP_PWA_CONFIGURED_EVENT } from "../features/app-update/appUpdateModel";
 import type { AppIdentifier } from "../features/notifications/types";
 
 const APP_MANIFEST_ID = "active-app-manifest";
@@ -168,6 +169,11 @@ export async function configurePwaForPath(pathname: string) {
 
   try {
     await registerAppServiceWorker(appIdentifier);
+    window.dispatchEvent(
+      new CustomEvent(APP_PWA_CONFIGURED_EVENT, {
+        detail: { appIdentifier },
+      })
+    );
   } catch (error) {
     console.error("Không thể đăng ký service worker", error);
   }

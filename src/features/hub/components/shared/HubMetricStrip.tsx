@@ -15,7 +15,7 @@ type HubMetricStripProps = {
 export function HubMetricStrip({ items, ariaLabel }: HubMetricStripProps) {
   return (
     <dl
-      className={`hub-metric-strip hub-metric-strip--${Math.min(items.length, 5)}`}
+      className={`hub-metric-strip hub-metric-strip--${Math.min(items.length, 6)}`}
       aria-label={ariaLabel}
     >
       {items.map(({ label, value, icon: Icon, tone = "default" }) => (

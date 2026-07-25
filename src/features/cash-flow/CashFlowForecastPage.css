@@ -1,0 +1,1017 @@
+.cash-flow-page {
+  display: grid;
+  gap: 1rem;
+  width: min(100%, 72rem);
+  margin: 0 auto;
+  min-width: 0;
+}
+
+.cash-flow-page *,
+.cash-flow-page *::before,
+.cash-flow-page *::after {
+  box-sizing: border-box;
+}
+
+.cash-flow-page-header,
+.cash-flow-controls,
+.cash-flow-summary,
+.cash-flow-scenario-section,
+.cash-flow-chart-section,
+.cash-flow-average-section,
+.cash-flow-plan-section,
+.cash-flow-projection-section,
+.cash-flow-method-note {
+  min-width: 0;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  box-shadow: 0 10px 28px rgb(28 39 31 / 0.04);
+}
+
+.cash-flow-page-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1.25rem;
+  padding: 1.4rem 1.5rem;
+  border-radius: 1.1rem;
+}
+
+.cash-flow-page-header h1,
+.cash-flow-page-header p,
+.cash-flow-page-header small,
+.cash-flow-section-heading h2,
+.cash-flow-section-heading p,
+.cash-flow-modal-header h2,
+.cash-flow-modal-header p {
+  margin: 0;
+}
+
+.cash-flow-page-header h1 {
+  margin-top: 0.25rem;
+  font-size: clamp(1.65rem, 3vw, 2.15rem);
+  line-height: 1.15;
+}
+
+.cash-flow-page-header p {
+  margin-top: 0.45rem;
+  color: var(--text-secondary);
+}
+
+.cash-flow-page-header small {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 0.65rem;
+  color: var(--primary-text);
+}
+
+.cash-flow-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--primary-text);
+  font-size: 0.84rem;
+  font-weight: 600;
+}
+
+.cash-flow-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.8rem 1rem;
+  border-radius: 0.9rem;
+}
+
+.cash-flow-controls > div:first-child {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.cash-flow-controls > div:first-child span {
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+}
+
+.cash-flow-horizon-options {
+  display: flex;
+  gap: 0.35rem;
+  padding: 0.25rem;
+  border-radius: 0.75rem;
+  background: var(--primary-subtle);
+}
+
+.cash-flow-horizon-options button {
+  min-height: 2.5rem;
+  padding: 0.45rem 0.8rem;
+  border: 1px solid transparent;
+  border-radius: 0.6rem;
+  color: var(--text-secondary);
+  background: transparent;
+  font-weight: 600;
+}
+
+.cash-flow-horizon-options button:hover {
+  color: var(--primary-text);
+  background: var(--primary-soft);
+}
+
+.cash-flow-horizon-options button.is-active {
+  color: var(--primary-foreground);
+  background: var(--primary);
+}
+
+.cash-flow-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.8rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--warning-border);
+  border-radius: 0.9rem;
+  background: var(--warning-soft);
+}
+
+.cash-flow-alert.is-danger {
+  border-color: var(--danger-border);
+  background: var(--danger-soft);
+}
+
+.cash-flow-alert > span {
+  display: grid;
+  place-items: center;
+  flex: 0 0 2.45rem;
+  width: 2.45rem;
+  height: 2.45rem;
+  border-radius: 0.7rem;
+  color: var(--warning);
+  background: var(--surface);
+}
+
+.cash-flow-alert.is-danger > span {
+  color: var(--danger);
+}
+
+.cash-flow-alert strong {
+  display: block;
+  margin-bottom: 0.2rem;
+  color: var(--text-primary);
+}
+
+.cash-flow-alert p {
+  margin: 0;
+  color: var(--text-secondary);
+}
+
+.cash-flow-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  overflow: hidden;
+  border-radius: 1rem;
+}
+
+.cash-flow-summary > div {
+  display: grid;
+  align-content: center;
+  gap: 0.3rem;
+  min-width: 0;
+  min-height: 7.3rem;
+  padding: 1rem 1.1rem;
+}
+
+.cash-flow-summary > div + div {
+  border-left: 1px solid var(--border);
+}
+
+.cash-flow-summary span,
+.cash-flow-summary small {
+  color: var(--text-secondary);
+}
+
+.cash-flow-summary span {
+  font-size: 0.83rem;
+}
+
+.cash-flow-summary strong {
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: clamp(1.15rem, 2vw, 1.45rem);
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cash-flow-summary small {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  min-width: 0;
+  font-size: 0.75rem;
+}
+
+.cash-flow-page .is-positive {
+  color: var(--success);
+}
+
+.cash-flow-page .is-negative {
+  color: var(--danger);
+}
+
+.cash-flow-scenario-section,
+.cash-flow-chart-section,
+.cash-flow-average-section,
+.cash-flow-plan-section,
+.cash-flow-projection-section {
+  padding: 1.2rem;
+  border-radius: 1rem;
+}
+
+.cash-flow-section-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.cash-flow-section-heading h2 {
+  font-size: 1.08rem;
+}
+
+.cash-flow-section-heading p {
+  margin-top: 0.2rem;
+  color: var(--text-secondary);
+  font-size: 0.84rem;
+}
+
+.cash-flow-section-heading > span {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.cash-flow-trend {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.4rem 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-subtle);
+}
+
+.cash-flow-trend.is-positive {
+  border-color: var(--success-border);
+  color: var(--success);
+  background: var(--success-soft);
+}
+
+.cash-flow-trend.is-warning {
+  border-color: var(--warning-border);
+  color: var(--warning);
+  background: var(--warning-soft);
+}
+
+.cash-flow-scenario-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+
+.cash-flow-scenario-card {
+  display: grid;
+  gap: 0.25rem;
+  min-width: 0;
+  padding: 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: 0.8rem;
+  color: var(--text-primary);
+  text-align: left;
+  background: var(--surface-subtle);
+}
+
+.cash-flow-scenario-card:hover {
+  border-color: var(--primary-border);
+  background: var(--primary-subtle);
+}
+
+.cash-flow-scenario-card.is-active {
+  border-color: var(--primary);
+  box-shadow: inset 0 0 0 1px var(--primary);
+  background: var(--primary-soft);
+}
+
+.cash-flow-scenario-card > span {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+}
+
+.cash-flow-scenario-card > strong {
+  overflow: hidden;
+  font-size: 1.15rem;
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cash-flow-scenario-card > small {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.cash-flow-scenario-card > em {
+  margin-top: 0.3rem;
+  color: var(--text-muted);
+  font-size: 0.74rem;
+  font-style: normal;
+}
+
+.cash-flow-main-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(20rem, 0.8fr);
+  gap: 1rem;
+  min-width: 0;
+}
+
+.cash-flow-main-grid > * {
+  min-width: 0;
+}
+
+.cash-flow-chart {
+  width: 100%;
+  height: 19rem;
+}
+
+.cash-flow-chart .recharts-text {
+  fill: var(--text-secondary);
+  font-family: inherit;
+  font-size: 0.73rem;
+}
+
+.cash-flow-average-table {
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  overflow: hidden;
+}
+
+.cash-flow-average-header,
+.cash-flow-average-row {
+  display: grid;
+  grid-template-columns: 0.7fr repeat(3, minmax(0, 1fr));
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+  padding: 0.65rem 0.7rem;
+}
+
+.cash-flow-average-header {
+  color: var(--text-secondary);
+  background: var(--surface-subtle);
+  font-size: 0.72rem;
+}
+
+.cash-flow-average-row + .cash-flow-average-row {
+  border-top: 1px solid var(--border);
+}
+
+.cash-flow-average-row span {
+  overflow: hidden;
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cash-flow-planned-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.6rem;
+  margin-top: 0.75rem;
+}
+
+.cash-flow-planned-summary > div {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+  padding: 0.75rem;
+  border-radius: 0.7rem;
+  background: var(--primary-subtle);
+}
+
+.cash-flow-planned-summary span {
+  color: var(--text-secondary);
+  font-size: 0.76rem;
+}
+
+.cash-flow-planned-summary strong {
+  overflow: hidden;
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cash-flow-plan-list {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.cash-flow-plan-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 0.8rem;
+  min-width: 0;
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.8rem;
+  background: var(--surface-subtle);
+}
+
+.cash-flow-plan-item.is-disabled {
+  opacity: 0.58;
+}
+
+.cash-flow-plan-icon {
+  display: grid;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 0.7rem;
+}
+
+.cash-flow-plan-icon.is-income {
+  color: var(--success);
+  background: var(--success-soft);
+}
+
+.cash-flow-plan-icon.is-expense {
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+
+.cash-flow-plan-copy {
+  min-width: 0;
+}
+
+.cash-flow-plan-copy > div {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.cash-flow-plan-copy strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cash-flow-plan-copy > div span {
+  padding: 0.2rem 0.4rem;
+  border-radius: 999px;
+  color: var(--primary-text);
+  background: var(--primary-soft);
+  font-size: 0.68rem;
+  white-space: nowrap;
+}
+
+.cash-flow-plan-copy p {
+  margin: 0.15rem 0 0;
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+}
+
+.cash-flow-plan-amount {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.cash-flow-plan-amount.is-income {
+  color: var(--success);
+}
+
+.cash-flow-plan-amount.is-expense {
+  color: var(--danger);
+}
+
+.cash-flow-plan-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.cash-flow-icon-button,
+.cash-flow-pagination button {
+  display: grid;
+  place-items: center;
+  min-width: 2.55rem;
+  min-height: 2.55rem;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 0.7rem;
+  color: var(--text-secondary);
+  background: var(--surface);
+}
+
+.cash-flow-icon-button:hover,
+.cash-flow-pagination button:hover:not(:disabled) {
+  border-color: var(--primary-border);
+  color: var(--primary-text);
+  background: var(--primary-soft);
+}
+
+.cash-flow-icon-button.is-danger {
+  color: var(--danger);
+}
+
+.cash-flow-icon-button.is-danger:hover {
+  border-color: var(--danger-border);
+  background: var(--danger-soft);
+}
+
+.cash-flow-toggle {
+  position: relative;
+  width: 2.65rem;
+  height: 1.55rem;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: var(--border-strong);
+}
+
+.cash-flow-toggle span {
+  position: absolute;
+  top: 0.2rem;
+  left: 0.2rem;
+  width: 1.15rem;
+  height: 1.15rem;
+  border-radius: 50%;
+  background: var(--surface);
+  box-shadow: 0 1px 3px rgb(15 23 42 / 0.2);
+  transition: transform 160ms ease;
+}
+
+.cash-flow-toggle.is-active {
+  background: var(--primary);
+}
+
+.cash-flow-toggle.is-active span {
+  transform: translateX(1.1rem);
+}
+
+.cash-flow-empty {
+  display: grid;
+  justify-items: center;
+  gap: 0.45rem;
+  padding: 2rem 1rem;
+  color: var(--text-secondary);
+  text-align: center;
+  border: 1px dashed var(--border-strong);
+  border-radius: 0.85rem;
+  background: var(--surface-subtle);
+}
+
+.cash-flow-empty strong {
+  color: var(--text-primary);
+}
+
+.cash-flow-empty span {
+  max-width: 34rem;
+  font-size: 0.84rem;
+}
+
+.cash-flow-empty button {
+  margin-top: 0.4rem;
+}
+
+.cash-flow-projection-table {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 0.8rem;
+}
+
+.cash-flow-projection-header,
+.cash-flow-projection-row {
+  display: grid;
+  grid-template-columns: 1fr repeat(4, minmax(0, 1fr));
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 0;
+  padding: 0.7rem 0.8rem;
+}
+
+.cash-flow-projection-header {
+  color: var(--text-secondary);
+  background: var(--surface-subtle);
+  font-size: 0.74rem;
+}
+
+.cash-flow-projection-row + .cash-flow-projection-row {
+  border-top: 1px solid var(--border);
+}
+
+.cash-flow-projection-row span,
+.cash-flow-projection-row strong {
+  overflow: hidden;
+  font-size: 0.82rem;
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cash-flow-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.7rem;
+  margin-top: 0.8rem;
+}
+
+.cash-flow-pagination span {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+}
+
+.cash-flow-pagination button:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
+.cash-flow-method-note {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.85rem 1rem;
+  border-radius: 0.9rem;
+  background: var(--primary-subtle);
+}
+
+.cash-flow-method-note > span {
+  display: grid;
+  place-items: center;
+  width: 2.4rem;
+  height: 2.4rem;
+  border-radius: 0.65rem;
+  color: var(--primary-text);
+  background: var(--primary-soft);
+}
+
+.cash-flow-method-note p {
+  margin: 0.15rem 0 0;
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+}
+
+.cash-flow-method-note > svg {
+  color: var(--success);
+}
+
+.cash-flow-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgb(15 23 42 / 0.48);
+}
+
+.cash-flow-modal {
+  width: min(100%, 34rem);
+  max-height: min(90vh, 44rem);
+  overflow-y: auto;
+  padding: 1.2rem;
+  border: 1px solid var(--border);
+  border-radius: 1rem;
+  color: var(--text-primary);
+  background: var(--surface);
+  box-shadow: 0 24px 64px rgb(15 23 42 / 0.24);
+}
+
+.cash-flow-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.cash-flow-modal-header span {
+  color: var(--primary-text);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.cash-flow-modal-header h2 {
+  margin-top: 0.2rem;
+  font-size: 1.3rem;
+}
+
+.cash-flow-modal-header p {
+  margin-top: 0.25rem;
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+}
+
+.cash-flow-plan-type {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.35rem;
+  margin-bottom: 1rem;
+  padding: 0.3rem;
+  border-radius: 0.75rem;
+  background: var(--primary-subtle);
+}
+
+.cash-flow-plan-type button {
+  min-height: 2.7rem;
+  border: 1px solid transparent;
+  border-radius: 0.6rem;
+  color: var(--text-secondary);
+  background: transparent;
+  font-weight: 600;
+}
+
+.cash-flow-plan-type button.is-active {
+  border-color: var(--primary-border);
+  color: var(--primary-text);
+  background: var(--surface);
+}
+
+.cash-flow-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.8rem;
+}
+
+.cash-flow-field {
+  display: grid;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.cash-flow-field-wide {
+  grid-column: 1 / -1;
+}
+
+.cash-flow-field > span {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.cash-flow-field input,
+.cash-flow-field select,
+.cash-flow-money-input {
+  width: 100%;
+  min-width: 0;
+  min-height: 2.9rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 0.7rem;
+  color: var(--text-primary);
+  background: var(--surface);
+}
+
+.cash-flow-field input,
+.cash-flow-field select {
+  padding: 0.65rem 0.75rem;
+}
+
+.cash-flow-money-input {
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+}
+
+.cash-flow-money-input input {
+  min-height: calc(2.9rem - 2px);
+  border: 0;
+  border-radius: 0;
+}
+
+.cash-flow-money-input span {
+  padding: 0 0.75rem;
+  color: var(--text-secondary);
+}
+
+.cash-flow-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  margin-top: 1.1rem;
+}
+
+.dark .cash-flow-page-header,
+.dark .cash-flow-controls,
+.dark .cash-flow-summary,
+.dark .cash-flow-scenario-section,
+.dark .cash-flow-chart-section,
+.dark .cash-flow-average-section,
+.dark .cash-flow-plan-section,
+.dark .cash-flow-projection-section,
+.dark .cash-flow-method-note,
+.dark .cash-flow-modal {
+  box-shadow: none;
+}
+
+@media (max-width: 980px) {
+  .cash-flow-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .cash-flow-summary > div:nth-child(3) {
+    border-left: 0;
+    border-top: 1px solid var(--border);
+  }
+
+  .cash-flow-summary > div:nth-child(4) {
+    border-top: 1px solid var(--border);
+  }
+
+  .cash-flow-main-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 700px) {
+  .cash-flow-page {
+    gap: 0.75rem;
+  }
+
+  .cash-flow-page-header {
+    align-items: stretch;
+    padding: 1rem;
+  }
+
+  .cash-flow-page-header,
+  .cash-flow-controls,
+  .cash-flow-section-heading {
+    flex-direction: column;
+  }
+
+  .cash-flow-page-header > button,
+  .cash-flow-plan-section .cash-flow-section-heading > button {
+    width: 100%;
+  }
+
+  .cash-flow-controls {
+    align-items: stretch;
+  }
+
+  .cash-flow-horizon-options {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .cash-flow-horizon-options button {
+    padding-inline: 0.25rem;
+    white-space: nowrap;
+  }
+
+  .cash-flow-summary > div {
+    min-height: 6.5rem;
+    padding: 0.85rem;
+  }
+
+  .cash-flow-summary strong {
+    font-size: 1rem;
+  }
+
+  .cash-flow-scenario-section,
+  .cash-flow-chart-section,
+  .cash-flow-average-section,
+  .cash-flow-plan-section,
+  .cash-flow-projection-section {
+    padding: 1rem;
+  }
+
+  .cash-flow-section-heading {
+    gap: 0.6rem;
+  }
+
+  .cash-flow-trend {
+    align-self: flex-start;
+    white-space: normal;
+  }
+
+  .cash-flow-scenario-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .cash-flow-scenario-card {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+  }
+
+  .cash-flow-scenario-card > strong,
+  .cash-flow-scenario-card > em {
+    grid-column: 1;
+  }
+
+  .cash-flow-scenario-card > small {
+    grid-column: 2;
+    grid-row: 1 / span 3;
+  }
+
+  .cash-flow-chart {
+    height: 16rem;
+  }
+
+  .cash-flow-average-table,
+  .cash-flow-projection-table {
+    overflow-x: auto;
+  }
+
+  .cash-flow-average-header,
+  .cash-flow-average-row {
+    min-width: 35rem;
+  }
+
+  .cash-flow-plan-item {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 0.65rem;
+  }
+
+  .cash-flow-plan-amount {
+    grid-column: 2 / -1;
+    grid-row: 2;
+  }
+
+  .cash-flow-plan-actions {
+    grid-column: 3;
+    grid-row: 1;
+  }
+
+  .cash-flow-projection-header,
+  .cash-flow-projection-row {
+    min-width: 45rem;
+  }
+
+  .cash-flow-form-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .cash-flow-field-wide {
+    grid-column: auto;
+  }
+}
+
+@media (max-width: 430px) {
+  .cash-flow-summary {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .cash-flow-summary > div + div,
+  .cash-flow-summary > div:nth-child(3) {
+    border-top: 1px solid var(--border);
+    border-left: 0;
+  }
+
+  .cash-flow-summary > div {
+    min-height: auto;
+  }
+
+  .cash-flow-horizon-options {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .cash-flow-planned-summary {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .cash-flow-plan-item {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .cash-flow-plan-actions {
+    grid-column: 1 / -1;
+    grid-row: 3;
+    justify-content: flex-end;
+  }
+
+  .cash-flow-plan-amount {
+    grid-column: 2;
+  }
+
+  .cash-flow-method-note {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .cash-flow-method-note > svg {
+    display: none;
+  }
+
+  .cash-flow-modal {
+    align-self: end;
+    width: calc(100% + 2rem);
+    max-height: 92vh;
+    margin: -1rem;
+    border-radius: 1.1rem 1.1rem 0 0;
+    padding-bottom: calc(1.2rem + env(safe-area-inset-bottom));
+  }
+
+  .cash-flow-modal-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

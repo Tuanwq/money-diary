@@ -15,6 +15,8 @@ type ShiftFiltersProps = {
   calendarDays: HubCalendarDay[];
   resultCount: number;
   resultIncome: number;
+  resultOperatingCost: number;
+  resultActualProfit: number;
   resultOrders: number;
   resultHours: number;
   rangeLabel: string;
@@ -162,6 +164,8 @@ export function ShiftFilters(props: ShiftFiltersProps) {
             hubLabel={hubLabel}
             count={props.resultCount}
             income={props.resultIncome}
+            operatingCost={props.resultOperatingCost}
+            actualProfit={props.resultActualProfit}
             orders={props.resultOrders}
             hours={props.resultHours}
           />

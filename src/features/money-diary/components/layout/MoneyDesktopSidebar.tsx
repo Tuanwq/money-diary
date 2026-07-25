@@ -10,6 +10,9 @@ import {
   PackagePlus,
   RefreshCcw,
   Settings,
+  TrendingUp,
+  WalletCards,
+  Workflow,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { RefObject } from "react";
@@ -83,6 +86,24 @@ export function MoneyDesktopSidebar({
       icon: PackagePlus,
       label: "Thu nhập",
       onClick: () => navigateTo("hub"),
+    },
+    {
+      active: currentPage === "accounts",
+      icon: WalletCards,
+      label: "Sổ tài khoản",
+      onClick: () => navigateTo("accounts"),
+    },
+    {
+      active: currentPage === "automation",
+      icon: Workflow,
+      label: "Tự động hóa",
+      onClick: () => navigateTo("automation"),
+    },
+    {
+      active: currentPage === "cashFlow",
+      icon: TrendingUp,
+      label: "Dự báo dòng tiền",
+      onClick: () => navigateTo("cashFlow"),
     },
     {
       active: ["balanceChecks", "expenses", "history"].includes(currentPage),

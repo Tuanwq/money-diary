@@ -1,6 +1,10 @@
 import type { Dispatch, SetStateAction } from "react";
 import type { Mood } from "../../../../types";
-import type { HubType, StreakDayStatus } from "../../../../types/hub";
+import type {
+  HubOperatingCostCategory,
+  HubType,
+  StreakDayStatus,
+} from "../../../../types/hub";
 
 export type HubTab = "add" | "calculator" | "dashboard" | "list" | "settings";
 
@@ -9,6 +13,13 @@ export type HubJoinForm = {
   type: string;
   quantity: string;
   price: string;
+};
+
+export type HubOperatingCostForm = {
+  id: string;
+  category: HubOperatingCostCategory;
+  amount: string;
+  note: string;
 };
 
 export type HubForm = {
@@ -20,6 +31,7 @@ export type HubForm = {
   isWellDone: boolean;
   isHubShort: boolean;
   extraIncome: string;
+  operatingCosts: HubOperatingCostForm[];
   receivedMoney: string;
   bonusMoney: string;
   mood: Mood;
