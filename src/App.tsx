@@ -3586,6 +3586,9 @@ if (route.kind === "daymark") {
               entries={entries}
               expenses={expenses}
               balanceChecks={balanceChecks}
+              cashFlowCurrentBalance={cashFlowCurrentBalance}
+              cashFlowGoalCommitments={cashFlowGoalCommitments}
+              cashFlowPlans={cashFlowPlans}
               cloudLoadError={cloudLoadError}
               isCloudLoading={isCloudLoading}
               isSelectedToday={isSelectedToday}
@@ -3609,7 +3612,7 @@ if (route.kind === "daymark") {
               dataWarnings={dataWarnings}
               goToTodayEntryForm={goToTodayEntryForm}
               goToTodayBalanceCheck={goToTodayBalanceCheck}
-              openCloseDay={() => openCloseDay(selectedDate)}
+              openCloseDay={(date) => openCloseDay(date ?? selectedDate)}
               onDataWarningAction={handleDataWarningAction}
               selectedActualIncome={selectedActualIncome}
               selectedEntry={selectedEntry}

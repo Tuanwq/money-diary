@@ -4,19 +4,18 @@ import {
   CalendarClock,
   CalendarRange,
   ChartNoAxesCombined,
-  CheckCircle2,
-  CircleDollarSign,
-  Clock3,
   Cloud,
   FileText,
+  Gauge,
+  LayoutDashboard,
   Lightbulb,
-  ListChecks,
   LoaderCircle,
   MessageCircleQuestion,
   ReceiptText,
   ShieldAlert,
+  SlidersHorizontal,
   Sparkles,
-  TrendingUp,
+  Truck,
   WandSparkles,
   X,
 } from "lucide-react";
@@ -27,6 +26,7 @@ import type {
   DailyEntry,
   ExpenseEntry,
   Goals,
+  Page,
 } from "../types";
 import { FunctionsHttpError } from "@supabase/supabase-js";
 import {
@@ -37,9 +37,10 @@ import {
 import { supabase } from "../lib/supabase";
 import type { HubEntry, HubSettings } from "../types/hub";
 import {
-  answerAiFinanceQuestion,
+  answerAiFinanceQuestionDetailed,
   buildAiAutomationInsights,
   type AiAutomationInsights,
+  type AiFinanceReportSection,
 } from "../utils/aiAutomation";
 import {
   AI_FINANCE_RANGE_OPTIONS,
@@ -47,6 +48,16 @@ import {
   type AiFinanceRange,
 } from "../utils/aiFinanceAnalysis";
 import { formatDateShort } from "../utils/date";
+import type {
+  CashFlowGoalCommitment,
+  CashFlowPlan,
+} from "../features/cash-flow/cashFlowForecastModel";
+import {
+  FinanceActionPlanView,
+  FinanceAnomalyView,
+  FinanceComparisonView,
+  FinanceSimulationView,
+} from "./FinancialDecisionViews";
 import "./AiFinanceInsight.css";
 
 export type AiFinanceInsightProps = {
@@ -54,12 +65,22 @@ export type AiFinanceInsightProps = {
   expenses: ExpenseEntry[];
   balanceChecks: BalanceCheckEntry[];
   goals: Goals;
+  cashFlowCurrentBalance?: number;
+  cashFlowGoalCommitments?: CashFlowGoalCommitment[];
+  cashFlowPlans?: CashFlowPlan[];
   hideTrigger?: boolean;
   initialOpen?: boolean;
+  onNavigate?: (page: Page, date?: string) => void;
   today: string;
 };
 
-type AiInsightView = "analysis" | "report" | "plan" | "anomalies" | "qa";
+type AiInsightView =
+  | "analysis"
+  | "report"
+  | "plan"
+  | "anomalies"
+  | "simulation"
+  | "qa";
 type ReportMode = "week" | "month";
 
 const AI_INSIGHT_VIEWS: Array<{
@@ -67,22 +88,24 @@ const AI_INSIGHT_VIEWS: Array<{
   label: string;
   value: AiInsightView;
 }> = [
-  { icon: ChartNoAxesCombined, label: "Phân tích", value: "analysis" },
-  { icon: FileText, label: "Báo cáo", value: "report" },
-  { icon: CalendarClock, label: "Kế hoạch mai", value: "plan" },
+  { icon: ChartNoAxesCombined, label: "So sánh", value: "analysis" },
   { icon: ShieldAlert, label: "Bất thường", value: "anomalies" },
+  { icon: CalendarClock, label: "Kế hoạch", value: "plan" },
+  { icon: SlidersHorizontal, label: "Mô phỏng", value: "simulation" },
+  { icon: FileText, label: "Báo cáo", value: "report" },
   { icon: MessageCircleQuestion, label: "Hỏi đáp", value: "qa" },
 ];
 
-const METRIC_ICONS = [
-  CircleDollarSign,
-  TrendingUp,
-  ReceiptText,
-  ListChecks,
-  Clock3,
-  CalendarRange,
-  Sparkles,
-] as const;
+const AI_REPORT_SECTION_ICONS: Record<
+  AiFinanceReportSection["id"],
+  LucideIcon
+> = {
+  expense: ReceiptText,
+  hub: Truck,
+  overview: LayoutDashboard,
+  performance: Gauge,
+  recommendation: Lightbulb,
+};
 
 function loadLocalJson<T>(key: string, fallback: T): T {
   try {
@@ -130,12 +153,16 @@ async function getFunctionErrorMessage(error: unknown) {
 }
 
 export function AiFinanceInsight({
+  cashFlowCurrentBalance,
+  cashFlowGoalCommitments = [],
+  cashFlowPlans = [],
   entries,
   expenses,
   balanceChecks,
   goals,
   hideTrigger = false,
   initialOpen = false,
+  onNavigate,
   today,
 }: AiFinanceInsightProps) {
   const [isOpen, setIsOpen] = useState(initialOpen);
@@ -196,12 +223,17 @@ export function AiFinanceInsight({
       today,
     ]
   );
-  const localQuestionAnswer = useMemo(() => {
+  const localQuestionResult = useMemo(() => {
     const trimmedQuestion = question.trim();
 
-    if (!trimmedQuestion) return "";
+    if (!trimmedQuestion) {
+      return {
+        answer: "",
+        evidence: [] as string[],
+      };
+    }
 
-    return answerAiFinanceQuestion({
+    return answerAiFinanceQuestionDetailed({
       question: trimmedQuestion,
       entries,
       expenses,
@@ -223,6 +255,10 @@ export function AiFinanceInsight({
   ]);
   const selectedReport =
     reportMode === "week" ? automation.weeklyReport : automation.monthlyReport;
+  const selectedReportSections =
+    reportMode === "week"
+      ? automation.weeklyReportSections
+      : automation.monthlyReportSections;
 
   useEffect(() => {
     function openFromMoneyNavigation() {
@@ -270,6 +306,7 @@ export function AiFinanceInsight({
         question: question.trim(),
         analysis,
         automation,
+        verifiedAnswer: localQuestionResult,
       },
     });
 
@@ -298,6 +335,11 @@ export function AiFinanceInsight({
     setView(nextView);
     setRealAiText("");
     setRealAiError("");
+  }
+
+  function navigateFromInsight(page: Page, date?: string) {
+    setIsOpen(false);
+    onNavigate?.(page, date);
   }
 
   return (
@@ -334,11 +376,7 @@ export function AiFinanceInsight({
               </div>
               <div className="ai-finance-header-copy">
                 <span>{analysis.rangeLabel}</span>
-                <h2 id="ai-finance-title">
-                  {view === "analysis"
-                    ? analysis.title
-                    : "Trung tâm AI tài chính"}
-                </h2>
+                <h2 id="ai-finance-title">{analysis.title}</h2>
                 <p>
                   <CalendarRange aria-hidden="true" size={14} />
                   {formatDateShort(analysis.fromDate)} -{" "}
@@ -393,84 +431,30 @@ export function AiFinanceInsight({
                 ))}
               </div>
 
-              <button
-                className="ai-finance-run-button"
-                type="button"
-                onClick={runRealAiAnalysis}
-                disabled={isRealAiLoading}
-              >
-                {isRealAiLoading ? (
-                  <LoaderCircle
-                    aria-hidden="true"
-                    className="is-spinning"
-                    size={17}
-                  />
-                ) : (
-                  <WandSparkles aria-hidden="true" size={17} />
-                )}
-                {isRealAiLoading ? "Đang phân tích" : "Phân tích với AI"}
-              </button>
+              <div className="ai-finance-toolbar-actions">
+                <button
+                  className="ai-finance-run-button"
+                  type="button"
+                  onClick={runRealAiAnalysis}
+                  disabled={isRealAiLoading}
+                >
+                  {isRealAiLoading ? (
+                    <LoaderCircle
+                      aria-hidden="true"
+                      className="is-spinning"
+                      size={17}
+                    />
+                  ) : (
+                    <WandSparkles aria-hidden="true" size={17} />
+                  )}
+                  {isRealAiLoading ? "Đang phân tích" : "Phân tích với AI"}
+                </button>
+              </div>
             </div>
 
             <div className="ai-finance-content">
               {view === "analysis" && (
-                <div className="ai-finance-analysis-view">
-                  <section className="ai-finance-summary-panel">
-                    <span aria-hidden="true">
-                      <Sparkles size={19} />
-                    </span>
-                    <div>
-                      <small>Tóm tắt kỳ đang xem</small>
-                      <p>{analysis.summary}</p>
-                    </div>
-                  </section>
-
-                  <section
-                    className="ai-finance-metric-grid"
-                    aria-label="Chỉ số tài chính"
-                  >
-                    {analysis.metrics.map((metric, index) => {
-                      const Icon = METRIC_ICONS[index % METRIC_ICONS.length];
-
-                      return (
-                        <article
-                          key={metric.label}
-                          className="ai-finance-metric-card"
-                        >
-                          <div>
-                            <span aria-hidden="true">
-                              <Icon size={16} />
-                            </span>
-                            <small>{metric.label}</small>
-                          </div>
-                          <strong>{metric.value}</strong>
-                          <p>{metric.detail}</p>
-                        </article>
-                      );
-                    })}
-                  </section>
-
-                  <section className="ai-finance-insight-grid">
-                    <InsightList
-                      icon={CheckCircle2}
-                      title="Điểm tốt"
-                      items={analysis.highlights}
-                      tone="positive"
-                    />
-                    <InsightList
-                      icon={AlertTriangle}
-                      title="Cần chú ý"
-                      items={analysis.risks}
-                      tone="warning"
-                    />
-                    <InsightList
-                      icon={Lightbulb}
-                      title="Nên làm tiếp"
-                      items={analysis.actions}
-                      tone="action"
-                    />
-                  </section>
-                </div>
+                <FinanceComparisonView analysis={analysis} />
               )}
 
               {view === "report" && (
@@ -478,35 +462,47 @@ export function AiFinanceInsight({
                   automation={automation}
                   reportMode={reportMode}
                   selectedReport={selectedReport}
+                  selectedReportSections={selectedReportSections}
                   setReportMode={setReportMode}
                 />
               )}
 
               {view === "plan" && (
-                <section className="ai-finance-single-view">
-                  <InsightList
-                    icon={CalendarClock}
-                    title="Kế hoạch ngày mai"
-                    items={automation.tomorrowPlan}
-                    tone="action"
-                  />
-                </section>
+                <FinanceActionPlanView
+                  items={analysis.actionPlan}
+                  onNavigate={onNavigate ? navigateFromInsight : undefined}
+                />
               )}
 
               {view === "anomalies" && (
-                <section className="ai-finance-single-view">
-                  <InsightList
-                    icon={ShieldAlert}
-                    title="Bất thường cần kiểm tra"
-                    items={automation.anomalies}
-                    tone="warning"
-                  />
-                </section>
+                <FinanceAnomalyView
+                  anomalies={analysis.anomalies}
+                  onNavigate={onNavigate ? navigateFromInsight : undefined}
+                />
+              )}
+
+              {view === "simulation" && (
+                <FinanceSimulationView
+                  currentBalance={
+                    cashFlowCurrentBalance ??
+                    goals.bigGoalSaved +
+                      analysis.facts.totalIncome -
+                      analysis.facts.totalExpense
+                  }
+                  entries={entries}
+                  expenses={expenses}
+                  goalCommitments={cashFlowGoalCommitments}
+                  goals={goals}
+                  onNavigate={onNavigate ? navigateFromInsight : undefined}
+                  plans={cashFlowPlans}
+                  today={today}
+                />
               )}
 
               {view === "qa" && (
                 <AiQuestionAnswerView
-                  answer={localQuestionAnswer}
+                  answer={localQuestionResult.answer}
+                  evidence={localQuestionResult.evidence}
                   question={question}
                   setQuestion={setQuestion}
                   suggestedQuestions={automation.suggestedQuestions}
@@ -565,11 +561,13 @@ function AiReportView({
   automation,
   reportMode,
   selectedReport,
+  selectedReportSections,
   setReportMode,
 }: {
   automation: AiAutomationInsights;
   reportMode: ReportMode;
   selectedReport: string;
+  selectedReportSections: AiFinanceReportSection[];
   setReportMode: (mode: ReportMode) => void;
 }) {
   return (
@@ -605,9 +603,37 @@ function AiReportView({
         </div>
       </header>
 
-      <div className="ai-finance-report-copy">
-        {selectedReport}
-      </div>
+      {selectedReportSections.length > 0 ? (
+        <div className="ai-finance-report-document">
+          {selectedReportSections.map((section) => {
+            const Icon = AI_REPORT_SECTION_ICONS[section.id];
+
+            return (
+              <section
+                className={`ai-finance-report-section is-${section.id}`}
+                key={section.id}
+              >
+                <header>
+                  <span aria-hidden="true">
+                    <Icon size={17} />
+                  </span>
+                  <h4>{section.title}</h4>
+                </header>
+                <div>
+                  {section.items.map((item) => (
+                    <p key={item}>
+                      <span aria-hidden="true" />
+                      {item}
+                    </p>
+                  ))}
+                </div>
+              </section>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="ai-finance-report-copy">{selectedReport}</div>
+      )}
 
       <div className="ai-finance-report-insights">
         <InsightList
@@ -629,11 +655,13 @@ function AiReportView({
 
 function AiQuestionAnswerView({
   answer,
+  evidence,
   question,
   setQuestion,
   suggestedQuestions,
 }: {
   answer: string;
+  evidence: string[];
   question: string;
   setQuestion: (value: string) => void;
   suggestedQuestions: string[];
@@ -675,14 +703,24 @@ function AiQuestionAnswerView({
       </label>
 
       {answer && (
-        <div className="ai-finance-local-answer">
-          <span aria-hidden="true">
-            <Bot size={18} />
-          </span>
-          <p>
-          {answer}
-          </p>
-        </div>
+        <>
+          <div className="ai-finance-local-answer">
+            <span aria-hidden="true">
+              <Bot size={18} />
+            </span>
+            <p>{answer}</p>
+          </div>
+          {evidence.length > 0 && (
+            <div className="ai-finance-answer-evidence">
+              <strong>Nguồn kiểm chứng trong app</strong>
+              <div>
+                {evidence.map((item) => (
+                  <span key={item}>{item}</span>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
       )}
     </section>
   );

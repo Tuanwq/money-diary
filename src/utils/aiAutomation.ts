@@ -27,10 +27,23 @@ import { formatMoney } from "./money";
 
 export type AiAutomationInsights = {
   weeklyReport: string;
+  weeklyReportSections: AiFinanceReportSection[];
   monthlyReport: string;
+  monthlyReportSections: AiFinanceReportSection[];
   tomorrowPlan: string[];
   anomalies: string[];
   suggestedQuestions: string[];
+};
+
+export type AiFinanceReportSection = {
+  id: "overview" | "performance" | "hub" | "expense" | "recommendation";
+  items: string[];
+  title: string;
+};
+
+export type AiFinanceQuestionResult = {
+  answer: string;
+  evidence: string[];
 };
 
 type AiAutomationOptions = {
@@ -222,8 +235,7 @@ function buildReport({
   });
   const topOtherExpense = otherExpenseBreakdown[0];
   const needPerDay = getNeedPerDay({ entries, expenses, goals });
-  const lines = [
-    `${title} (${fromDate} đến ${toDate})`,
+  const overviewItems = [
     `Thu ${formatMoney(totals.income)}, chi ${formatMoney(
       totals.expense
     )}, ròng ${formatMoney(totals.net)}.`,
@@ -231,21 +243,30 @@ function buildReport({
     `Trung bình ròng ${formatMoney(
       averageNet
     )}/ngày trên ${activeDays}/${rows.length} ngày có dữ liệu.`,
+  ];
+  const performanceItems = [
     `Tiền/giờ ${incomePerHour > 0 ? formatMoney(incomePerHour) : "chưa có"} · ${
       totals.hours
     } giờ · ${totals.orders} đơn.`,
   ];
+  const hubItems: string[] = [];
+  const expenseItems: string[] = [];
+  const recommendationItems: string[] = [];
 
   if (best) {
-    lines.push(`Ngày tốt nhất: ${best.date}, ròng ${formatMoney(best.net)}.`);
+    performanceItems.push(
+      `Ngày tốt nhất: ${best.date}, ròng ${formatMoney(best.net)}.`
+    );
   }
 
   if (worst) {
-    lines.push(`Ngày yếu nhất: ${worst.date}, ròng ${formatMoney(worst.net)}.`);
+    performanceItems.push(
+      `Ngày yếu nhất: ${worst.date}, ròng ${formatMoney(worst.net)}.`
+    );
   }
 
   if (hubSummary.shifts > 0) {
-    lines.push(
+    hubItems.push(
       `Hub: ${hubSummary.shifts} ca, ${hubSummary.orders} đơn, tổng thu ${formatMoney(
         hubSummary.grossIncome
       )}, chi phí vận hành ${formatMoney(
@@ -255,7 +276,7 @@ function buildReport({
   }
 
   if (bestHub) {
-    lines.push(
+    hubItems.push(
       `Hub có lợi nhuận tốt nhất: ${bestHub.label}, ${formatMoney(
         bestHub.actualProfit
       )}.`
@@ -263,7 +284,7 @@ function buildReport({
   }
 
   if (bestShift) {
-    lines.push(
+    hubItems.push(
       `Ca hiệu quả nhất: ${bestShift.label}, ${formatMoney(
         bestShift.actualProfitPerHour
       )} lợi nhuận/giờ.`
@@ -271,7 +292,7 @@ function buildReport({
   }
 
   if (topOtherExpense) {
-    lines.push(
+    expenseItems.push(
       `Khoản khác lớn nhất: ${topOtherExpense.label}, ${formatMoney(
         topOtherExpense.total
       )} qua ${topOtherExpense.count} lần ghi.`
@@ -279,16 +300,59 @@ function buildReport({
   }
 
   if (averageNet < needPerDay && needPerDay > 0) {
-    lines.push(
-      `Khuyến nghị: cần tăng thêm khoảng ${formatMoney(
+    recommendationItems.push(
+      `Cần tăng thêm khoảng ${formatMoney(
         needPerDay - averageNet
       )}/ngày hoặc giảm chi tương ứng để bám mục tiêu lớn.`
     );
   } else {
-    lines.push("Khuyến nghị: giữ nhịp nhập dữ liệu đều và ưu tiên ca có tiền/giờ tốt.");
+    recommendationItems.push(
+      "Giữ nhịp nhập dữ liệu đều và ưu tiên ca có tiền/giờ tốt."
+    );
   }
 
-  return lines.join("\n");
+  const sections = ([
+    {
+      id: "overview",
+      items: overviewItems,
+      title: "Tổng quan dòng tiền",
+    },
+    {
+      id: "performance",
+      items: performanceItems,
+      title: "Hiệu suất công việc",
+    },
+    {
+      id: "hub",
+      items: hubItems,
+      title: "Hub và ca làm",
+    },
+    {
+      id: "expense",
+      items: expenseItems,
+      title: "Chi tiêu nổi bật",
+    },
+    {
+      id: "recommendation",
+      items: recommendationItems,
+      title: "Khuyến nghị",
+    },
+  ] satisfies AiFinanceReportSection[]).filter(
+    (section) => section.items.length > 0
+  );
+  const reportTitle = `${title} (${fromDate} đến ${toDate})`;
+  const text = [
+    reportTitle,
+    ...sections.flatMap((section) => [
+      section.title,
+      ...section.items,
+    ]),
+  ].join("\n");
+
+  return {
+    sections,
+    text,
+  };
 }
 
 function buildTomorrowPlan(options: AiAutomationOptions) {
@@ -458,24 +522,28 @@ export function buildAiAutomationInsights(
   const previousWeek = getWeekRangeFromDate(options.today, -1);
   const thisMonth = getMonthRangeFromDate(options.today);
   const previousMonth = getMonthRangeFromDate(options.today, -1);
+  const weeklyReport = buildReport({
+    ...options,
+    title: "Báo cáo tuần này",
+    fromDate: thisWeek.fromDate,
+    toDate: thisWeek.toDate,
+    previousFromDate: previousWeek.fromDate,
+    previousToDate: previousWeek.toDate,
+  });
+  const monthlyReport = buildReport({
+    ...options,
+    title: "Báo cáo tháng này",
+    fromDate: thisMonth.fromDate,
+    toDate: thisMonth.toDate,
+    previousFromDate: previousMonth.fromDate,
+    previousToDate: previousMonth.toDate,
+  });
 
   return {
-    weeklyReport: buildReport({
-      ...options,
-      title: "Báo cáo tuần này",
-      fromDate: thisWeek.fromDate,
-      toDate: thisWeek.toDate,
-      previousFromDate: previousWeek.fromDate,
-      previousToDate: previousWeek.toDate,
-    }),
-    monthlyReport: buildReport({
-      ...options,
-      title: "Báo cáo tháng này",
-      fromDate: thisMonth.fromDate,
-      toDate: thisMonth.toDate,
-      previousFromDate: previousMonth.fromDate,
-      previousToDate: previousMonth.toDate,
-    }),
+    weeklyReport: weeklyReport.text,
+    weeklyReportSections: weeklyReport.sections,
+    monthlyReport: monthlyReport.text,
+    monthlyReportSections: monthlyReport.sections,
     tomorrowPlan: buildTomorrowPlan(options),
     anomalies: buildAnomalies(options),
     suggestedQuestions: [
@@ -496,10 +564,10 @@ function normalizeQuestion(question: string) {
     .replace(/đ/g, "d");
 }
 
-export function answerAiFinanceQuestion({
+export function answerAiFinanceQuestionDetailed({
   question,
   ...options
-}: AiAutomationOptions & { question: string }) {
+}: AiAutomationOptions & { question: string }): AiFinanceQuestionResult {
   const normalized = normalizeQuestion(question);
   const hubRows = buildHubAnalyticsRows(
     options.hubEntries ?? [],
@@ -517,12 +585,22 @@ export function answerAiFinanceQuestion({
     const bestHub = groupHubPerformance(rows, "hub", "actualProfit")[0];
 
     return bestHub
-      ? `Tuần này ${bestHub.label} kiếm tốt nhất: ${formatMoney(
-          bestHub.actualProfit
-        )}, ${bestHub.shifts} ca, ${bestHub.orders} đơn, trung bình ${formatMoney(
-          bestHub.actualProfitPerHour
-        )} lợi nhuận/giờ.`
-      : "Tuần này chưa có dữ liệu Hub đủ để xếp hạng.";
+      ? {
+          answer: `Tuần này ${bestHub.label} kiếm tốt nhất: ${formatMoney(
+            bestHub.actualProfit
+          )}, ${bestHub.shifts} ca, ${bestHub.orders} đơn, trung bình ${formatMoney(
+            bestHub.actualProfitPerHour
+          )} lợi nhuận/giờ.`,
+          evidence: [
+            `Phạm vi: ${thisWeek.fromDate} - ${thisWeek.toDate}`,
+            `${bestHub.shifts} ca · ${bestHub.orders} đơn`,
+            `Lợi nhuận thực: ${formatMoney(bestHub.actualProfit)}`,
+          ],
+        }
+      : {
+          answer: "Tuần này chưa có dữ liệu Hub đủ để xếp hạng.",
+          evidence: [`Phạm vi: ${thisWeek.fromDate} - ${thisWeek.toDate}`],
+        };
   }
 
   if (normalized.includes("ca") && normalized.includes("hieu qua")) {
@@ -538,12 +616,28 @@ export function answerAiFinanceQuestion({
     )[0];
 
     return bestShift
-      ? `Ca hiệu quả nhất gần đây là ${bestShift.label}: ${formatMoney(
-          bestShift.actualProfitPerHour
-        )} lợi nhuận/giờ, ${bestShift.shifts} ca, lợi nhuận thực ${formatMoney(
-          bestShift.actualProfit
-        )}.`
-      : "Chưa có đủ dữ liệu ca Hub để so sánh lợi nhuận/giờ.";
+      ? {
+          answer: `Ca hiệu quả nhất gần đây là ${bestShift.label}: ${formatMoney(
+            bestShift.actualProfitPerHour
+          )} lợi nhuận/giờ, ${bestShift.shifts} ca, lợi nhuận thực ${formatMoney(
+            bestShift.actualProfit
+          )}.`,
+          evidence: [
+            `Phạm vi: ${addDaysToDateString(options.today, -29)} - ${
+              options.today
+            }`,
+            `${bestShift.shifts} ca được so sánh`,
+            `Lợi nhuận thực: ${formatMoney(bestShift.actualProfit)}`,
+          ],
+        }
+      : {
+          answer: "Chưa có đủ dữ liệu ca Hub để so sánh lợi nhuận/giờ.",
+          evidence: [
+            `Phạm vi: ${addDaysToDateString(options.today, -29)} - ${
+              options.today
+            }`,
+          ],
+        };
   }
 
   if (normalized.includes("cham") || normalized.includes("deadline")) {
@@ -557,17 +651,25 @@ export function answerAiFinanceQuestion({
     const averageNet = getAverage(totals.net, monthRows.length);
     const needPerDay = getNeedPerDay(options);
 
-    return averageNet < needPerDay
-      ? `Tháng này đang chậm vì trung bình ròng ${formatMoney(
-          averageNet
-        )}/ngày thấp hơn nhịp cần ${formatMoney(
-          needPerDay
-        )}/ngày. Cần tăng thêm khoảng ${formatMoney(
-          needPerDay - averageNet
-        )}/ngày hoặc giảm chi tương ứng.`
-      : `Tháng này chưa chậm mục tiêu theo nhịp hiện tại: trung bình ròng ${formatMoney(
-          averageNet
-        )}/ngày so với nhịp cần ${formatMoney(needPerDay)}/ngày.`;
+    return {
+      answer:
+        averageNet < needPerDay
+          ? `Tháng này đang chậm vì trung bình ròng ${formatMoney(
+              averageNet
+            )}/ngày thấp hơn nhịp cần ${formatMoney(
+              needPerDay
+            )}/ngày. Cần tăng thêm khoảng ${formatMoney(
+              needPerDay - averageNet
+            )}/ngày hoặc giảm chi tương ứng.`
+          : `Tháng này chưa chậm mục tiêu theo nhịp hiện tại: trung bình ròng ${formatMoney(
+              averageNet
+            )}/ngày so với nhịp cần ${formatMoney(needPerDay)}/ngày.`,
+      evidence: [
+        `Phạm vi: ${thisMonth.fromDate} - ${thisMonth.toDate}`,
+        `Ròng trung bình: ${formatMoney(averageNet)}/ngày`,
+        `Nhịp cần: ${formatMoney(needPerDay)}/ngày`,
+      ],
+    };
   }
 
   if (normalized.includes("chi") || normalized.includes("tieu")) {
@@ -591,18 +693,39 @@ export function answerAiFinanceQuestion({
           )}.`
         : "";
 
-    return `7 ngày gần nhất chi trung bình ${formatMoney(
-      averageExpense
-    )}/ngày. Ngày chi cao nhất là ${highestExpenseDay.date}: ${formatMoney(
-      highestExpenseDay.expense
-    )}.${topOtherText}`;
+    return {
+      answer: `7 ngày gần nhất chi trung bình ${formatMoney(
+        averageExpense
+      )}/ngày. Ngày chi cao nhất là ${highestExpenseDay.date}: ${formatMoney(
+        highestExpenseDay.expense
+      )}.${topOtherText}`,
+      evidence: [
+        `Phạm vi: ${addDaysToDateString(options.today, -6)} - ${
+          options.today
+        }`,
+        `Tổng chi: ${formatMoney(totals.expense)}`,
+        `Ngày chi cao nhất: ${highestExpenseDay.date}`,
+      ],
+    };
   }
 
   const insights = buildAiAutomationInsights(options);
 
-  return [
-    "Mình chưa nhận diện được đúng ý câu hỏi, đây là tóm tắt nhanh:",
-    insights.weeklyReport.split("\n").slice(1, 4).join("\n"),
-    "Bạn có thể hỏi: Tuần này Hub nào kiếm tốt nhất? Ca nào hiệu quả nhất gần đây? Vì sao tháng này chậm mục tiêu?",
-  ].join("\n");
+  return {
+    answer: [
+      "Mình chưa nhận diện được đúng ý câu hỏi, đây là tóm tắt nhanh:",
+      insights.weeklyReport.split("\n").slice(1, 4).join("\n"),
+      "Bạn có thể hỏi: Tuần này Hub nào kiếm tốt nhất? Ca nào hiệu quả nhất gần đây? Vì sao tháng này chậm mục tiêu?",
+    ].join("\n"),
+    evidence: [
+      `Báo cáo tuần: ${thisWeek.fromDate} - ${thisWeek.toDate}`,
+      "Kết quả lấy từ nhật ký, chi tiêu, kiểm kê và ca Hub đã lưu.",
+    ],
+  };
+}
+
+export function answerAiFinanceQuestion(
+  options: AiAutomationOptions & { question: string }
+) {
+  return answerAiFinanceQuestionDetailed(options).answer;
 }

@@ -3,6 +3,7 @@ import type {
   DailyEntry,
   ExpenseEntry,
   Goals,
+  Page,
 } from "../types";
 import { addDaysToDateString, formatDateShort, toDate } from "./date";
 import {
@@ -20,9 +21,52 @@ import { formatMoney } from "./money";
 export type AiFinanceRange = "today" | "last7" | "last30" | "thisMonth";
 
 export type AiFinanceMetric = {
+  key:
+    | "net"
+    | "workIncome"
+    | "expense"
+    | "topOtherExpense"
+    | "incomePerHour"
+    | "activeDays"
+    | "requiredPace";
   label: string;
   value: string;
   detail: string;
+  currentValue: number;
+  previousValue: number;
+  changeValue: number;
+  changePercent: number | null;
+  changeLabel: string;
+  positiveWhenUp: boolean;
+  sources: AiFinanceSource[];
+};
+
+export type AiFinanceSource = {
+  label: string;
+  value: string;
+  amount: number;
+  share: number;
+  tone: "expense" | "income" | "neutral";
+};
+
+export type AiFinanceAnomaly = {
+  actionLabel: string;
+  actionPage: Page;
+  date?: string;
+  detail: string;
+  id: string;
+  severity: "danger" | "warning" | "info";
+  title: string;
+};
+
+export type AiFinanceActionPlanItem = {
+  actionLabel: string;
+  actionPage: Page;
+  detail: string;
+  id: string;
+  impact: string;
+  target: string;
+  title: string;
 };
 
 export type AiFinanceAnalysis = {
@@ -30,12 +74,32 @@ export type AiFinanceAnalysis = {
   rangeLabel: string;
   fromDate: string;
   toDate: string;
+  previousFromDate: string;
+  previousToDate: string;
   summary: string;
+  comparisonSummary: string;
   metrics: AiFinanceMetric[];
   otherExpenseBreakdown: OtherExpenseBreakdownItem[];
   highlights: string[];
   risks: string[];
   actions: string[];
+  anomalies: AiFinanceAnomaly[];
+  actionPlan: AiFinanceActionPlanItem[];
+  facts: {
+    activeDays: number;
+    averageExpense: number;
+    averageNet: number;
+    dayCount: number;
+    expenseRatio: number;
+    incomePerHour: number;
+    needPerDay: number;
+    orderCount: number;
+    previousNet: number;
+    totalExpense: number;
+    totalIncome: number;
+    totalNet: number;
+    workHours: number;
+  };
 };
 
 type BuildAiFinanceAnalysisOptions = {
@@ -264,6 +328,107 @@ function getTrendLabel(currentNet: number, previousNet: number) {
   return "gần như ngang kỳ trước";
 }
 
+function getChange(
+  currentValue: number,
+  previousValue: number,
+  formatter: (value: number) => string = formatMoney
+) {
+  const changeValue = currentValue - previousValue;
+  const changePercent =
+    previousValue === 0
+      ? null
+      : Math.round((changeValue / Math.abs(previousValue)) * 100);
+  const changeLabel =
+    previousValue === 0
+      ? currentValue === 0
+        ? "Không đổi"
+        : "Kỳ trước chưa có"
+      : Math.abs(changePercent ?? 0) <= 1
+        ? "Gần như không đổi"
+        : `${changeValue >= 0 ? "Tăng" : "Giảm"} ${formatter(
+            Math.abs(changeValue)
+          )} (${Math.abs(changePercent ?? 0)}%)`;
+
+  return {
+    changeLabel,
+    changePercent,
+    changeValue,
+  };
+}
+
+function buildMoneySource(
+  label: string,
+  amount: number,
+  total: number,
+  tone: AiFinanceSource["tone"]
+): AiFinanceSource {
+  return {
+    amount,
+    label,
+    share: total > 0 ? Math.round((Math.abs(amount) / total) * 100) : 0,
+    tone,
+    value: formatMoney(amount),
+  };
+}
+
+function buildMetric({
+  currentValue,
+  changeFormatter = formatMoney,
+  detail,
+  formatter = formatMoney,
+  key,
+  label,
+  positiveWhenUp = true,
+  previousValue,
+  sources,
+}: {
+  currentValue: number;
+  changeFormatter?: (value: number) => string;
+  detail: string;
+  formatter?: (value: number) => string;
+  key: AiFinanceMetric["key"];
+  label: string;
+  positiveWhenUp?: boolean;
+  previousValue: number;
+  sources: AiFinanceSource[];
+}): AiFinanceMetric {
+  return {
+    ...getChange(currentValue, previousValue, changeFormatter),
+    currentValue,
+    detail,
+    key,
+    label,
+    positiveWhenUp,
+    previousValue,
+    sources,
+    value: formatter(currentValue),
+  };
+}
+
+function getMealExpenseTotal(
+  expenses: ExpenseEntry[],
+  fromDate: string,
+  toDate: string
+) {
+  return expenses
+    .filter((expense) => expense.date >= fromDate && expense.date <= toDate)
+    .reduce(
+      (total, expense) =>
+        total + expense.breakfast + expense.lunch + expense.dinner,
+      0
+    );
+}
+
+function getOtherExpenseTotal(
+  expenses: ExpenseEntry[],
+  fromDate: string,
+  toDate: string
+) {
+  return expenses
+    .filter((expense) => expense.date >= fromDate && expense.date <= toDate)
+    .reduce((total, expense) => total + expense.other, 0);
+}
+
 export function buildAiFinanceAnalysis({
   entries,
   expenses,
@@ -293,9 +458,12 @@ export function buildAiFinanceAnalysis({
   const activeDays = rows.filter(
     (row) => row.totalIncome > 0 || row.expense > 0
   ).length;
+  const previousActiveDays = previousRows.filter(
+    (row) => row.totalIncome > 0 || row.expense > 0
+  ).length;
   const missingExpenseDays = rows.filter(
     (row) => row.totalIncome > 0 && row.expense === 0
-  ).length;
+  );
   const reachedDailyGoalDays = rows.filter((row) => {
     return goals.dailyIncome > 0 && row.mainIncome + row.bonusMoney >= goals.dailyIncome;
   }).length;
@@ -305,13 +473,42 @@ export function buildAiFinanceAnalysis({
       : 0;
   const averageNet = Math.round(totals.net / dayCount);
   const averageExpense = Math.round(totals.expense / dayCount);
+  const previousAverageExpense = Math.round(previousTotals.expense / dayCount);
   const incomePerHour =
     totals.workHours > 0
       ? Math.round((totals.mainIncome + totals.bonusMoney) / totals.workHours)
       : 0;
+  const previousIncomePerHour =
+    previousTotals.workHours > 0
+      ? Math.round(
+          (previousTotals.mainIncome + previousTotals.bonusMoney) /
+            previousTotals.workHours
+        )
+      : 0;
   const targetIncomePerHour =
     goals.dailyHours > 0 ? Math.round(goals.dailyIncome / goals.dailyHours) : 0;
   const needPerDay = getNeedPerDay({ entries, expenses, goals, today });
+  const allRecordedIncome = entries.reduce(
+    (sum, entry) => sum + getTotalEntryMoney(entry),
+    0
+  );
+  const allRecordedExpense = expenses.reduce(
+    (sum, expense) => sum + getExpenseTotal(expense),
+    0
+  );
+  const currentGoalMoney =
+    goals.bigGoalSaved + allRecordedIncome - allRecordedExpense;
+  const remainingGoalMoney = Math.max(
+    goals.bigGoalTarget - currentGoalMoney,
+    0
+  );
+  const goalDaysLeft = Math.max(
+    Math.ceil(
+      (toDate(goals.bigGoalDeadline).getTime() - toDate(today).getTime()) /
+        (1000 * 60 * 60 * 24)
+    ),
+    0
+  );
   const bestDay = findBestDay(rows);
   const worstDay = findWorstDay(rows);
   const latestBalanceCheck = getLatestBalanceCheck(
@@ -324,10 +521,27 @@ export function buildAiFinanceAnalysis({
     toDate: selectedRange.toDate,
   });
   const topOtherExpense = otherExpenseBreakdown[0];
+  const previousOtherExpenseBreakdown = buildOtherExpenseBreakdown(expenses, {
+    fromDate: previousFromDate,
+    toDate: previousToDate,
+  });
+  const previousTopOtherExpense = previousOtherExpenseBreakdown[0];
+  const mealExpense = getMealExpenseTotal(
+    expenses,
+    selectedRange.fromDate,
+    selectedRange.toDate
+  );
+  const otherExpense = getOtherExpenseTotal(
+    expenses,
+    selectedRange.fromDate,
+    selectedRange.toDate
+  );
   const trendLabel = getTrendLabel(totals.net, previousTotals.net);
   const highlights: string[] = [];
   const risks: string[] = [];
   const actions: string[] = [];
+  const anomalies: AiFinanceAnomaly[] = [];
+  const actionPlan: AiFinanceActionPlanItem[] = [];
 
   if (totals.net > 0) {
     highlights.push(
@@ -369,9 +583,9 @@ export function buildAiFinanceAnalysis({
     );
   }
 
-  if (missingExpenseDays > 0) {
+  if (missingExpenseDays.length > 0) {
     risks.push(
-      `${missingExpenseDays} ngày có thu nhập nhưng chưa ghi chi tiêu, số liệu ròng có thể đang đẹp hơn thực tế.`
+      `${missingExpenseDays.length} ngày có thu nhập nhưng chưa ghi chi tiêu, số liệu ròng có thể đang đẹp hơn thực tế.`
     );
   }
 
@@ -443,7 +657,7 @@ export function buildAiFinanceAnalysis({
     );
   }
 
-  if (missingExpenseDays > 0) {
+  if (missingExpenseDays.length > 0) {
     actions.push("Bổ sung chi tiêu còn thiếu trước khi dùng số liệu để chốt kế hoạch.");
   }
 
@@ -475,55 +689,414 @@ export function buildAiFinanceAnalysis({
         )}, trung bình ${formatMoney(
           averageNet
         )}/ngày và xu hướng ${trendLabel}.`;
+  const comparisonSummary = `So với ${formatDateShort(
+    previousFromDate
+  )} - ${formatDateShort(previousToDate)}, tiền ròng ${
+    getChange(totals.net, previousTotals.net).changeLabel.toLocaleLowerCase(
+      "vi-VN"
+    )
+  }.`;
+  const unlabeledExpense = otherExpenseBreakdown.find(
+    (item) => item.label === UNLABELED_OTHER_EXPENSE_LABEL
+  );
+  const outlierExpenseDay = [...rows]
+    .filter(
+      (row) =>
+        row.expense > 0 &&
+        previousAverageExpense > 0 &&
+        row.expense >= previousAverageExpense * 1.5
+    )
+    .sort((left, right) => right.expense - left.expense)[0];
+
+  if (missingExpenseDays.length > 0) {
+    const firstMissingDate = missingExpenseDays[0].date;
+    anomalies.push({
+      actionLabel: "Bổ sung chi tiêu",
+      actionPage: "closeDay",
+      date: firstMissingDate,
+      detail: `${missingExpenseDays.length} ngày có thu nhập nhưng chi tiêu bằng 0. Ngày đầu tiên cần kiểm tra là ${formatDateShort(
+        firstMissingDate
+      )}.`,
+      id: "missing-expense",
+      severity: "warning",
+      title: "Có thể đang thiếu chi tiêu",
+    });
+  }
+
+  if (unlabeledExpense && unlabeledExpense.total > 0) {
+    anomalies.push({
+      actionLabel: "Gắn nhãn khoản chi",
+      actionPage: "expenses",
+      detail: `${formatMoney(
+        unlabeledExpense.total
+      )} trong ${unlabeledExpense.count} khoản khác chưa được phân loại.`,
+      id: "unlabeled-expense",
+      severity: "warning",
+      title: "Khoản chi chưa có nhãn",
+    });
+  }
+
+  if (outlierExpenseDay) {
+    anomalies.push({
+      actionLabel: "Xem lịch sử chi",
+      actionPage: "expenses",
+      date: outlierExpenseDay.date,
+      detail: `Ngày ${formatDateShort(
+        outlierExpenseDay.date
+      )} chi ${formatMoney(
+        outlierExpenseDay.expense
+      )}, cao hơn đáng kể mức trung bình kỳ trước ${formatMoney(
+        previousAverageExpense
+      )}/ngày.`,
+      id: "expense-spike",
+      severity: "warning",
+      title: "Chi tiêu tăng bất thường",
+    });
+  }
+
+  if (latestBalanceCheck && Math.abs(latestBalanceCheck.difference) >= 50000) {
+    anomalies.push({
+      actionLabel: "Đối chiếu số dư",
+      actionPage: "balanceChecks",
+      date: latestBalanceCheck.date,
+      detail: `Kiểm kê ngày ${formatDateShort(
+        latestBalanceCheck.date
+      )} lệch ${formatMoney(
+        latestBalanceCheck.difference
+      )} so với số app tính.`,
+      id: "balance-gap",
+      severity:
+        Math.abs(latestBalanceCheck.difference) >= 200000
+          ? "danger"
+          : "warning",
+      title: "Số dư thực tế đang lệch",
+    });
+  }
+
+  if (
+    incomePerHour > 0 &&
+    previousIncomePerHour > 0 &&
+    incomePerHour < previousIncomePerHour * 0.75
+  ) {
+    anomalies.push({
+      actionLabel: "Xem hiệu suất Hub",
+      actionPage: "hub",
+      detail: `Tiền/giờ hiện tại ${formatMoney(
+        incomePerHour
+      )}, thấp hơn kỳ trước ${formatMoney(previousIncomePerHour)}.`,
+      id: "low-hourly-income",
+      severity: "warning",
+      title: "Hiệu suất làm việc giảm",
+    });
+  }
+
+  if (averageNet < needPerDay && needPerDay > 0) {
+    anomalies.push({
+      actionLabel: "Xem mục tiêu",
+      actionPage: "goals",
+      detail: `Trung bình ròng đang thiếu ${formatMoney(
+        needPerDay - averageNet
+      )}/ngày so với nhịp cần để kịp mục tiêu chính.`,
+      id: "goal-pace-gap",
+      severity: "danger",
+      title: "Mục tiêu đang chậm nhịp",
+    });
+  }
+
+  const targetNet = Math.max(needPerDay, goals.dailyIncome);
+  const suggestedExpenseCap =
+    averageExpense > 0
+      ? Math.max(Math.round(averageExpense * 0.9), 0)
+      : Math.max(Math.round(targetNet * 0.25), 0);
+  const netGap = Math.max(targetNet - averageNet, 0);
+  const incomePerOrder =
+    totals.orderCount > 0
+      ? Math.round(
+          (totals.mainIncome + totals.bonusMoney) / totals.orderCount
+        )
+      : 0;
+  const extraHours =
+    netGap > 0 && incomePerHour > 0 ? netGap / incomePerHour : 0;
+  const extraOrders =
+    netGap > 0 && incomePerOrder > 0
+      ? Math.ceil(netGap / incomePerOrder)
+      : 0;
+
+  actionPlan.push({
+    actionLabel: "Nhập thu nhập",
+    actionPage: "hub",
+    detail: `Đây là mức ròng tối thiểu để giữ nhịp mục tiêu chính, đã đối chiếu với mục tiêu ngày ${formatMoney(
+      goals.dailyIncome
+    )}.`,
+    id: "target-net",
+    impact:
+      netGap > 0
+        ? `Cao hơn nhịp hiện tại ${formatMoney(netGap)}/ngày`
+        : "Nhịp hiện tại đã đạt mức này",
+    target: formatMoney(targetNet),
+    title: "Mục tiêu ròng ngày mai",
+  });
+
+  actionPlan.push({
+    actionLabel: "Quản lý chi tiêu",
+    actionPage: "expenses",
+    detail: `Giới hạn này thấp hơn khoảng 10% so với mức chi trung bình ${formatMoney(
+      averageExpense
+    )}/ngày trong kỳ.`,
+    id: "expense-cap",
+    impact: `Nếu giữ được, ròng tăng khoảng ${formatMoney(
+      Math.max(averageExpense - suggestedExpenseCap, 0)
+    )}/ngày`,
+    target: formatMoney(suggestedExpenseCap),
+    title: "Trần chi tiêu đề xuất",
+  });
+
+  if (netGap > 0) {
+    actionPlan.push({
+      actionLabel: "Chọn ca Hub",
+      actionPage: "hub",
+      detail:
+        incomePerHour > 0 || incomePerOrder > 0
+          ? `Theo hiệu suất hiện tại, cần thêm khoảng ${
+              extraHours > 0 ? `${extraHours.toFixed(1)} giờ` : "chưa đủ dữ liệu giờ"
+            }${
+              extraOrders > 0 ? ` hoặc ${extraOrders} đơn` : ""
+            }.`
+          : "Chưa đủ dữ liệu tiền/giờ và tiền/đơn để quy đổi khối lượng làm việc.",
+      id: "work-gap",
+      impact: `Bù phần thiếu ${formatMoney(netGap)}/ngày`,
+      target: formatMoney(netGap),
+      title: "Thu nhập cần bù thêm",
+    });
+  }
+
+  if (anomalies.length > 0) {
+    actionPlan.push({
+      actionLabel: "Xử lý bất thường",
+      actionPage: anomalies[0].actionPage,
+      detail: `Ưu tiên xử lý “${anomalies[0].title}” trước khi dùng số liệu để quyết định.`,
+      id: "data-cleanup",
+      impact: `${anomalies.length} vấn đề đang ảnh hưởng độ tin cậy`,
+      target: `${anomalies.length} mục`,
+      title: "Làm sạch dữ liệu",
+    });
+  }
+
+  const netSourceTotal = Math.max(
+    totals.mainIncome +
+      totals.bonusMoney +
+      totals.receivedMoney +
+      totals.expense,
+    1
+  );
+  const expenseSourceTotal = Math.max(totals.expense, 1);
+  const workIncome = totals.mainIncome + totals.bonusMoney;
+  const previousWorkIncome =
+    previousTotals.mainIncome + previousTotals.bonusMoney;
+  const metrics: AiFinanceMetric[] = [
+    buildMetric({
+      currentValue: totals.net,
+      detail: `Thu ${formatMoney(totals.totalIncome)} - chi ${formatMoney(
+        totals.expense
+      )}`,
+      key: "net",
+      label: "Tiền ròng",
+      previousValue: previousTotals.net,
+      sources: [
+        buildMoneySource(
+          "Tiền làm được",
+          totals.mainIncome,
+          netSourceTotal,
+          "income"
+        ),
+        buildMoneySource(
+          "Tiền thưởng",
+          totals.bonusMoney,
+          netSourceTotal,
+          "income"
+        ),
+        buildMoneySource(
+          "Tiền nhận",
+          totals.receivedMoney,
+          netSourceTotal,
+          "income"
+        ),
+        buildMoneySource(
+          "Chi tiêu",
+          -totals.expense,
+          netSourceTotal,
+          "expense"
+        ),
+      ],
+    }),
+    buildMetric({
+      currentValue: workIncome,
+      detail: `Không tính tiền nhận riêng ${formatMoney(totals.receivedMoney)}`,
+      key: "workIncome",
+      label: "Tiền làm được",
+      previousValue: previousWorkIncome,
+      sources: [
+        buildMoneySource(
+          "Thu nhập công việc",
+          totals.mainIncome,
+          Math.max(workIncome, 1),
+          "income"
+        ),
+        buildMoneySource(
+          "Tiền thưởng",
+          totals.bonusMoney,
+          Math.max(workIncome, 1),
+          "income"
+        ),
+      ],
+    }),
+    buildMetric({
+      currentValue: averageExpense,
+      detail: `Tổng ${formatMoney(totals.expense)} · tỷ lệ chi ${expenseRatio}%`,
+      key: "expense",
+      label: "Chi tiêu/ngày",
+      positiveWhenUp: false,
+      previousValue: previousAverageExpense,
+      sources: [
+        buildMoneySource(
+          "Ăn uống",
+          mealExpense,
+          expenseSourceTotal,
+          "expense"
+        ),
+        buildMoneySource(
+          "Khoản khác",
+          otherExpense,
+          expenseSourceTotal,
+          "expense"
+        ),
+      ],
+    }),
+    buildMetric({
+      currentValue: topOtherExpense?.total ?? 0,
+      detail: topOtherExpense ? topOtherExpense.label : "Chưa có khoản khác",
+      key: "topOtherExpense",
+      label: "Khoản khác lớn nhất",
+      positiveWhenUp: false,
+      previousValue: previousTopOtherExpense?.total ?? 0,
+      sources: otherExpenseBreakdown.slice(0, 4).map((item) =>
+        buildMoneySource(
+          item.label,
+          item.total,
+          Math.max(otherExpense, 1),
+          "expense"
+        )
+      ),
+    }),
+    buildMetric({
+      currentValue: incomePerHour,
+      detail: `${totals.workHours.toFixed(1)} giờ · ${totals.orderCount} đơn`,
+      key: "incomePerHour",
+      label: "Tiền/giờ",
+      previousValue: previousIncomePerHour,
+      sources: [
+        {
+          amount: totals.workHours,
+          label: "Tổng giờ",
+          share: 0,
+          tone: "neutral",
+          value: `${totals.workHours.toFixed(1)} giờ`,
+        },
+        {
+          amount: totals.orderCount,
+          label: "Tổng đơn",
+          share: 0,
+          tone: "neutral",
+          value: `${totals.orderCount} đơn`,
+        },
+      ],
+    }),
+    buildMetric({
+      changeFormatter: (value) => `${value} ngày`,
+      currentValue: activeDays,
+      detail: `${reachedDailyGoalDays} ngày đạt mục tiêu ngày`,
+      formatter: (value) => `${value}/${dayCount}`,
+      key: "activeDays",
+      label: "Ngày có dữ liệu",
+      previousValue: previousActiveDays,
+      sources: [
+        {
+          amount: reachedDailyGoalDays,
+          label: "Ngày đạt mục tiêu",
+          share:
+            dayCount > 0
+              ? Math.round((reachedDailyGoalDays / dayCount) * 100)
+              : 0,
+          tone: "neutral",
+          value: `${reachedDailyGoalDays} ngày`,
+        },
+        {
+          amount: missingExpenseDays.length,
+          label: "Ngày thiếu chi tiêu",
+          share:
+            dayCount > 0
+              ? Math.round((missingExpenseDays.length / dayCount) * 100)
+              : 0,
+          tone: "expense",
+          value: `${missingExpenseDays.length} ngày`,
+        },
+      ],
+    }),
+    buildMetric({
+      currentValue: needPerDay,
+      detail: "Mức ròng/ngày để bám mục tiêu lớn",
+      key: "requiredPace",
+      label: "Nhịp cần",
+      previousValue: needPerDay,
+      sources: [
+        {
+          amount: remainingGoalMoney,
+          label: "Mục tiêu còn thiếu",
+          share: 0,
+          tone: "neutral",
+          value: formatMoney(remainingGoalMoney),
+        },
+        {
+          amount: goalDaysLeft,
+          label: "Thời gian còn lại",
+          share: 0,
+          tone: "neutral",
+          value: `${goalDaysLeft} ngày`,
+        },
+      ],
+    }),
+  ];
 
   return {
-    title: "AI phân tích tài chính",
-    rangeLabel: selectedRange.label,
-    fromDate: selectedRange.fromDate,
-    toDate: selectedRange.toDate,
-    summary,
-    metrics: [
-      {
-        label: "Tiền ròng",
-        value: formatMoney(totals.net),
-        detail: `Thu ${formatMoney(totals.totalIncome)} - chi ${formatMoney(
-          totals.expense
-        )}`,
-      },
-      {
-        label: "Tiền làm được",
-        value: formatMoney(totals.mainIncome + totals.bonusMoney),
-        detail: `Chưa tính tiền nhận riêng: ${formatMoney(totals.receivedMoney)}`,
-      },
-      {
-        label: "Chi tiêu/ngày",
-        value: formatMoney(averageExpense),
-        detail: `Tỷ lệ chi: ${expenseRatio}%`,
-      },
-      {
-        label: "Khác lớn nhất",
-        value: topOtherExpense ? formatMoney(topOtherExpense.total) : "Chưa có",
-        detail: topOtherExpense ? topOtherExpense.label : "Chưa có khoản khác",
-      },
-      {
-        label: "Tiền/giờ",
-        value: incomePerHour > 0 ? formatMoney(incomePerHour) : "Chưa có",
-        detail: `${totals.workHours.toFixed(1)} giờ · ${totals.orderCount} đơn`,
-      },
-      {
-        label: "Ngày có dữ liệu",
-        value: `${activeDays}/${dayCount}`,
-        detail: `${reachedDailyGoalDays} ngày đạt mục tiêu ngày`,
-      },
-      {
-        label: "Nhịp cần",
-        value: formatMoney(needPerDay),
-        detail: "Mức ròng/ngày để bám mục tiêu lớn",
-      },
-    ],
-    otherExpenseBreakdown: otherExpenseBreakdown.slice(0, 8),
-    highlights: highlights.slice(0, 4),
-    risks: risks.slice(0, 4),
+    actionPlan,
     actions: actions.slice(0, 4),
+    anomalies,
+    comparisonSummary,
+    facts: {
+      activeDays,
+      averageExpense,
+      averageNet,
+      dayCount,
+      expenseRatio,
+      incomePerHour,
+      needPerDay,
+      orderCount: totals.orderCount,
+      previousNet: previousTotals.net,
+      totalExpense: totals.expense,
+      totalIncome: totals.totalIncome,
+      totalNet: totals.net,
+      workHours: totals.workHours,
+    },
+    fromDate: selectedRange.fromDate,
+    highlights: highlights.slice(0, 4),
+    metrics,
+    otherExpenseBreakdown: otherExpenseBreakdown.slice(0, 8),
+    previousFromDate,
+    previousToDate,
+    rangeLabel: selectedRange.label,
+    risks: risks.slice(0, 4),
+    summary,
+    title: "Trung tâm phân tích tài chính",
+    toDate: selectedRange.toDate,
   };
 }

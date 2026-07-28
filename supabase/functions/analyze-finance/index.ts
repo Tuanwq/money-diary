@@ -19,12 +19,13 @@ type AiFinanceRequest = {
   question?: string;
   analysis?: unknown;
   automation?: unknown;
+  verifiedAnswer?: unknown;
 };
 
 type AiProvider = "gemini" | "openai";
 
 const systemInstruction =
-  "Bạn là trợ lý phân tích tài chính cá nhân cho người làm theo ca Hub. Trả lời bằng tiếng Việt, ngắn gọn, thực tế, có số liệu cụ thể. Không đưa lời khuyên đầu tư. Tập trung vào thu nhập, chi tiêu, tiền/giờ, tiến độ mục tiêu, rủi ro dữ liệu và việc nên làm tiếp.";
+  "Bạn là trợ lý phân tích tài chính cá nhân cho người làm theo ca Hub. Trả lời bằng tiếng Việt, ngắn gọn, thực tế, có số liệu cụ thể. Không đưa lời khuyên đầu tư. Chỉ kết luận từ dữ liệu đã cung cấp, không tự suy đoán số liệu. Khi trả lời hãy nêu phạm vi thời gian và dẫn lại 2-4 dữ kiện kiểm chứng từ analysis hoặc verifiedAnswer. Tập trung vào thu nhập, chi tiêu, tiền/giờ, tiến độ mục tiêu, rủi ro dữ liệu và việc nên làm tiếp.";
 
 function buildPrompt(body: AiFinanceRequest) {
   return (
@@ -41,6 +42,7 @@ function buildPrompt(body: AiFinanceRequest) {
         question: body.question,
         analysis: body.analysis,
         automation: body.automation,
+        verifiedAnswer: body.verifiedAnswer,
       },
       null,
       2

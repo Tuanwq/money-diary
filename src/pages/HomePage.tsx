@@ -6,6 +6,10 @@ import {
 } from "react";
 import type { AiFinanceInsightProps } from "../components/AiFinanceInsight";
 import { HUB_INITIAL_TAB_SESSION_KEY } from "../constants/hanoiHub";
+import type {
+  CashFlowGoalCommitment,
+  CashFlowPlan,
+} from "../features/cash-flow/cashFlowForecastModel";
 import { BalanceCheckSummaryCard } from "../features/money-diary/components/dashboard/BalanceCheckSummaryCard";
 import { DataCompletionCard } from "../features/money-diary/components/dashboard/DataCompletionCard";
 import { GoalJourney } from "../features/money-diary/components/dashboard/GoalJourney";
@@ -68,6 +72,9 @@ type HomePageProps = {
   entries: DailyEntry[];
   expenses: ExpenseEntry[];
   balanceChecks: BalanceCheckEntry[];
+  cashFlowCurrentBalance: number;
+  cashFlowGoalCommitments: CashFlowGoalCommitment[];
+  cashFlowPlans: CashFlowPlan[];
   cloudLoadError: string | null;
   isCloudLoading: boolean;
   isSelectedToday: boolean;
@@ -91,7 +98,7 @@ type HomePageProps = {
   dataWarnings: DataWarning[];
   goToTodayEntryForm: () => void;
   goToTodayBalanceCheck: () => void;
-  openCloseDay: () => void;
+  openCloseDay: (date?: string) => void;
   onDataWarningAction: (warning: DataWarning) => void;
   selectedActualIncome: number;
   selectedEntry?: DailyEntry;
@@ -117,6 +124,9 @@ export function HomePage({
   entries,
   expenses,
   balanceChecks,
+  cashFlowCurrentBalance,
+  cashFlowGoalCommitments,
+  cashFlowPlans,
   cloudLoadError,
   isCloudLoading,
   isSelectedToday,
@@ -174,6 +184,16 @@ export function HomePage({
 
   function requestNotificationPermission() {
     navigateTo("settings");
+  }
+
+  function navigateFromFinanceInsight(page: Page, date?: string) {
+    if (page === "closeDay") {
+      openCloseDay(date);
+      return;
+    }
+
+    if (date) handleSelectDate(date);
+    navigateTo(page);
   }
 
   return (
@@ -300,10 +320,14 @@ export function HomePage({
 
       <DeferredAiFinanceInsight
         balanceChecks={balanceChecks}
+        cashFlowCurrentBalance={cashFlowCurrentBalance}
+        cashFlowGoalCommitments={cashFlowGoalCommitments}
+        cashFlowPlans={cashFlowPlans}
         entries={entries}
         expenses={expenses}
         goals={goals}
         hideTrigger
+        onNavigate={navigateFromFinanceInsight}
         today={todayString}
       />
     </div>
