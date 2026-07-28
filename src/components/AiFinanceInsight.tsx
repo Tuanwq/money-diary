@@ -1,4 +1,27 @@
-import { useEffect, useMemo, useState } from "react";
+import {
+  AlertTriangle,
+  Bot,
+  CalendarClock,
+  CalendarRange,
+  ChartNoAxesCombined,
+  CheckCircle2,
+  CircleDollarSign,
+  Clock3,
+  Cloud,
+  FileText,
+  Lightbulb,
+  ListChecks,
+  LoaderCircle,
+  MessageCircleQuestion,
+  ReceiptText,
+  ShieldAlert,
+  Sparkles,
+  TrendingUp,
+  WandSparkles,
+  X,
+} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type {
   BalanceCheckEntry,
   DailyEntry,
@@ -24,26 +47,42 @@ import {
   type AiFinanceRange,
 } from "../utils/aiFinanceAnalysis";
 import { formatDateShort } from "../utils/date";
+import "./AiFinanceInsight.css";
 
-type AiFinanceInsightProps = {
+export type AiFinanceInsightProps = {
   entries: DailyEntry[];
   expenses: ExpenseEntry[];
   balanceChecks: BalanceCheckEntry[];
   goals: Goals;
   hideTrigger?: boolean;
+  initialOpen?: boolean;
   today: string;
 };
 
 type AiInsightView = "analysis" | "report" | "plan" | "anomalies" | "qa";
 type ReportMode = "week" | "month";
 
-const AI_INSIGHT_VIEWS: Array<{ label: string; value: AiInsightView }> = [
-  { label: "Phân tích", value: "analysis" },
-  { label: "Báo cáo", value: "report" },
-  { label: "Kế hoạch mai", value: "plan" },
-  { label: "Bất thường", value: "anomalies" },
-  { label: "Hỏi đáp", value: "qa" },
+const AI_INSIGHT_VIEWS: Array<{
+  icon: LucideIcon;
+  label: string;
+  value: AiInsightView;
+}> = [
+  { icon: ChartNoAxesCombined, label: "Phân tích", value: "analysis" },
+  { icon: FileText, label: "Báo cáo", value: "report" },
+  { icon: CalendarClock, label: "Kế hoạch mai", value: "plan" },
+  { icon: ShieldAlert, label: "Bất thường", value: "anomalies" },
+  { icon: MessageCircleQuestion, label: "Hỏi đáp", value: "qa" },
 ];
+
+const METRIC_ICONS = [
+  CircleDollarSign,
+  TrendingUp,
+  ReceiptText,
+  ListChecks,
+  Clock3,
+  CalendarRange,
+  Sparkles,
+] as const;
 
 function loadLocalJson<T>(key: string, fallback: T): T {
   try {
@@ -96,9 +135,10 @@ export function AiFinanceInsight({
   balanceChecks,
   goals,
   hideTrigger = false,
+  initialOpen = false,
   today,
 }: AiFinanceInsightProps) {
-  const [isOpen, setIsOpen] = useState(false);
+  const [isOpen, setIsOpen] = useState(initialOpen);
   const [view, setView] = useState<AiInsightView>("analysis");
   const [range, setRange] = useState<AiFinanceRange>("last7");
   const [reportMode, setReportMode] = useState<ReportMode>("week");
@@ -106,6 +146,7 @@ export function AiFinanceInsight({
   const [realAiText, setRealAiText] = useState("");
   const [realAiError, setRealAiError] = useState("");
   const [isRealAiLoading, setIsRealAiLoading] = useState(false);
+  const dialogRef = useRef<HTMLDivElement>(null);
   const hubData = useMemo(() => {
     if (!isOpen) {
       return {
@@ -195,6 +236,25 @@ export function AiFinanceInsight({
     };
   }, []);
 
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    dialogRef.current?.focus();
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setIsOpen(false);
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isOpen]);
+
   async function runRealAiAnalysis() {
     setIsRealAiLoading(true);
     setRealAiError("");
@@ -246,115 +306,171 @@ export function AiFinanceInsight({
         <button
           type="button"
           onClick={() => setIsOpen(true)}
-          className="app-primary-button w-full rounded-xl px-4 py-2 text-sm font-bold sm:w-auto"
+          className="app-primary-button ai-finance-trigger"
         >
+          <Sparkles aria-hidden="true" size={17} />
           Phân tích tài chính
         </button>
       )}
 
       {isOpen && (
-        <div className="fixed inset-0 z-[80] bg-slate-950/60 px-3 py-4 backdrop-blur-sm sm:px-6">
-          <div className="mx-auto flex max-h-[92vh] max-w-4xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
-            <header className="flex flex-wrap items-start justify-between gap-3 border-b px-4 py-4 sm:px-5">
-              <div className="min-w-0">
-                <p className="text-xs font-bold tracking-wide text-slate-500">
-                  {view === "analysis" ? analysis.rangeLabel : "AI và tự động hóa"}
-                </p>
-                <h2 className="mt-1 text-xl font-bold text-slate-900">
-                  {view === "analysis" ? analysis.title : "Trung tâm AI tài chính"}
+        <div
+          className="ai-finance-backdrop"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setIsOpen(false);
+          }}
+        >
+          <div
+            ref={dialogRef}
+            aria-labelledby="ai-finance-title"
+            aria-modal="true"
+            className="ai-finance-dialog"
+            role="dialog"
+            tabIndex={-1}
+          >
+            <header className="ai-finance-header">
+              <div className="ai-finance-header-icon" aria-hidden="true">
+                <Bot size={24} />
+              </div>
+              <div className="ai-finance-header-copy">
+                <span>{analysis.rangeLabel}</span>
+                <h2 id="ai-finance-title">
+                  {view === "analysis"
+                    ? analysis.title
+                    : "Trung tâm AI tài chính"}
                 </h2>
-                <p className="mt-1 text-sm text-slate-500">
+                <p>
+                  <CalendarRange aria-hidden="true" size={14} />
                   {formatDateShort(analysis.fromDate)} -{" "}
                   {formatDateShort(analysis.toDate)}
                 </p>
               </div>
-
               <button
+                aria-label="Đóng phân tích tài chính"
+                className="ai-finance-close-button"
                 type="button"
                 onClick={() => setIsOpen(false)}
-                className="rounded-xl border bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-100"
               >
-                Đóng
+                <X aria-hidden="true" size={20} />
               </button>
             </header>
 
-            <div className="overflow-y-auto px-4 py-4 sm:px-5">
-              <div className="flex flex-wrap gap-2">
-                {AI_INSIGHT_VIEWS.map((option) => (
+            <nav className="ai-finance-view-tabs" aria-label="Nội dung phân tích">
+              {AI_INSIGHT_VIEWS.map((option) => {
+                const Icon = option.icon;
+
+                return (
                   <button
                     key={option.value}
+                    aria-current={view === option.value ? "page" : undefined}
+                    className={view === option.value ? "is-active" : ""}
                     type="button"
                     onClick={() => selectView(option.value)}
-                    className={`rounded-xl px-3 py-2 text-sm font-bold ${
-                      view === option.value
-                        ? "bg-slate-900 text-white"
-                        : "bg-slate-100 text-slate-700 hover:bg-slate-200"
-                    }`}
                   >
+                    <Icon aria-hidden="true" size={16} />
                     {option.label}
                   </button>
-                ))}
-              </div>
+                );
+              })}
+            </nav>
 
-              <div className="mt-3 flex flex-wrap gap-2">
+            <div className="ai-finance-toolbar">
+              <div
+                className="ai-finance-range-options"
+                role="group"
+                aria-label="Khoảng dữ liệu"
+              >
                 {AI_FINANCE_RANGE_OPTIONS.map((option) => (
                   <button
                     key={option.value}
+                    aria-pressed={range === option.value}
+                    className={range === option.value ? "is-active" : ""}
                     type="button"
                     onClick={() => selectRange(option.value)}
-                    className={`rounded-xl px-3 py-2 text-sm font-bold ${
-                      range === option.value
-                        ? "bg-slate-900 text-white"
-                        : "bg-slate-100 text-slate-700 hover:bg-slate-200"
-                    }`}
                   >
                     {option.label}
                   </button>
                 ))}
-
-                <button
-                  type="button"
-                  onClick={runRealAiAnalysis}
-                  disabled={isRealAiLoading}
-                  className="rounded-xl bg-blue-600 px-3 py-2 text-sm font-bold text-white hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {isRealAiLoading ? "Đang gọi AI..." : "Gọi AI thật"}
-                </button>
               </div>
 
+              <button
+                className="ai-finance-run-button"
+                type="button"
+                onClick={runRealAiAnalysis}
+                disabled={isRealAiLoading}
+              >
+                {isRealAiLoading ? (
+                  <LoaderCircle
+                    aria-hidden="true"
+                    className="is-spinning"
+                    size={17}
+                  />
+                ) : (
+                  <WandSparkles aria-hidden="true" size={17} />
+                )}
+                {isRealAiLoading ? "Đang phân tích" : "Phân tích với AI"}
+              </button>
+            </div>
+
+            <div className="ai-finance-content">
               {view === "analysis" && (
-                <>
-                  <section className="mt-4 rounded-xl bg-slate-100 p-4">
-                    <p className="text-sm font-medium leading-6 text-slate-700">
-                      {analysis.summary}
-                    </p>
+                <div className="ai-finance-analysis-view">
+                  <section className="ai-finance-summary-panel">
+                    <span aria-hidden="true">
+                      <Sparkles size={19} />
+                    </span>
+                    <div>
+                      <small>Tóm tắt kỳ đang xem</small>
+                      <p>{analysis.summary}</p>
+                    </div>
                   </section>
 
-                  <section className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                    {analysis.metrics.map((metric) => (
-                      <article
-                        key={metric.label}
-                        className="rounded-xl border bg-white p-3"
-                      >
-                        <p className="text-xs font-medium text-slate-500">
-                          {metric.label}
-                        </p>
-                        <p className="mt-1 break-words text-lg font-bold text-slate-900">
-                          {metric.value}
-                        </p>
-                        <p className="mt-1 text-xs leading-5 text-slate-500">
-                          {metric.detail}
-                        </p>
-                      </article>
-                    ))}
+                  <section
+                    className="ai-finance-metric-grid"
+                    aria-label="Chỉ số tài chính"
+                  >
+                    {analysis.metrics.map((metric, index) => {
+                      const Icon = METRIC_ICONS[index % METRIC_ICONS.length];
+
+                      return (
+                        <article
+                          key={metric.label}
+                          className="ai-finance-metric-card"
+                        >
+                          <div>
+                            <span aria-hidden="true">
+                              <Icon size={16} />
+                            </span>
+                            <small>{metric.label}</small>
+                          </div>
+                          <strong>{metric.value}</strong>
+                          <p>{metric.detail}</p>
+                        </article>
+                      );
+                    })}
                   </section>
 
-                  <section className="mt-4 grid gap-3 lg:grid-cols-3">
-                    <InsightList title="Điểm tốt" items={analysis.highlights} />
-                    <InsightList title="Cần chú ý" items={analysis.risks} />
-                    <InsightList title="Nên làm tiếp" items={analysis.actions} />
+                  <section className="ai-finance-insight-grid">
+                    <InsightList
+                      icon={CheckCircle2}
+                      title="Điểm tốt"
+                      items={analysis.highlights}
+                      tone="positive"
+                    />
+                    <InsightList
+                      icon={AlertTriangle}
+                      title="Cần chú ý"
+                      items={analysis.risks}
+                      tone="warning"
+                    />
+                    <InsightList
+                      icon={Lightbulb}
+                      title="Nên làm tiếp"
+                      items={analysis.actions}
+                      tone="action"
+                    />
                   </section>
-                </>
+                </div>
               )}
 
               {view === "report" && (
@@ -367,19 +483,23 @@ export function AiFinanceInsight({
               )}
 
               {view === "plan" && (
-                <section className="mt-4">
+                <section className="ai-finance-single-view">
                   <InsightList
+                    icon={CalendarClock}
                     title="Kế hoạch ngày mai"
                     items={automation.tomorrowPlan}
+                    tone="action"
                   />
                 </section>
               )}
 
               {view === "anomalies" && (
-                <section className="mt-4">
+                <section className="ai-finance-single-view">
                   <InsightList
+                    icon={ShieldAlert}
                     title="Bất thường cần kiểm tra"
                     items={automation.anomalies}
+                    tone="warning"
                   />
                 </section>
               )}
@@ -394,30 +514,40 @@ export function AiFinanceInsight({
               )}
 
               {(realAiError || realAiText || isRealAiLoading) && (
-                <section className="mt-4 rounded-xl border bg-white p-4">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <h3 className="font-bold text-slate-900">
-                      Gọi AI phân tích 
-                    </h3>
-                    <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700">
-                      Supabase Edge Function
+                <section className="ai-finance-real-ai" aria-live="polite">
+                  <header>
+                    <div>
+                      <span aria-hidden="true">
+                        <WandSparkles size={17} />
+                      </span>
+                      <h3>Phân tích chuyên sâu</h3>
+                    </div>
+                    <span className="ai-finance-cloud-badge">
+                      <Cloud aria-hidden="true" size={14} />
+                      AI cloud
                     </span>
-                  </div>
+                  </header>
 
                   {isRealAiLoading && (
-                    <p className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600">
+                    <p className="ai-finance-ai-status">
+                      <LoaderCircle
+                        aria-hidden="true"
+                        className="is-spinning"
+                        size={17}
+                      />
                       Đang gửi số liệu tổng hợp lên AI...
                     </p>
                   )}
 
                   {realAiError && (
-                    <p className="mt-3 whitespace-pre-line rounded-lg bg-red-50 px-3 py-2 text-sm leading-6 text-red-600">
+                    <p className="ai-finance-ai-error">
+                      <AlertTriangle aria-hidden="true" size={17} />
                       {realAiError}
                     </p>
                   )}
 
                   {realAiText && (
-                    <div className="mt-3 whitespace-pre-line rounded-lg bg-blue-50 px-3 py-3 text-sm leading-6 text-slate-800">
+                    <div className="ai-finance-ai-answer">
                       {realAiText}
                     </div>
                   )}
@@ -443,44 +573,55 @@ function AiReportView({
   setReportMode: (mode: ReportMode) => void;
 }) {
   return (
-    <section className="mt-4 rounded-xl border bg-white p-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <section className="ai-finance-report-view">
+      <header className="ai-finance-section-header">
         <div>
-          <h3 className="font-bold text-slate-900">Báo cáo tự động</h3>
-          <p className="text-sm text-slate-500">
+          <span aria-hidden="true">
+            <FileText size={18} />
+          </span>
+          <div>
+            <h3>Báo cáo tự động</h3>
+            <p>
             Tạo nhanh báo cáo dạng văn bản để bạn ghi chép hoặc gửi lại.
-          </p>
+            </p>
+          </div>
         </div>
 
-        <div className="flex rounded-xl bg-slate-100 p-1">
+        <div className="ai-finance-report-switch" role="group" aria-label="Loại báo cáo">
           <button
             type="button"
             onClick={() => setReportMode("week")}
-            className={`rounded-lg px-3 py-1.5 text-sm font-bold ${
-              reportMode === "week" ? "bg-white shadow-sm" : "text-slate-600"
-            }`}
+            className={reportMode === "week" ? "is-active" : ""}
           >
             Tuần
           </button>
           <button
             type="button"
             onClick={() => setReportMode("month")}
-            className={`rounded-lg px-3 py-1.5 text-sm font-bold ${
-              reportMode === "month" ? "bg-white shadow-sm" : "text-slate-600"
-            }`}
+            className={reportMode === "month" ? "is-active" : ""}
           >
             Tháng
           </button>
         </div>
-      </div>
+      </header>
 
-      <div className="mt-4 whitespace-pre-line rounded-xl bg-slate-50 p-4 text-sm leading-6 text-slate-800">
+      <div className="ai-finance-report-copy">
         {selectedReport}
       </div>
 
-      <div className="mt-4 grid gap-3 lg:grid-cols-2">
-        <InsightList title="Kế hoạch ngày mai" items={automation.tomorrowPlan} />
-        <InsightList title="Bất thường" items={automation.anomalies} />
+      <div className="ai-finance-report-insights">
+        <InsightList
+          icon={CalendarClock}
+          title="Kế hoạch ngày mai"
+          items={automation.tomorrowPlan}
+          tone="action"
+        />
+        <InsightList
+          icon={ShieldAlert}
+          title="Bất thường"
+          items={automation.anomalies}
+          tone="warning"
+        />
       </div>
     </section>
   );
@@ -498,55 +639,88 @@ function AiQuestionAnswerView({
   suggestedQuestions: string[];
 }) {
   return (
-    <section className="mt-4 rounded-xl border bg-white p-4">
-      <h3 className="font-bold text-slate-900">Hỏi đáp dữ liệu</h3>
-      <p className="mt-1 text-sm text-slate-500">
-        Hỏi nhanh về Hub, chi tiêu, tiền/giờ hoặc tiến độ mục tiêu.
-      </p>
+    <section className="ai-finance-qa-view">
+      <header className="ai-finance-section-header">
+        <div>
+          <span aria-hidden="true">
+            <MessageCircleQuestion size={18} />
+          </span>
+          <div>
+            <h3>Hỏi đáp dữ liệu</h3>
+            <p>Hỏi nhanh về Hub, chi tiêu, tiền/giờ hoặc tiến độ mục tiêu.</p>
+          </div>
+        </div>
+      </header>
 
-      <div className="mt-3 flex flex-wrap gap-2">
+      <div className="ai-finance-suggested-questions">
         {suggestedQuestions.map((item) => (
           <button
             key={item}
             type="button"
             onClick={() => setQuestion(item)}
-            className="rounded-full bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-200"
           >
             {item}
           </button>
         ))}
       </div>
 
-      <textarea
-        rows={3}
-        value={question}
-        onChange={(event) => setQuestion(event.target.value)}
-        placeholder="VD: Tuần này Hub nào kiếm tốt nhất?"
-        className="mt-3 w-full rounded-xl border px-3 py-2 text-sm"
-      />
+      <label className="ai-finance-question-field">
+        <span>Câu hỏi của bạn</span>
+        <textarea
+          rows={3}
+          value={question}
+          onChange={(event) => setQuestion(event.target.value)}
+          placeholder="VD: Tuần này Hub nào kiếm tốt nhất?"
+        />
+      </label>
 
       {answer && (
-        <div className="mt-3 whitespace-pre-line rounded-xl bg-slate-50 p-4 text-sm leading-6 text-slate-800">
+        <div className="ai-finance-local-answer">
+          <span aria-hidden="true">
+            <Bot size={18} />
+          </span>
+          <p>
           {answer}
+          </p>
         </div>
       )}
     </section>
   );
 }
 
-function InsightList({ title, items }: { title: string; items: string[] }) {
+function InsightList({
+  icon: Icon,
+  items,
+  title,
+  tone = "neutral",
+}: {
+  icon?: LucideIcon;
+  items: string[];
+  title: string;
+  tone?: "action" | "neutral" | "positive" | "warning";
+}) {
   return (
-    <article className="rounded-xl border bg-white p-4">
-      <h3 className="font-bold text-slate-900">{title}</h3>
-      <div className="mt-3 grid gap-2">
-        {items.map((item) => (
-          <p
-            key={item}
-            className="rounded-lg bg-slate-50 px-3 py-2 text-sm leading-6 text-slate-700"
-          >
-            {item}
-          </p>
-        ))}
+    <article className={`ai-finance-insight-list is-${tone}`}>
+      <header>
+        {Icon && (
+          <span aria-hidden="true">
+            <Icon size={17} />
+          </span>
+        )}
+        <h3>{title}</h3>
+        <small>{items.length}</small>
+      </header>
+      <div>
+        {items.length > 0 ? (
+          items.map((item) => (
+            <p key={item}>
+              <span aria-hidden="true" />
+              {item}
+            </p>
+          ))
+        ) : (
+          <p className="is-empty">Chưa có nội dung trong kỳ này.</p>
+        )}
       </div>
     </article>
   );

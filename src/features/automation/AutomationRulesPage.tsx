@@ -1,6 +1,5 @@
 import {
   AlertTriangle,
-  ArrowRight,
   BellRing,
   Bot,
   CheckCircle2,
@@ -24,9 +23,11 @@ import type { FinancialAccount } from "../account-ledger/accountLedgerModel";
 import {
   AUTOMATION_ACTION_LABELS,
   AUTOMATION_AMOUNT_MODE_LABELS,
+  AUTOMATION_FREQUENCY_LABELS,
   AUTOMATION_TRIGGER_LABELS,
   type AutomationAction,
   type AutomationAmountMode,
+  type AutomationFrequency,
   type AutomationRule,
   type AutomationRunLog,
   type AutomationTrigger,
@@ -49,7 +50,10 @@ function formatDateTime(value: string) {
 }
 
 function getRuleSummary(rule: AutomationRule) {
-  const parts = [AUTOMATION_TRIGGER_LABELS[rule.trigger]];
+  const parts = [
+    AUTOMATION_TRIGGER_LABELS[rule.trigger],
+    AUTOMATION_FREQUENCY_LABELS[rule.executionFrequency ?? "per_event"],
+  ];
 
   if (rule.minimumAmount > 0) {
     parts.push(`từ ${formatMoney(rule.minimumAmount)}`);
@@ -100,6 +104,10 @@ function RuleForm({
     rule?.amountValue ? formatMoneyInput(String(rule.amountValue)) : ""
   );
   const [enabled, setEnabled] = useState(rule?.enabled ?? true);
+  const [executionFrequency, setExecutionFrequency] =
+    useState<AutomationFrequency>(
+      rule?.executionFrequency ?? "per_event"
+    );
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -164,6 +172,7 @@ function RuleForm({
         action === "alert" || amountMode === "full" ? 0 : parsedValue,
       createdAt: rule?.createdAt ?? now,
       enabled,
+      executionFrequency,
       expenseLabel: trigger === "expense" ? expenseLabel : "",
       hubType: trigger === "hub_shift" ? hubType : "",
       id: rule?.id ?? crypto.randomUUID(),
@@ -245,6 +254,33 @@ function RuleForm({
               />
               <span>đ</span>
             </div>
+          </label>
+
+          <label className="automation-field">
+            <span>Tần suất thực hiện</span>
+            <select
+              onChange={(event) =>
+                setExecutionFrequency(
+                  event.target.value as AutomationFrequency
+                )
+              }
+              value={executionFrequency}
+            >
+              {(
+                Object.keys(
+                  AUTOMATION_FREQUENCY_LABELS
+                ) as AutomationFrequency[]
+              ).map((value) => (
+                <option key={value} value={value}>
+                  {AUTOMATION_FREQUENCY_LABELS[value]}
+                </option>
+              ))}
+            </select>
+            <small className="automation-field-hint">
+              {executionFrequency === "daily"
+                ? "Chạy ở thao tác phù hợp đầu tiên; các thao tác sau trong ngày sẽ bỏ qua."
+                : "Mỗi bản ghi phù hợp sẽ tạo một lần thực hiện riêng."}
+            </small>
           </label>
 
           {trigger === "expense" && (
@@ -416,7 +452,9 @@ function RuleForm({
 
 export function AutomationRulesPage({
   accounts,
+  clearLogs,
   cloudStatus,
+  deleteLog,
   deleteRule,
   expenseLabels,
   logs,
@@ -426,7 +464,9 @@ export function AutomationRulesPage({
   toggleRule,
 }: {
   accounts: FinancialAccount[];
+  clearLogs: () => void;
   cloudStatus: string;
+  deleteLog: (logId: string) => void;
   deleteRule: (ruleId: string) => void;
   expenseLabels: string[];
   logs: AutomationRunLog[];
@@ -467,6 +507,34 @@ export function AutomationRulesPage({
       )
     ) {
       deleteRule(rule.id);
+    }
+  }
+
+  function confirmDeleteLog(log: AutomationRunLog) {
+    if (
+      confirm(
+        `Xóa lịch sử chạy "${log.ruleName}" lúc ${formatDateTime(
+          log.createdAt
+        )}? Quy tắc sẽ không chạy lại thao tác cũ.`
+      )
+    ) {
+      deleteLog(log.id);
+      const nextTotalPages = Math.max(
+        1,
+        Math.ceil((logs.length - 1) / LOGS_PER_PAGE)
+      );
+      setLogPage((current) => Math.min(current, nextTotalPages));
+    }
+  }
+
+  function confirmClearLogs() {
+    if (
+      confirm(
+        `Xóa toàn bộ ${logs.length} bản ghi lịch sử tự động chạy? Các khóa chống chạy trùng vẫn được giữ.`
+      )
+    ) {
+      clearLogs();
+      setLogPage(1);
     }
   }
 
@@ -515,7 +583,7 @@ export function AutomationRulesPage({
         <header className="automation-section-heading">
           <div>
             <h2>Quy tắc của bạn</h2>
-            <p>Quy tắc chỉ chạy một lần cho mỗi bản ghi nguồn.</p>
+            <p>Mỗi quy tắc có thể chạy theo thao tác hoặc tối đa một lần mỗi ngày.</p>
           </div>
           <Bot aria-hidden="true" size={21} />
         </header>
@@ -625,6 +693,16 @@ export function AutomationRulesPage({
             <h2>Lịch sử tự động chạy</h2>
             <p>{logs.length} kết quả đã được ghi nhận.</p>
           </div>
+          {logs.length > 0 && (
+            <button
+              className="automation-clear-history-button"
+              onClick={confirmClearLogs}
+              type="button"
+            >
+              <Trash2 aria-hidden="true" size={16} />
+              Xóa toàn bộ
+            </button>
+          )}
         </header>
 
         {paginatedLogs.length === 0 ? (
@@ -645,7 +723,14 @@ export function AutomationRulesPage({
                   <small>{formatDateTime(log.createdAt)}</small>
                 </div>
                 <b>{formatMoney(log.amount)}</b>
-                <ArrowRight aria-hidden="true" size={17} />
+                <button
+                  aria-label={`Xóa lịch sử ${log.ruleName}`}
+                  className="automation-icon-button is-danger"
+                  onClick={() => confirmDeleteLog(log)}
+                  type="button"
+                >
+                  <Trash2 aria-hidden="true" size={16} />
+                </button>
               </article>
             ))}
           </div>

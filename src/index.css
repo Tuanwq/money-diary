@@ -1,5 +1,62 @@
 @import "tailwindcss";
 
+.app-lazy-fallback,
+.app-lazy-error {
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 0.65rem;
+  width: 100%;
+  min-height: min(18rem, 48vh);
+  padding: 2rem 1rem;
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+.app-lazy-fallback > span {
+  width: 2rem;
+  height: 2rem;
+  border: 3px solid var(--primary-border);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: app-lazy-spin 700ms linear infinite;
+}
+
+.app-lazy-fallback strong,
+.app-lazy-error strong {
+  color: var(--text-primary);
+}
+
+.app-lazy-error {
+  margin: 1rem auto;
+  border: 1px solid var(--warning-border);
+  border-radius: 1rem;
+  background: var(--warning-soft);
+}
+
+.app-lazy-error button {
+  min-height: 2.75rem;
+  padding: 0.55rem 0.9rem;
+  border: 1px solid var(--primary);
+  border-radius: 0.7rem;
+  color: var(--primary-foreground);
+  background: var(--primary);
+  font: inherit;
+  font-weight: 600;
+}
+
+@keyframes app-lazy-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-lazy-fallback > span {
+    animation: none;
+  }
+}
+
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
@@ -12538,6 +12595,78 @@ textarea {
   gap: 0.75rem;
 }
 
+.hub-shift-day-group,
+.hub-shift-day-group__list {
+  display: grid;
+  min-width: 0;
+  max-width: 100%;
+  gap: 0.65rem;
+}
+
+.hub-shift-day-group + .hub-shift-day-group {
+  margin-top: 0.35rem;
+}
+
+.hub-shift-day-group__header {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 0.7rem;
+  min-width: 0;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid var(--hub-border);
+  border-radius: 0.9rem;
+  background: var(--hub-primary-soft);
+}
+
+.hub-shift-day-group__icon {
+  display: grid;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 0.65rem;
+  color: var(--hub-primary);
+  background: var(--hub-surface);
+}
+
+.hub-shift-day-group__header h3,
+.hub-shift-day-group__header p {
+  margin: 0;
+}
+
+.hub-shift-day-group__header h3 {
+  font-size: 0.95rem;
+}
+
+.hub-shift-day-group__header p,
+.hub-shift-day-group__total span,
+.hub-shift-day-group__total small,
+.hub-shift-day-group__reward span,
+.hub-shift-day-group__reward small {
+  color: var(--hub-text-secondary);
+  font-size: 0.7rem;
+}
+
+.hub-shift-day-group__total,
+.hub-shift-day-group__reward {
+  display: grid;
+  justify-items: end;
+  min-width: 0;
+}
+
+.hub-shift-day-group__total strong,
+.hub-shift-day-group__reward strong {
+  color: var(--hub-primary);
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.hub-shift-day-group__reward {
+  min-width: 10.5rem;
+  padding-left: 0.7rem;
+  border-left: 1px solid var(--hub-border);
+}
+
 .hub-work-page .shift-result-card {
   min-width: 0;
   max-width: 100%;
@@ -14208,6 +14337,43 @@ textarea {
 
   .hub-shift-filters__mobile-controls {
     display: grid;
+  }
+}
+
+@media (max-width: 700px) {
+  .hub-shift-day-group__header {
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 0.55rem 0.65rem;
+    padding: 0.7rem;
+  }
+
+  .hub-shift-day-group__total,
+  .hub-shift-day-group__reward {
+    grid-column: 1 / -1;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    justify-items: start;
+    gap: 0.15rem 0.55rem;
+    width: 100%;
+    padding-top: 0.55rem;
+    border-top: 1px solid var(--hub-border);
+  }
+
+  .hub-shift-day-group__total strong,
+  .hub-shift-day-group__reward strong {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+  }
+
+  .hub-shift-day-group__total small,
+  .hub-shift-day-group__reward small {
+    grid-column: 1;
+  }
+
+  .hub-shift-day-group__reward {
+    min-width: 0;
+    padding-left: 0;
+    border-left: 0;
   }
 }
 
@@ -16520,6 +16686,22 @@ textarea {
   font-weight: 650;
 }
 
+.automation-clear-history-button {
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--danger-border);
+  border-radius: 9px;
+  color: var(--danger);
+  display: inline-flex;
+  gap: 0.35rem;
+  min-height: 38px;
+  padding: 0.4rem 0.7rem;
+}
+
+.automation-clear-history-button:hover {
+  background: var(--danger-soft);
+}
+
 .automation-rule-list,
 .automation-history-list {
   display: grid;
@@ -16835,6 +17017,10 @@ textarea {
   font-size: 0.69rem;
 }
 
+.automation-field small.automation-field-hint {
+  color: var(--text-secondary);
+}
+
 .automation-money-input {
   align-items: center;
   display: flex;
@@ -16960,9 +17146,14 @@ textarea {
     grid-column: 2;
   }
 
-  .automation-history-item > svg {
+  .automation-history-item > button {
     grid-column: 3;
     grid-row: 1 / span 2;
+  }
+
+  .automation-history-section .automation-section-heading {
+    align-items: flex-start;
+    flex-wrap: wrap;
   }
 
   .automation-modal-backdrop {

@@ -252,6 +252,10 @@ function BackupPreview({
             <strong>{record.summary.financialAccounts ?? 0}</strong>
           </div>
           <div>
+            <span>Kiểm kê tài khoản</span>
+            <strong>{record.summary.accountReconciliations ?? 0}</strong>
+          </div>
+          <div>
             <span>Quy tắc</span>
             <strong>{record.summary.automationRules ?? 0}</strong>
           </div>
@@ -619,6 +623,8 @@ export function BackupCenter({
                   {record.summary.hubShifts} ca Hub
                   {" · "}
                   {record.summary.accountTransactions ?? 0} giao dịch
+                  {" · "}
+                  {record.summary.accountReconciliations ?? 0} kiểm kê tài khoản
                   {" · "}
                   {record.summary.automationRules ?? 0} quy tắc
                   {" · "}

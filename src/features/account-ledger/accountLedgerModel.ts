@@ -92,6 +92,14 @@ export function createDefaultAccounts(now = new Date().toISOString()) {
       type: "e_wallet",
       updatedAt: now,
     },
+    {
+      createdAt: now,
+      id: "money-account-driver-wallet",
+      name: "Ví Driver",
+      openingBalance: 0,
+      type: "e_wallet",
+      updatedAt: now,
+    },
   ] satisfies FinancialAccount[];
 }
 
@@ -133,6 +141,17 @@ export function calculateAccountBalance(
 
     return balance;
   }, account.openingBalance);
+}
+
+export function calculateAccountBalanceAtDate(
+  account: FinancialAccount,
+  transactions: AccountTransaction[],
+  date: string
+) {
+  return calculateAccountBalance(
+    account,
+    transactions.filter((transaction) => transaction.date <= date)
+  );
 }
 
 export function getLedgerSummary(

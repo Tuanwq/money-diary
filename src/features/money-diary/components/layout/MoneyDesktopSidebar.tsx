@@ -2,13 +2,13 @@ import {
   BookOpenText,
   ChartNoAxesCombined,
   ChevronRight,
-  FileText,
   Goal,
   History,
   House,
   LogOut,
   PackagePlus,
   RefreshCcw,
+  Scale,
   Settings,
   TrendingUp,
   WalletCards,
@@ -27,7 +27,6 @@ type MoneyDesktopSidebarProps = {
   isCloudRefreshing: boolean;
   navigateTo: (page: Page, goalScreen?: GoalScreen) => void;
   accountButtonRef: RefObject<HTMLButtonElement | null>;
-  onExportReport: () => void;
   onLogout: () => void;
   onOpenAccount: () => void;
   onOpenAdd: () => void;
@@ -52,7 +51,6 @@ export function MoneyDesktopSidebar({
   email,
   isCloudRefreshing,
   navigateTo,
-  onExportReport,
   onLogout,
   onOpenAccount,
   onOpenAdd,
@@ -94,6 +92,12 @@ export function MoneyDesktopSidebar({
       onClick: () => navigateTo("accounts"),
     },
     {
+      active: currentPage === "reconciliation",
+      icon: Scale,
+      label: "Kiểm kê tài khoản",
+      onClick: () => navigateTo("reconciliation"),
+    },
+    {
       active: currentPage === "automation",
       icon: Workflow,
       label: "Tự động hóa",
@@ -110,12 +114,6 @@ export function MoneyDesktopSidebar({
       icon: History,
       label: "Lịch sử",
       onClick: () => navigateTo("history"),
-    },
-    {
-      active: false,
-      icon: FileText,
-      label: "Báo cáo",
-      onClick: onExportReport,
     },
   ];
 

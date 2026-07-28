@@ -144,4 +144,69 @@ assert.equal(
   0
 );
 
+const hubEvent = events.find((event) => event.trigger === "hub_shift");
+const twoHubEvents = [
+  ...events,
+  {
+    ...hubEvent,
+    amount: 300,
+    id: "hub:hub-2",
+    occurredAt: "2026-07-25T11:00:00.000Z",
+    title: "HUB 3 · 16:00 - 19:00",
+  },
+];
+const dailyExecutions = planAutomationExecutions({
+  events: twoHubEvents,
+  processedKeys: [],
+  rules: [
+    {
+      ...baseRule,
+      executionFrequency: "daily",
+      hubType: "HUB_3",
+      id: "rule-hub-daily",
+      minimumAmount: 400,
+      trigger: "hub_shift",
+    },
+  ],
+});
+
+assert.equal(dailyExecutions.length, 1);
+assert.equal(dailyExecutions[0].amount, 500);
+assert.equal(
+  dailyExecutions[0].idempotencyKey,
+  "rule-hub-daily:day:2026-07-25"
+);
+assert.equal(
+  planAutomationExecutions({
+    events: twoHubEvents,
+    processedKeys: [dailyExecutions[0].idempotencyKey],
+    rules: [
+      {
+        ...baseRule,
+        executionFrequency: "daily",
+        hubType: "HUB_3",
+        id: "rule-hub-daily",
+        trigger: "hub_shift",
+      },
+    ],
+  }).length,
+  0
+);
+
+const perEventExecutions = planAutomationExecutions({
+  events: twoHubEvents,
+  processedKeys: [],
+  rules: [
+    {
+      ...baseRule,
+      executionFrequency: "per_event",
+      hubType: "HUB_3",
+      id: "rule-hub-event",
+      trigger: "hub_shift",
+    },
+  ],
+});
+
+assert.equal(perEventExecutions.length, 2);
+
 console.log("Automation rule tests passed.");

@@ -1,5 +1,8 @@
 import type { HubEntry, HubSettings } from "../types/hub";
-import { calculateHubIncome } from "./hubIncome";
+import {
+  calculateHubIncome,
+  type HubIncome,
+} from "./hubIncome";
 import {
   calculateHubProfitTotals,
   getHubOperatingCosts,
@@ -17,9 +20,10 @@ export {
 
 export function calculateHubActualProfit(
   entry: HubEntry,
-  settings: HubSettings
+  settings: HubSettings,
+  calculatedIncome?: HubIncome
 ) {
-  const income = calculateHubIncome(entry, settings);
+  const income = calculatedIncome ?? calculateHubIncome(entry, settings);
   const operatingCosts = getHubOperatingCosts(entry);
   const operatingCost = operatingCosts.reduce(
     (total, cost) => total + cost.amount,

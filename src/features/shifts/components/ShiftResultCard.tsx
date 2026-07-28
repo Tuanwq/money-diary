@@ -172,8 +172,8 @@ export function ShiftResultCard({
               <dl>
                 <IncomeRow label="Vượt mốc đơn" value={income.extraOrderReward} />
                 <IncomeRow label="Vượt mốc ghép" value={income.extraJoinOrderReward} />
-                <IncomeRow label="Thưởng Chủ nhật" value={income.sundayReward} />
-                <IncomeRow label="Thưởng khu vực" value={income.weekdayRegionReward} />
+                <IncomeRow label="Thưởng Chủ nhật (theo ngày)" value={income.sundayReward} />
+                <IncomeRow label="Thưởng khu vực (theo ngày)" value={income.weekdayRegionReward} />
               </dl>
             </section>
 

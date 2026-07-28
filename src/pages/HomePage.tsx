@@ -1,4 +1,10 @@
-import { AiFinanceInsight } from "../components/AiFinanceInsight";
+import {
+  lazy,
+  Suspense,
+  useEffect,
+  useState,
+} from "react";
+import type { AiFinanceInsightProps } from "../components/AiFinanceInsight";
 import { HUB_INITIAL_TAB_SESSION_KEY } from "../constants/hanoiHub";
 import { BalanceCheckSummaryCard } from "../features/money-diary/components/dashboard/BalanceCheckSummaryCard";
 import { DataCompletionCard } from "../features/money-diary/components/dashboard/DataCompletionCard";
@@ -22,6 +28,41 @@ import type {
 } from "../types";
 import type { DataWarning } from "../utils/dataWarnings";
 import { getProgress } from "../utils/goals";
+
+const LazyAiFinanceInsight = lazy(() =>
+  import("../components/AiFinanceInsight").then((module) => ({
+    default: module.AiFinanceInsight,
+  }))
+);
+
+function DeferredAiFinanceInsight(props: AiFinanceInsightProps) {
+  const [shouldMount, setShouldMount] = useState(
+    () => sessionStorage.getItem("money-diary:open-ai-pending") === "1"
+  );
+
+  useEffect(() => {
+    if (shouldMount) {
+      sessionStorage.removeItem("money-diary:open-ai-pending");
+    }
+
+    function handleOpenAi() {
+      sessionStorage.removeItem("money-diary:open-ai-pending");
+      setShouldMount(true);
+    }
+
+    window.addEventListener("money-diary:open-ai", handleOpenAi);
+    return () =>
+      window.removeEventListener("money-diary:open-ai", handleOpenAi);
+  }, [shouldMount]);
+
+  if (!shouldMount) return null;
+
+  return (
+    <Suspense fallback={null}>
+      <LazyAiFinanceInsight {...props} initialOpen />
+    </Suspense>
+  );
+}
 
 type HomePageProps = {
   entries: DailyEntry[];
@@ -257,7 +298,7 @@ export function HomePage({
         onIncome={openIncome}
       />
 
-      <AiFinanceInsight
+      <DeferredAiFinanceInsight
         balanceChecks={balanceChecks}
         entries={entries}
         expenses={expenses}

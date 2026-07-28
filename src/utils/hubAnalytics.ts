@@ -3,7 +3,7 @@ import type { ExpenseEntry } from "../types";
 import type { HubEntry, HubSettings, HubType } from "../types/hub";
 import { getDateString, toDate } from "./date";
 import { getExpenseTotal } from "./entries";
-import { calculateHubIncome } from "./hubIncome";
+import { calculateHubIncomeByEntry } from "./hubIncome";
 import {
   calculateHubProfitTotals,
   getHubOperatingCostTotal,
@@ -76,8 +76,13 @@ export function buildHubAnalyticsRows(
   entries: HubEntry[],
   settings: HubSettings
 ): HubAnalyticsRow[] {
+  const incomeByEntry = calculateHubIncomeByEntry(entries, settings);
+
   return entries.map((entry) => {
-    const income = calculateHubIncome(entry, settings);
+    const income = incomeByEntry.get(entry.id);
+    if (!income) {
+      throw new Error(`Missing Hub income for entry ${entry.id}`);
+    }
     const hours = getHubShiftHours(entry.shiftName);
     const workIncome = income.workIncome;
     const operatingCost = getHubOperatingCostTotal(entry);

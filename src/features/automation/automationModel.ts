@@ -16,6 +16,7 @@ export type AutomationTrigger =
 export type AutomationAction = "ledger" | "subgoal" | "alert";
 
 export type AutomationAmountMode = "full" | "percent" | "fixed";
+export type AutomationFrequency = "per_event" | "daily";
 
 export type AutomationRule = {
   action: AutomationAction;
@@ -24,6 +25,7 @@ export type AutomationRule = {
   amountValue: number;
   createdAt: string;
   enabled: boolean;
+  executionFrequency?: AutomationFrequency;
   expenseLabel: string;
   hubType: HubType | "";
   id: string;
@@ -98,6 +100,14 @@ export const AUTOMATION_AMOUNT_MODE_LABELS: Record<
   full: "Toàn bộ số tiền",
   percent: "Theo phần trăm",
   fixed: "Số tiền cố định",
+};
+
+export const AUTOMATION_FREQUENCY_LABELS: Record<
+  AutomationFrequency,
+  string
+> = {
+  per_event: "Một lần mỗi thao tác",
+  daily: "Tối đa một lần mỗi ngày",
 };
 
 export function createDefaultAutomationState(): AutomationState {
@@ -259,7 +269,6 @@ function matchesRule(rule: AutomationRule, event: AutomationEvent) {
   if (
     !rule.enabled ||
     rule.trigger !== event.trigger ||
-    event.amount < rule.minimumAmount ||
     new Date(event.occurredAt).getTime() <
       new Date(rule.activeFrom).getTime()
   ) {
@@ -298,12 +307,66 @@ export function planAutomationExecutions({
 }): AutomationExecution[] {
   const processed = new Set(processedKeys);
   const executions: AutomationExecution[] = [];
+  const orderedEvents = [...events].sort((left, right) => {
+    const timeDifference =
+      new Date(left.occurredAt).getTime() - new Date(right.occurredAt).getTime();
+
+    return timeDifference || left.id.localeCompare(right.id);
+  });
 
   rules.forEach((rule) => {
-    events.forEach((event) => {
+    const matchingEvents = orderedEvents.filter((event) =>
+      matchesRule(rule, event)
+    );
+
+    if ((rule.executionFrequency ?? "per_event") === "daily") {
+      const eventsByDate = new Map<string, AutomationEvent[]>();
+
+      matchingEvents
+        .filter((event) => event.amount >= rule.minimumAmount)
+        .forEach((event) => {
+        const dailyEvents = eventsByDate.get(event.date) ?? [];
+        dailyEvents.push(event);
+        eventsByDate.set(event.date, dailyEvents);
+        });
+
+      eventsByDate.forEach((dailyEvents, date) => {
+        const idempotencyKey = `${rule.id}:day:${date}`;
+
+        if (processed.has(idempotencyKey)) return;
+
+        const firstEvent = dailyEvents[0];
+        const amount = calculateExecutionAmount(rule, firstEvent.amount);
+
+        if (amount <= 0) return;
+
+        executions.push({
+          action: rule.action,
+          amount,
+          date,
+          direction: firstEvent.direction,
+          eventId: `${rule.trigger}:${date}`,
+          idempotencyKey,
+          ruleId: rule.id,
+          ruleName: rule.name,
+          targetId: rule.targetId,
+          title: firstEvent.title,
+        });
+        processed.add(idempotencyKey);
+      });
+
+      return;
+    }
+
+    matchingEvents.forEach((event) => {
       const idempotencyKey = `${rule.id}:${event.id}`;
 
-      if (processed.has(idempotencyKey) || !matchesRule(rule, event)) return;
+      if (
+        processed.has(idempotencyKey) ||
+        event.amount < rule.minimumAmount
+      ) {
+        return;
+      }
 
       const amount = calculateExecutionAmount(rule, event.amount);
 
@@ -321,6 +384,7 @@ export function planAutomationExecutions({
         targetId: rule.targetId,
         title: event.title,
       });
+      processed.add(idempotencyKey);
     });
   });
 

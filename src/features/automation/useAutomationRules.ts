@@ -177,6 +177,25 @@ export function useAutomationRules(userId?: string) {
     [updateState]
   );
 
+  const deleteLog = useCallback(
+    (logId: string) => {
+      updateState((current) => ({
+        logs: current.logs.filter((log) => log.id !== logId),
+        processedKeys: current.processedKeys,
+        rules: current.rules,
+      }));
+    },
+    [updateState]
+  );
+
+  const clearLogs = useCallback(() => {
+    updateState((current) => ({
+      logs: [],
+      processedKeys: current.processedKeys,
+      rules: current.rules,
+    }));
+  }, [updateState]);
+
   const toggleRule = useCallback(
     (ruleId: string) => {
       const now = new Date().toISOString();
@@ -227,8 +246,10 @@ export function useAutomationRules(userId?: string) {
   );
 
   return {
+    clearLogs,
     cloudStatus,
     commitExecutions,
+    deleteLog,
     deleteRule,
     logs: state.logs,
     processedKeys: state.processedKeys,

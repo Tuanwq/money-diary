@@ -1,22 +1,19 @@
 import { useBrowserRoute } from "./app/router/useBrowserRoute";
-import { DayMarkApp } from "./features/daymark/DayMarkApp";
 import { HubSelectionPage } from "./features/hub/pages/HubSelectionPage";
-import { AccountLedgerPage } from "./features/account-ledger/AccountLedgerPage";
 import { calculateAccountBalance } from "./features/account-ledger/accountLedgerModel";
 import { useAccountLedger } from "./features/account-ledger/useAccountLedger";
-import { AutomationRulesPage } from "./features/automation/AutomationRulesPage";
+import { useAccountReconciliations } from "./features/account-reconciliation/useAccountReconciliations";
 import type { AutomationExecution } from "./features/automation/automationModel";
 import { useAutomationEngine } from "./features/automation/useAutomationEngine";
 import { useAutomationRules } from "./features/automation/useAutomationRules";
-import { CashFlowForecastPage } from "./features/cash-flow/CashFlowForecastPage";
+import type {
+  CashFlowAccountBalance,
+  CashFlowGoalCommitment,
+} from "./features/cash-flow/cashFlowForecastModel";
 import { useCashFlowPlans } from "./features/cash-flow/useCashFlowPlans";
-import {
-  BalanceCheckOverlay,
-  type BalanceCheckOverlayMode,
-} from "./features/money-diary/components/balance-check/BalanceCheckOverlay";
+import type { BalanceCheckOverlayMode } from "./features/money-diary/components/balance-check/BalanceCheckOverlay";
 import { MoneyPageShell } from "./features/money-diary/components/layout/MoneyPageShell";
 import { useMoneyDiaryNotificationScheduler } from "./features/notifications/useNotificationScheduler";
-import { exportWordReport } from "./features/report/exportWordReport";
 import type {
   BackupSection,
   BackupSnapshot,
@@ -28,17 +25,19 @@ import { useCloudSync } from "./hooks/useCloudSync";
 import { useMoneyDiaryData } from "./hooks/useMoneyDiaryData";
 import { useThemeMode } from "./hooks/useThemeMode";
 import { supabase } from "./lib/supabase";
-import { AppChangeLogPage } from "./pages/AppChangeLogPage";
 import { AuthPage } from "./pages/AuthPage";
-import { BalanceChecksPage } from "./pages/BalanceChecksPage";
-import { CloseDayPage, type CloseDayForm } from "./pages/CloseDayPage";
-import { EntryPage } from "./pages/EntryPage";
-import { ExpensesPage } from "./pages/ExpensesPage";
-import { GoalsPage } from "./pages/GoalsPage";
-import { HistoryPage } from "./pages/HistoryPage";
+import type { CloseDayForm } from "./pages/CloseDayPage";
 import { HomePage } from "./pages/HomePage";
-import { MoneyDiarySettingsPage } from "./pages/MoneyDiarySettingsPage";
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  Component,
+  lazy,
+  Suspense,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import {
   ITEMS_PER_PAGE,
   STORAGE_APP_CHANGE_LOGS_KEY,
@@ -51,10 +50,9 @@ import {
   STORAGE_HUB_ENTRIES_KEY,
   STORAGE_HUB_SETTINGS_KEY,
 } from "./constants/hanoiHub";
-import {
-  HubPage,
-  type HubDiaryContribution,
-  type HubDiaryPayload,
+import type {
+  HubDiaryContribution,
+  HubDiaryPayload,
 } from "./pages/HubPage";
 import type { HubEntry, HubSettings } from "./types/hub";
 import type {
@@ -111,11 +109,130 @@ import {
   type DataWarning,
 } from "./utils/dataWarnings";
 import { buildGoalForecast } from "./utils/forecast";
-import { calculateHubIncome } from "./utils/hubIncome";
+import {
+  calculateHubIncome,
+  calculateHubIncomeByEntry,
+} from "./utils/hubIncome";
 import {
   createOtherExpenseItemForm,
   type OtherExpenseItemForm,
 } from "./utils/otherExpenseForms";
+
+const LazyDayMarkApp = lazy(() =>
+  import("./features/daymark/DayMarkApp").then((module) => ({
+    default: module.DayMarkApp,
+  }))
+);
+const LazyAccountLedgerPage = lazy(() =>
+  import("./features/account-ledger/AccountLedgerPage").then((module) => ({
+    default: module.AccountLedgerPage,
+  }))
+);
+const LazyAccountReconciliationPage = lazy(() =>
+  import(
+    "./features/account-reconciliation/AccountReconciliationPage"
+  ).then((module) => ({
+    default: module.AccountReconciliationPage,
+  }))
+);
+const LazyAutomationRulesPage = lazy(() =>
+  import("./features/automation/AutomationRulesPage").then((module) => ({
+    default: module.AutomationRulesPage,
+  }))
+);
+const LazyCashFlowForecastPage = lazy(() =>
+  import("./features/cash-flow/CashFlowForecastPage").then((module) => ({
+    default: module.CashFlowForecastPage,
+  }))
+);
+const LazyBalanceCheckOverlay = lazy(() =>
+  import(
+    "./features/money-diary/components/balance-check/BalanceCheckOverlay"
+  ).then((module) => ({
+    default: module.BalanceCheckOverlay,
+  }))
+);
+const LazyAppChangeLogPage = lazy(() =>
+  import("./pages/AppChangeLogPage").then((module) => ({
+    default: module.AppChangeLogPage,
+  }))
+);
+const LazyBalanceChecksPage = lazy(() =>
+  import("./pages/BalanceChecksPage").then((module) => ({
+    default: module.BalanceChecksPage,
+  }))
+);
+const LazyCloseDayPage = lazy(() =>
+  import("./pages/CloseDayPage").then((module) => ({
+    default: module.CloseDayPage,
+  }))
+);
+const LazyEntryPage = lazy(() =>
+  import("./pages/EntryPage").then((module) => ({
+    default: module.EntryPage,
+  }))
+);
+const LazyExpensesPage = lazy(() =>
+  import("./pages/ExpensesPage").then((module) => ({
+    default: module.ExpensesPage,
+  }))
+);
+const LazyGoalsPage = lazy(() =>
+  import("./pages/GoalsPage").then((module) => ({
+    default: module.GoalsPage,
+  }))
+);
+const LazyHistoryPage = lazy(() =>
+  import("./pages/HistoryPage").then((module) => ({
+    default: module.HistoryPage,
+  }))
+);
+const LazyHubPage = lazy(() =>
+  import("./pages/HubPage").then((module) => ({
+    default: module.HubPage,
+  }))
+);
+const LazyMoneyDiarySettingsPage = lazy(() =>
+  import("./pages/MoneyDiarySettingsPage").then((module) => ({
+    default: module.MoneyDiarySettingsPage,
+  }))
+);
+
+function LazyRouteFallback() {
+  return (
+    <div className="app-lazy-fallback" aria-live="polite" aria-busy="true">
+      <span aria-hidden="true" />
+      <strong>Đang tải chức năng...</strong>
+    </div>
+  );
+}
+
+class LazyRouteBoundary extends Component<
+  { children: ReactNode },
+  { hasError: boolean }
+> {
+  state = { hasError: false };
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="app-lazy-error" role="alert">
+          <strong>Không tải được chức năng mới.</strong>
+          <span>Ứng dụng có thể đang giữ một phiên bản cache cũ.</span>
+          <button onClick={() => window.location.reload()} type="button">
+            Tải lại ứng dụng
+          </button>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
 
 function buildOtherExpenseFormItems(expense?: ExpenseEntry): OtherExpenseItemForm[] {
   const items = expense ? getOtherExpenseItems(expense) : [];
@@ -355,9 +472,11 @@ function buildHubDiaryMigrationTotals() {
     string,
     { grossIncome: number; legacyGrossIncome: number; workIncome: number }
   >();
+  const incomeByEntry = calculateHubIncomeByEntry(hubEntries, settings);
 
   for (const entry of hubEntries) {
-    const income = calculateHubIncome(entry, settings);
+    const income =
+      incomeByEntry.get(entry.id) ?? calculateHubIncome(entry, settings);
     const current = totalsByDate.get(entry.date) ?? {
       grossIncome: 0,
       legacyGrossIncome: 0,
@@ -556,8 +675,18 @@ export default function App() {
     transactions: accountTransactions,
   } = useAccountLedger(session?.user.id);
   const {
+    checks: accountReconciliations,
+    cloudStatus: accountReconciliationCloudStatus,
+    deleteCheck: deleteAccountReconciliation,
+    markLineAdjusted: markReconciliationLineAdjusted,
+    replaceReconciliationState,
+    saveCheck: saveAccountReconciliation,
+  } = useAccountReconciliations(session?.user.id);
+  const {
+    clearLogs: clearAutomationLogs,
     cloudStatus: automationCloudStatus,
     commitExecutions,
+    deleteLog: deleteAutomationLog,
     deleteRule: deleteAutomationRule,
     logs: automationLogs,
     processedKeys: automationProcessedKeys,
@@ -577,6 +706,7 @@ export default function App() {
   const backupSource = useMemo(
     () =>
       buildBackupSourceData({
+        accountReconciliations,
         accountTransactions,
         appChangeLogs,
         automationLogs,
@@ -592,6 +722,7 @@ export default function App() {
       }),
     [
       accountTransactions,
+      accountReconciliations,
       appChangeLogs,
       automationLogs,
       automationProcessedKeys,
@@ -965,6 +1096,9 @@ async function restoreBackup(
     replaceLedger(
       snapshot.data.accounts.accounts,
       snapshot.data.accounts.transactions
+    );
+    replaceReconciliationState(
+      snapshot.data.accounts.reconciliations ?? []
     );
   }
 
@@ -1496,6 +1630,41 @@ const totalSavedForBigGoal = actualMoney;
 const isBigGoalBehind = bigGoalProgress + 5 < bigGoalTimeProgress;
   const needPerDay =
     daysLeft > 0 ? Math.ceil(remainingBigGoal / daysLeft) : remainingBigGoal;
+const cashFlowAccountBalances: CashFlowAccountBalance[] = hasAccountLedgerData
+  ? activeFinancialAccounts.map((account) => ({
+      balance: calculateAccountBalance(account, accountTransactions),
+      id: account.id,
+      name: account.name,
+    }))
+  : [];
+const cashFlowGoalCommitments: CashFlowGoalCommitment[] = [
+  ...(remainingBigGoal > 0 && goals.bigGoalDeadline
+    ? [
+        {
+          deadline: goals.bigGoalDeadline,
+          id: "main-goal",
+          label: goals.bigGoalName || "Mục tiêu chính",
+          remaining: remainingBigGoal,
+          type: "main" as const,
+        },
+      ]
+    : []),
+  ...(goals.subGoals ?? []).flatMap((goal) => {
+    const remaining = Math.max(goal.target - getSubGoalSaved(goal), 0);
+
+    return remaining > 0 && goal.deadline
+      ? [
+          {
+            deadline: goal.deadline,
+            id: goal.id,
+            label: goal.name,
+            remaining,
+            type: "sub" as const,
+          },
+        ]
+      : [];
+  }),
+];
 
 const todayDailyIncomeRemaining =
   goals.dailyIncome > 0
@@ -3247,27 +3416,36 @@ function deleteExpenseBudget(id: string) {
   });
 }
 
-function exportToWord() {
-  exportWordReport({
-    entries,
-    expenses,
-    balanceChecks,
-    completedGoals,
-    goals,
-    totalIncome,
-    totalExpense,
-    actualMoney,
-    totalSavedForBigGoal,
-    remainingBigGoal,
-    bigGoalProgress,
-    bigGoalTimeProgress,
-    needPerDay,
-    isBigGoalBehind,
-    safeForecastDays,
-    goalForecast,
-    currentBalanceMovementData,
-    getBalanceStatus,
-  });
+async function exportToWord() {
+  try {
+    const { exportWordReport } = await import(
+      "./features/report/exportWordReport"
+    );
+
+    exportWordReport({
+      entries,
+      expenses,
+      balanceChecks,
+      completedGoals,
+      goals,
+      totalIncome,
+      totalExpense,
+      actualMoney,
+      totalSavedForBigGoal,
+      remainingBigGoal,
+      bigGoalProgress,
+      bigGoalTimeProgress,
+      needPerDay,
+      isBigGoalBehind,
+      safeForecastDays,
+      goalForecast,
+      currentBalanceMovementData,
+      getBalanceStatus,
+    });
+  } catch (error) {
+    console.error(error);
+    alert("Không tải được chức năng xuất Word. Hãy tải lại ứng dụng và thử lại.");
+  }
 }
 
 if (!session) {
@@ -3303,16 +3481,20 @@ if (route.kind === "hub" || route.kind === "login" || route.kind === "unknown") 
 
 if (route.kind === "daymark") {
   return (
-    <DayMarkApp
-      currentRoute={route.dayMarkRoute}
-      email={session.user.email}
-      onLogout={handleLogout}
-      onNavigate={navigateApp}
-      onSwitchApp={openAppHub}
-      themeMode={themeMode}
-      toggleThemeMode={toggleThemeMode}
-      userId={session.user.id}
-    />
+    <LazyRouteBoundary>
+      <Suspense fallback={<LazyRouteFallback />}>
+        <LazyDayMarkApp
+          currentRoute={route.dayMarkRoute}
+          email={session.user.email}
+          onLogout={handleLogout}
+          onNavigate={navigateApp}
+          onSwitchApp={openAppHub}
+          themeMode={themeMode}
+          toggleThemeMode={toggleThemeMode}
+          userId={session.user.id}
+        />
+      </Suspense>
+    </LazyRouteBoundary>
   );
 }
 
@@ -3326,6 +3508,7 @@ if (route.kind === "daymark") {
       onLogout={handleLogout}
       onOpenBalanceCheck={goToTodayBalanceCheck}
       onOpenAccountLedger={() => navigateTo("accounts")}
+      onOpenAccountReconciliation={() => navigateTo("reconciliation")}
       onOpenAutomation={() => navigateTo("automation")}
       onOpenCashFlow={() => navigateTo("cashFlow")}
       onOpenChangeLog={() => navigateTo("changes")}
@@ -3338,8 +3521,10 @@ if (route.kind === "daymark") {
       themeMode={themeMode}
       toggleThemeMode={toggleThemeMode}
     >
+      <LazyRouteBoundary key={page}>
+        <Suspense fallback={<LazyRouteFallback />}>
           {page === "accounts" && (
-            <AccountLedgerPage
+            <LazyAccountLedgerPage
               accounts={financialAccounts}
               archiveAccount={archiveAccount}
               cloudStatus={accountLedgerCloudStatus}
@@ -3349,12 +3534,28 @@ if (route.kind === "daymark") {
               transactions={accountTransactions}
             />
           )}
+          {page === "reconciliation" && (
+            <LazyAccountReconciliationPage
+              accounts={financialAccounts}
+              checks={accountReconciliations}
+              cloudStatus={accountReconciliationCloudStatus}
+              deleteCheck={deleteAccountReconciliation}
+              markLineAdjusted={markReconciliationLineAdjusted}
+              onOpenLedger={() => navigateTo("accounts")}
+              saveAccount={saveAccount}
+              saveCheck={saveAccountReconciliation}
+              saveTransaction={saveAccountTransaction}
+              transactions={accountTransactions}
+            />
+          )}
           {page === "automation" && (
-            <AutomationRulesPage
+            <LazyAutomationRulesPage
               accounts={financialAccounts.filter(
                 (account) => !account.archivedAt
               )}
+              clearLogs={clearAutomationLogs}
               cloudStatus={automationCloudStatus}
+              deleteLog={deleteAutomationLog}
               deleteRule={deleteAutomationRule}
               expenseLabels={expenseLabelOptions}
               logs={automationLogs}
@@ -3365,13 +3566,16 @@ if (route.kind === "daymark") {
             />
           )}
           {page === "cashFlow" && (
-            <CashFlowForecastPage
+            <LazyCashFlowForecastPage
+              accountBalances={cashFlowAccountBalances}
               balanceSource={cashFlowBalanceSource}
               cloudStatus={cashFlowCloudStatus}
               currentBalance={cashFlowCurrentBalance}
               deletePlan={deleteCashFlowPlan}
               entries={entries}
+              expenseBudgets={goals.expenseBudgets ?? []}
               expenses={expenses}
+              goalCommitments={cashFlowGoalCommitments}
               plans={cashFlowPlans}
               savePlan={saveCashFlowPlan}
               togglePlan={toggleCashFlowPlan}
@@ -3432,7 +3636,7 @@ if (route.kind === "daymark") {
             />
           )}
           {page === "goals" && (
-            <GoalsPage
+            <LazyGoalsPage
               addContributionToSubGoal={addContributionToSubGoal}
               addSubGoal={addSubGoal}
               applySubGoalAllocation={applySubGoalAllocation}
@@ -3491,7 +3695,7 @@ if (route.kind === "daymark") {
             />
           )}
           {page === "closeDay" && (
-            <CloseDayPage
+            <LazyCloseDayPage
               form={closeDayForm}
               hasExistingData={Boolean(
                 entries.some((item) => item.date === closeDayForm.date) ||
@@ -3511,7 +3715,7 @@ if (route.kind === "daymark") {
             />
           )}
   {page === "entry" && (
-    <EntryPage
+    <LazyEntryPage
       editingDate={editingDate}
       editingExpenseDate={editingExpenseDate}
       form={form}
@@ -3535,7 +3739,7 @@ if (route.kind === "daymark") {
   )}
 
   {page === "hub" && (
-    <HubPage
+    <LazyHubPage
       expenses={expenses}
       onAdjustDiaryContribution={(previousContribution, nextContribution) => {
         const now = new Date().toISOString();
@@ -3641,7 +3845,7 @@ if (route.kind === "daymark") {
   )}
 
   {page === "history" && (
-    <HistoryPage
+    <LazyHistoryPage
       historySearch={historySearch}
       setHistorySearch={updateHistorySearch}
       historyFromDate={historyFromDate}
@@ -3667,7 +3871,7 @@ if (route.kind === "daymark") {
     />
   )}
   {page === "balanceChecks" && (
-    <BalanceChecksPage
+    <LazyBalanceChecksPage
       balanceChecks={sortedBalanceChecks}
       cloudLoadError={cloudLoadError}
       isCloudLoading={isCloudLoading}
@@ -3678,7 +3882,7 @@ if (route.kind === "daymark") {
     />
   )}
   {page === "expenses" && (
-    <ExpensesPage
+    <LazyExpensesPage
       expenseSearch={expenseSearch}
       setExpenseSearch={updateExpenseSearch}
       expenseFromDate={expenseFromDate}
@@ -3713,21 +3917,26 @@ if (route.kind === "daymark") {
     />
   )}
   {page === "changes" && (
-    <AppChangeLogPage
+    <LazyAppChangeLogPage
       changeLogs={appChangeLogs}
       navigateTo={navigateTo}
       restoreChangeLog={restoreChangeLog}
     />
   )}
   {page === "settings" && (
-    <MoneyDiarySettingsPage
+    <LazyMoneyDiarySettingsPage
       backupSource={backupSource}
       onRestoreBackup={restoreBackup}
       syncStatus={syncStatus}
       userId={session.user.id}
     />
   )}
-  <BalanceCheckOverlay
+        </Suspense>
+      </LazyRouteBoundary>
+  {balanceCheckOverlay.isOpen && (
+    <LazyRouteBoundary>
+      <Suspense fallback={null}>
+  <LazyBalanceCheckOverlay
     appMoney={getAppMoneyAtDate(balanceCheckForm.date)}
     balanceCheck={balanceChecks.find((item) => item.date === balanceCheckForm.date)}
     form={balanceCheckForm}
@@ -3765,6 +3974,9 @@ if (route.kind === "daymark") {
     }
     onSubmit={handleBalanceCheckSubmit}
   />
+      </Suspense>
+    </LazyRouteBoundary>
+  )}
     </MoneyPageShell>
   );
 }

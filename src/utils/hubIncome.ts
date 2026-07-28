@@ -5,6 +5,7 @@ import {
   HANOI_WEEKDAY_REGION_REWARD,
 } from "../constants/hanoiHub";
 import type { HubEntry, HubSettings } from "../types/hub";
+import { allocateHubDailyRewards } from "./hubDailyRewards";
 
 type RewardRange = [number, number | null, number];
 
@@ -131,4 +132,55 @@ export function calculateHubIncome(entry: HubEntry, settings: HubSettings) {
     extraIncome: entry.extraIncome,
     total,
   };
+}
+
+export type HubIncome = ReturnType<typeof calculateHubIncome>;
+
+/**
+ * Daily bonuses are unlocked from the total eligible orders of a date. Hub 1
+ * is excluded from the threshold, and rewards are split proportionally so
+ * per-shift analytics add up without counting the reward more than once.
+ */
+export function calculateHubIncomeByEntry(
+  entries: HubEntry[],
+  settings: HubSettings
+) {
+  const incomeByEntry = new Map<string, HubIncome>();
+  const rewardAllocations = allocateHubDailyRewards(
+    entries,
+    (date, totalOrders) =>
+      settings.includeSundayReward
+        ? getFlatRewardFromRange(
+            totalOrders,
+            isSunday(date)
+              ? HANOI_SUNDAY_ORDER_REWARD
+              : HANOI_WEEKDAY_REGION_REWARD
+          )
+        : 0,
+    (entry) => entry.hubType !== "HUB_1"
+  );
+
+  entries.forEach((entry) => {
+    const currentIncome = calculateHubIncome(entry, settings);
+    const allocatedReward = rewardAllocations.get(entry.id) ?? 0;
+    const sundayReward = isSunday(entry.date) ? allocatedReward : 0;
+    const weekdayRegionReward = isSunday(entry.date) ? 0 : allocatedReward;
+    const previousDailyReward =
+      currentIncome.sundayReward + currentIncome.weekdayRegionReward;
+    const total =
+      currentIncome.total - previousDailyReward + allocatedReward;
+    const excludedFromWorkIncome =
+      currentIncome.extraJoinOrderReward + allocatedReward;
+
+    incomeByEntry.set(entry.id, {
+      ...currentIncome,
+      excludedFromWorkIncome,
+      sundayReward,
+      total,
+      weekdayRegionReward,
+      workIncome: total - excludedFromWorkIncome,
+    });
+  });
+
+  return incomeByEntry;
 }

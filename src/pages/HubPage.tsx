@@ -21,9 +21,13 @@ import {
   groupHubPerformance,
   summarizeHubRows,
 } from "../utils/hubAnalytics";
-import { calculateHubIncome } from "../utils/hubIncome";
+import {
+  calculateHubIncome,
+  calculateHubIncomeByEntry,
+} from "../utils/hubIncome";
 import {
   calculateHubActualProfit,
+  getHubOperatingCostTotal,
   summarizeHubOperatingCosts,
 } from "../utils/hubProfit";
 import {
@@ -643,9 +647,12 @@ export function HubPage({
       string,
       { previousIncome: number; nextIncome: number }
     >();
+    const dailyIncomeByEntry = calculateHubIncomeByEntry(entries, settings);
 
     for (const entry of legacyEntries) {
-      const income = calculateHubIncome(entry, settings);
+      const income =
+        dailyIncomeByEntry.get(entry.id) ??
+        calculateHubIncome(entry, settings);
       const current = migrationByDate.get(entry.date) ?? {
         previousIncome: 0,
         nextIncome: 0,
@@ -744,6 +751,10 @@ export function HubPage({
     () => calculateMoneyStreak(entries, settings),
     [entries, settings]
   );
+  const hubIncomeByEntry = useMemo(
+    () => calculateHubIncomeByEntry(entries, settings),
+    [entries, settings]
+  );
 
   const calendarDays = useMemo(() => {
     return getCalendarDays(
@@ -762,23 +773,29 @@ export function HubPage({
 
   const totalHubIncome = useMemo(() => {
     return entries.reduce((sum, entry) => {
-      return sum + calculateHubIncome(entry, settings).total;
+      const income =
+        hubIncomeByEntry.get(entry.id) ?? calculateHubIncome(entry, settings);
+      return sum + income.total;
     }, 0);
-  }, [entries, settings]);
+  }, [entries, hubIncomeByEntry, settings]);
   const totalHubActualProfit = useMemo(() => {
     return entries.reduce((sum, entry) => {
-      return sum + calculateHubActualProfit(entry, settings).actualProfit;
+      const income =
+        hubIncomeByEntry.get(entry.id) ?? calculateHubIncome(entry, settings);
+      return sum + income.total - getHubOperatingCostTotal(entry);
     }, 0);
-  }, [entries, settings]);
+  }, [entries, hubIncomeByEntry, settings]);
 
   const calculatorRows = useMemo(() => {
     return entries
       .filter((entry) => entry.date === calculatorForm.date)
       .map((entry) => ({
         entry,
-        income: calculateHubIncome(entry, settings),
+        income:
+          hubIncomeByEntry.get(entry.id) ??
+          calculateHubIncome(entry, settings),
       }));
-  }, [calculatorForm.date, entries, settings]);
+  }, [calculatorForm.date, entries, hubIncomeByEntry, settings]);
 
   const calculatorTotals = useMemo(() => {
     const totalIncome = calculatorRows.reduce((sum, row) => {
@@ -846,11 +863,20 @@ export function HubPage({
   }, [form]);
 
   const previewIncome = useMemo(() => {
-    return calculateHubIncome(previewEntry, settings);
-  }, [previewEntry, settings]);
+    const previewEntries = [
+      ...entries.filter((entry) => entry.id !== editingHubEntryId),
+      previewEntry,
+    ];
+
+    return (
+      calculateHubIncomeByEntry(previewEntries, settings).get(
+        previewEntry.id
+      ) ?? calculateHubIncome(previewEntry, settings)
+    );
+  }, [editingHubEntryId, entries, previewEntry, settings]);
   const previewProfit = useMemo(
-    () => calculateHubActualProfit(previewEntry, settings),
-    [previewEntry, settings]
+    () => calculateHubActualProfit(previewEntry, settings, previewIncome),
+    [previewEntry, previewIncome, settings]
   );
   const hubRows = useMemo(
     () => buildHubAnalyticsRows(entries, settings),
@@ -1479,6 +1505,7 @@ export function HubPage({
       )}
       {tab === "list" && (
         <MyShiftsPage
+          allEntries={sortedEntries}
           entries={filteredHubEntries}
           settings={settings}
           expandedShiftIds={expandedShiftIds}

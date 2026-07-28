@@ -27,6 +27,7 @@ import type {
   AccountTransaction,
   FinancialAccount,
 } from "../account-ledger/accountLedgerModel";
+import type { AccountReconciliation } from "../account-reconciliation/accountReconciliationModel";
 import type {
   AutomationRule,
   AutomationRunLog,
@@ -35,6 +36,7 @@ import type { CashFlowPlan } from "../cash-flow/cashFlowForecastModel";
 
 export type MoneyBackupState = {
   accountTransactions: AccountTransaction[];
+  accountReconciliations: AccountReconciliation[];
   appChangeLogs: AppChangeLog[];
   automationLogs: AutomationRunLog[];
   automationProcessedKeys: string[];
@@ -68,6 +70,7 @@ export function buildBackupSourceData(
   return {
     accounts: {
       accounts: moneyState.financialAccounts,
+      reconciliations: moneyState.accountReconciliations,
       transactions: moneyState.accountTransactions,
     },
     automation: {

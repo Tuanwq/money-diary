@@ -15,6 +15,7 @@ import type {
   AccountTransaction,
   FinancialAccount,
 } from "../account-ledger/accountLedgerModel";
+import type { AccountReconciliation } from "../account-reconciliation/accountReconciliationModel";
 import type {
   AutomationRule,
   AutomationRunLog,
@@ -63,6 +64,7 @@ export type BackupHubData = {
 export type BackupSourceData = {
   accounts: {
     accounts: FinancialAccount[];
+    reconciliations: AccountReconciliation[];
     transactions: AccountTransaction[];
   };
   automation: {
@@ -80,6 +82,7 @@ export type BackupSourceData = {
 
 export type BackupSummary = {
   accountTransactions: number;
+  accountReconciliations: number;
   automationRules: number;
   automationRuns: number;
   balanceChecks: number;
@@ -185,6 +188,7 @@ export function getBackupKindLabel(kind: BackupKind) {
 export function getBackupSummary(data: BackupSourceData): BackupSummary {
   return {
     accountTransactions: data.accounts.transactions.length,
+    accountReconciliations: data.accounts.reconciliations?.length ?? 0,
     automationRules: data.automation.rules.length,
     automationRuns: data.automation.logs.length,
     balanceChecks: data.journal.balanceChecks.length,
@@ -282,6 +286,9 @@ function normalizeSnapshot(snapshot: BackupSnapshot): BackupSnapshot {
       accounts: {
         accounts: Array.isArray(source.accounts?.accounts)
           ? source.accounts.accounts
+          : [],
+        reconciliations: Array.isArray(source.accounts?.reconciliations)
+          ? source.accounts.reconciliations
           : [],
         transactions: Array.isArray(source.accounts?.transactions)
           ? source.accounts.transactions

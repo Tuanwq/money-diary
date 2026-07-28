@@ -1,14 +1,17 @@
 import {
   AlertTriangle,
+  ArrowRight,
   CalendarDays,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
   CircleDollarSign,
   Cloud,
+  Goal,
   Pencil,
   Plus,
   RefreshCcw,
+  Sparkles,
   Trash2,
   TrendingDown,
   TrendingUp,
@@ -27,7 +30,7 @@ import {
   YAxis,
 } from "recharts";
 import "./CashFlowForecastPage.css";
-import type { DailyEntry, ExpenseEntry } from "../../types";
+import type { DailyEntry, ExpenseBudget, ExpenseEntry } from "../../types";
 import { getToday } from "../../utils/date";
 import {
   formatMoney,
@@ -39,15 +42,22 @@ import {
   CASH_FLOW_PLAN_TYPE_LABELS,
   CASH_FLOW_RECURRENCE_LABELS,
   addCashFlowDays,
+  buildCashFlowAccountProjections,
   buildCashFlowForecast,
+  buildCashFlowSimulation,
+  type CashFlowAccountBalance,
+  type CashFlowGoalCommitment,
   type CashFlowPlan,
   type CashFlowPlanType,
   type CashFlowRecurrence,
   type CashFlowScenarioId,
+  type CashFlowSimulationAdjustment,
 } from "./cashFlowForecastModel";
+import { CashFlowScenarioBuilder } from "./CashFlowScenarioBuilder";
 
 const PROJECTION_ROWS_PER_PAGE = 10;
-const HORIZON_OPTIONS = [7, 14, 30, 60] as const;
+const HORIZON_OPTIONS = [7, 14, 30, 60, 90] as const;
+const MAX_HORIZON_DAYS = 180;
 
 function formatDate(value: string, options?: Intl.DateTimeFormatOptions) {
   const [year, month, day] = value.split("-").map(Number);
@@ -81,10 +91,12 @@ function formatCompactMoney(value: number) {
 }
 
 function CashFlowPlanForm({
+  accounts,
   onClose,
   onSave,
   plan,
 }: {
+  accounts: CashFlowAccountBalance[];
   onClose: () => void;
   onSave: (plan: CashFlowPlan) => void;
   plan: CashFlowPlan | null;
@@ -101,6 +113,7 @@ function CashFlowPlanForm({
   const [recurrence, setRecurrence] = useState<CashFlowRecurrence>(
     plan?.recurrence ?? "once"
   );
+  const [accountId, setAccountId] = useState(plan?.accountId ?? "");
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -132,6 +145,7 @@ function CashFlowPlanForm({
     const now = new Date().toISOString();
 
     onSave({
+      ...(accountId ? { accountId } : {}),
       amount: parsedAmount,
       createdAt: plan?.createdAt ?? now,
       enabled: plan?.enabled ?? true,
@@ -198,6 +212,21 @@ function CashFlowPlanForm({
             />
           </label>
 
+          <label className="cash-flow-field cash-flow-field-wide">
+            <span>Tài khoản áp dụng</span>
+            <select
+              onChange={(event) => setAccountId(event.target.value)}
+              value={accountId}
+            >
+              <option value="">Chưa gắn tài khoản cụ thể</option>
+              {accounts.map((account) => (
+                <option key={account.id} value={account.id}>
+                  {account.name}
+                </option>
+              ))}
+            </select>
+          </label>
+
           <label className="cash-flow-field">
             <span>Số tiền</span>
             <div className="cash-flow-money-input">
@@ -262,63 +291,128 @@ function CashFlowPlanForm({
 }
 
 export function CashFlowForecastPage({
+  accountBalances,
   balanceSource,
   cloudStatus,
   currentBalance,
   deletePlan,
   entries,
+  expenseBudgets,
   expenses,
+  goalCommitments,
   plans,
   savePlan,
   togglePlan,
 }: {
+  accountBalances: CashFlowAccountBalance[];
   balanceSource: string;
   cloudStatus: string;
   currentBalance: number;
   deletePlan: (planId: string) => void;
   entries: DailyEntry[];
+  expenseBudgets: ExpenseBudget[];
   expenses: ExpenseEntry[];
+  goalCommitments: CashFlowGoalCommitment[];
   plans: CashFlowPlan[];
   savePlan: (plan: CashFlowPlan) => void;
   togglePlan: (planId: string) => void;
 }) {
   const today = getToday();
-  const [horizonDays, setHorizonDays] = useState<(typeof HORIZON_OPTIONS)[number]>(
-    30
-  );
+  const [horizonDays, setHorizonDays] = useState(30);
+  const [isCustomHorizon, setIsCustomHorizon] = useState(false);
+  const [customHorizonDays, setCustomHorizonDays] = useState("45");
   const [scenarioId, setScenarioId] =
     useState<CashFlowScenarioId>("realistic");
   const [editingPlan, setEditingPlan] = useState<CashFlowPlan | null>(null);
   const [isPlanFormOpen, setIsPlanFormOpen] = useState(false);
   const [projectionPage, setProjectionPage] = useState(1);
+  const [simulationAdjustments, setSimulationAdjustments] = useState<
+    CashFlowSimulationAdjustment[]
+  >([]);
+  const accountNameMap = useMemo(
+    () => new Map(accountBalances.map((account) => [account.id, account.name])),
+    [accountBalances]
+  );
   const forecast = useMemo(
     () =>
       buildCashFlowForecast({
+        budgets: expenseBudgets,
         currentBalance,
         entries,
         expenses,
+        goalCommitments,
         horizonDays,
         plans,
         today,
       }),
-    [currentBalance, entries, expenses, horizonDays, plans, today]
+    [
+      currentBalance,
+      entries,
+      expenseBudgets,
+      expenses,
+      goalCommitments,
+      horizonDays,
+      plans,
+      today,
+    ]
   );
   const activeScenario =
     forecast.scenarios.find((scenario) => scenario.id === scenarioId) ??
     forecast.scenarios[1];
+  const simulationInput = useMemo(
+    () => ({ adjustments: simulationAdjustments }),
+    [simulationAdjustments]
+  );
+  const simulation = useMemo(
+    () =>
+      buildCashFlowSimulation(
+        activeScenario,
+        currentBalance,
+        simulationInput
+      ),
+    [activeScenario, currentBalance, simulationInput]
+  );
+  const isSimulationActive = simulation.appliedAdjustmentCount > 0;
+  const displayedScenario = isSimulationActive ? simulation : activeScenario;
+  const chartData = useMemo(
+    () =>
+      activeScenario.points.map((point, index) => ({
+        ...point,
+        simulatedBalance: simulation.points[index]?.balance ?? point.balance,
+      })),
+    [activeScenario.points, simulation.points]
+  );
+  const accountProjections = useMemo(
+    () =>
+      buildCashFlowAccountProjections({
+        accounts: accountBalances,
+        fromDate: forecast.fromDate,
+        plans,
+        simulationAdjustments,
+        toDate: forecast.toDate,
+      }),
+    [
+      accountBalances,
+      forecast.fromDate,
+      forecast.toDate,
+      plans,
+      simulationAdjustments,
+    ]
+  );
   const projectionTotalPages = Math.max(
     1,
-    Math.ceil(activeScenario.points.length / PROJECTION_ROWS_PER_PAGE)
+    Math.ceil(displayedScenario.points.length / PROJECTION_ROWS_PER_PAGE)
   );
-  const projectionRows = activeScenario.points.slice(
+  const projectionRows = displayedScenario.points.slice(
     (projectionPage - 1) * PROJECTION_ROWS_PER_PAGE,
     projectionPage * PROJECTION_ROWS_PER_PAGE
   );
-  const riskDate = activeScenario.negativeBalanceDate;
+  const riskDate = displayedScenario.negativeBalanceDate;
   const isLowBalance =
     !riskDate &&
-    activeScenario.lowestBalance >= 0 &&
-    activeScenario.lowestBalance < Math.max(currentBalance * 0.2, 500_000);
+    displayedScenario.lowestBalance >= 0 &&
+    displayedScenario.lowestBalance <
+      Math.max(currentBalance * 0.2, 500_000);
   const trendContent =
     forecast.trend === "improving"
       ? {
@@ -357,6 +451,59 @@ export function CashFlowForecastPage({
     }
   }
 
+  function applyHorizonDays(nextDays: number) {
+    const safeDays = Math.min(
+      Math.max(Math.round(nextDays) || 1, 1),
+      MAX_HORIZON_DAYS
+    );
+    const nextFromDate = addCashFlowDays(today, 1);
+    const nextToDate = addCashFlowDays(nextFromDate, safeDays - 1);
+
+    setHorizonDays(safeDays);
+    setProjectionPage(1);
+    setSimulationAdjustments((current) =>
+      current.map((adjustment) => {
+        if (adjustment.type === "rest") {
+          return {
+            ...adjustment,
+            startDate:
+              adjustment.startDate < nextFromDate ||
+              adjustment.startDate > nextToDate
+                ? nextFromDate
+                : adjustment.startDate,
+          };
+        }
+
+        if (
+          adjustment.type === "income" ||
+          adjustment.type === "expense"
+        ) {
+          return {
+            ...adjustment,
+            date:
+              adjustment.date < nextFromDate ||
+              adjustment.date > nextToDate
+                ? nextFromDate
+                : adjustment.date,
+          };
+        }
+
+        const startDate =
+          adjustment.startDate < nextFromDate ||
+          adjustment.startDate > nextToDate
+            ? nextFromDate
+            : adjustment.startDate;
+        const endDate =
+          adjustment.endDate < startDate ||
+          adjustment.endDate > nextToDate
+            ? nextToDate
+            : adjustment.endDate;
+
+        return { ...adjustment, endDate, startDate };
+      })
+    );
+  }
+
   return (
     <div className="cash-flow-page">
       <header className="cash-flow-page-header">
@@ -392,20 +539,151 @@ export function CashFlowForecastPage({
             {formatDate(forecast.fromDate)} - {formatDate(forecast.toDate)}
           </span>
         </div>
-        <div className="cash-flow-horizon-options">
-          {HORIZON_OPTIONS.map((days) => (
+        <div className="cash-flow-horizon-control">
+          <div className="cash-flow-horizon-options">
+            {HORIZON_OPTIONS.map((days) => (
+              <button
+                className={
+                  !isCustomHorizon && horizonDays === days
+                    ? "is-active"
+                    : ""
+                }
+                key={days}
+                onClick={() => {
+                  setIsCustomHorizon(false);
+                  applyHorizonDays(days);
+                }}
+                type="button"
+              >
+                {days} ngày
+              </button>
+            ))}
             <button
-              className={horizonDays === days ? "is-active" : ""}
-              key={days}
+              className={isCustomHorizon ? "is-active" : ""}
               onClick={() => {
-                setHorizonDays(days);
-                setProjectionPage(1);
+                setCustomHorizonDays(String(horizonDays));
+                setIsCustomHorizon(true);
               }}
               type="button"
             >
-              {days} ngày
+              Tùy chỉnh
             </button>
-          ))}
+          </div>
+          {isCustomHorizon && (
+            <form
+              className="cash-flow-custom-horizon"
+              onSubmit={(event) => {
+                event.preventDefault();
+                const nextDays = Number.parseInt(customHorizonDays, 10);
+
+                if (
+                  !Number.isFinite(nextDays) ||
+                  nextDays < 1 ||
+                  nextDays > MAX_HORIZON_DAYS
+                ) {
+                  alert(
+                    `Khoảng dự báo phải từ 1 đến ${MAX_HORIZON_DAYS} ngày.`
+                  );
+                  return;
+                }
+
+                applyHorizonDays(nextDays);
+                setCustomHorizonDays(String(nextDays));
+              }}
+            >
+              <label>
+                <span>Số ngày dự báo</span>
+                <input
+                  inputMode="numeric"
+                  max={MAX_HORIZON_DAYS}
+                  min="1"
+                  onChange={(event) =>
+                    setCustomHorizonDays(event.target.value)
+                  }
+                  type="number"
+                  value={customHorizonDays}
+                />
+              </label>
+              <button type="submit">Áp dụng</button>
+            </form>
+          )}
+        </div>
+      </section>
+
+      <section className="cash-flow-simulation-section">
+        <div className="cash-flow-section-heading">
+          <div>
+            <h2>Thử kịch bản cá nhân</h2>
+            <p>
+              Kết hợp nhiều điều chỉnh để thử các tình huống khác nhau mà
+              không lưu thành giao dịch.
+            </p>
+          </div>
+          <span className={isSimulationActive ? "is-active" : ""}>
+            <Sparkles aria-hidden="true" size={15} />
+            {isSimulationActive
+              ? `${simulation.appliedAdjustmentCount} điều chỉnh đang áp dụng`
+              : "Chưa áp dụng"}
+          </span>
+        </div>
+
+        <CashFlowScenarioBuilder
+          accounts={accountBalances}
+          adjustments={simulationAdjustments}
+          fromDate={forecast.fromDate}
+          onChange={setSimulationAdjustments}
+          toDate={forecast.toDate}
+        />
+
+        <div className="cash-flow-simulation-result" role="status">
+          <div>
+            <span>Đường cơ sở</span>
+            <strong>{formatMoney(activeScenario.projectedBalance)}</strong>
+          </div>
+          <div>
+            <span>Còn lại đến {formatShortDate(forecast.toDate)}</span>
+            <strong
+              className={
+                simulation.projectedBalance < 0
+                  ? "is-negative"
+                  : "is-positive"
+              }
+            >
+              {formatMoney(simulation.projectedBalance)}
+            </strong>
+          </div>
+          <div>
+            <span>Ảnh hưởng</span>
+            <strong
+              className={
+                simulation.baselineDifference < 0
+                  ? "is-negative"
+                  : "is-positive"
+              }
+            >
+              {formatSignedMoney(simulation.baselineDifference)}
+            </strong>
+          </div>
+          <div>
+            <span>Điều chỉnh thu nhập</span>
+            <strong
+              className={
+                simulation.extraIncome - simulation.lostIncome < 0
+                  ? "is-negative"
+                  : "is-positive"
+              }
+            >
+              {formatSignedMoney(
+                simulation.extraIncome - simulation.lostIncome
+              )}
+            </strong>
+          </div>
+          <div>
+            <span>Chi phí thêm</span>
+            <strong className={simulation.extraExpense > 0 ? "is-negative" : ""}>
+              {formatMoney(simulation.extraExpense)}
+            </strong>
+          </div>
         </div>
       </section>
 
@@ -425,12 +703,12 @@ export function CashFlowForecastPage({
             </strong>
             <p>
               {riskDate
-                ? `Theo kịch bản ${activeScenario.label.toLocaleLowerCase(
+                ? `Theo kịch bản ${displayedScenario.label.toLocaleLowerCase(
                     "vi-VN"
                   )}, các khoản chi có thể vượt số dư hiện có.`
                 : `Mức thấp nhất dự kiến là ${formatMoney(
-                    activeScenario.lowestBalance
-                  )} vào ${formatDate(activeScenario.lowestBalanceDate)}.`}
+                    displayedScenario.lowestBalance
+                  )} vào ${formatDate(displayedScenario.lowestBalanceDate)}.`}
             </p>
           </div>
         </section>
@@ -449,37 +727,45 @@ export function CashFlowForecastPage({
           <span>Số dư sau {horizonDays} ngày</span>
           <strong
             className={
-              activeScenario.projectedBalance < 0 ? "is-negative" : "is-positive"
+              displayedScenario.projectedBalance < 0
+                ? "is-negative"
+                : "is-positive"
             }
           >
-            {formatMoney(activeScenario.projectedBalance)}
+            {formatMoney(displayedScenario.projectedBalance)}
           </strong>
-          <small>Kịch bản {activeScenario.label.toLocaleLowerCase("vi-VN")}</small>
+          <small>
+            {isSimulationActive
+              ? "Đã gồm kịch bản thử"
+              : `Kịch bản ${activeScenario.label.toLocaleLowerCase("vi-VN")}`}
+          </small>
         </div>
         <div>
           <span>Biến động ròng</span>
           <strong
             className={
-              activeScenario.netChange < 0 ? "is-negative" : "is-positive"
+              displayedScenario.netChange < 0
+                ? "is-negative"
+                : "is-positive"
             }
           >
-            {formatSignedMoney(activeScenario.netChange)}
+            {formatSignedMoney(displayedScenario.netChange)}
           </strong>
           <small>
-            Thu {formatMoney(activeScenario.totalIncome)} · Chi{" "}
-            {formatMoney(activeScenario.totalExpense)}
+            Thu {formatMoney(displayedScenario.totalIncome)} · Chi và dành riêng{" "}
+            {formatMoney(displayedScenario.totalExpense)}
           </small>
         </div>
         <div>
           <span>Mức thấp nhất</span>
           <strong
             className={
-              activeScenario.lowestBalance < 0 ? "is-negative" : ""
+              displayedScenario.lowestBalance < 0 ? "is-negative" : ""
             }
           >
-            {formatMoney(activeScenario.lowestBalance)}
+            {formatMoney(displayedScenario.lowestBalance)}
           </strong>
-          <small>{formatDate(activeScenario.lowestBalanceDate)}</small>
+          <small>{formatDate(displayedScenario.lowestBalanceDate)}</small>
         </div>
       </section>
 
@@ -531,6 +817,76 @@ export function CashFlowForecastPage({
         </div>
       </section>
 
+      <section className="cash-flow-commitment-section">
+        <div className="cash-flow-section-heading">
+          <div>
+            <h2>Cam kết đã đưa vào dự báo</h2>
+            <p>
+              Mục tiêu được dành riêng theo deadline; ngân sách tạo mức chi dự
+              phòng theo tháng.
+            </p>
+          </div>
+          <span>
+            {forecast.goalCommitments.length} mục tiêu ·{" "}
+            {forecast.budgetEnvelopes.length} ngân sách
+          </span>
+        </div>
+
+        <div className="cash-flow-commitment-grid">
+          <div className="cash-flow-commitment-column">
+            <div className="cash-flow-commitment-title">
+              <Goal aria-hidden="true" size={17} />
+              <strong>Mục tiêu tài chính</strong>
+              <span>{formatMoney(forecast.totalGoalReserve)}</span>
+            </div>
+            {forecast.goalCommitments.length === 0 ? (
+              <p className="cash-flow-compact-empty">
+                Không còn mục tiêu cần dành thêm tiền.
+              </p>
+            ) : (
+              forecast.goalCommitments.map((commitment) => (
+                <div className="cash-flow-commitment-row" key={commitment.id}>
+                  <div>
+                    <strong>{commitment.label}</strong>
+                    <span>
+                      {commitment.type === "main" ? "Mục tiêu chính" : "Mục tiêu phụ"} ·
+                      hạn {formatDate(commitment.deadline)}
+                    </span>
+                  </div>
+                  <b>{formatMoney(commitment.remaining)}</b>
+                </div>
+              ))
+            )}
+          </div>
+
+          <div className="cash-flow-commitment-column">
+            <div className="cash-flow-commitment-title">
+              <CircleDollarSign aria-hidden="true" size={17} />
+              <strong>Ngân sách theo nhãn</strong>
+              <span>{formatMoney(forecast.totalBudgetEnvelope)}</span>
+            </div>
+            {forecast.budgetEnvelopes.length === 0 ? (
+              <p className="cash-flow-compact-empty">
+                Chưa có ngân sách theo nhãn để đưa vào dự báo.
+              </p>
+            ) : (
+              forecast.budgetEnvelopes.map((budget) => (
+                <div className="cash-flow-commitment-row" key={budget.id}>
+                  <div>
+                    <strong>{budget.label}</strong>
+                    <span>
+                      Đã chi {formatMoney(budget.spent)} /{" "}
+                      {formatMoney(budget.monthlyLimit)}
+                    </span>
+                  </div>
+                  <b>Còn {formatMoney(budget.remaining)}</b>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </section>
+
       <div className="cash-flow-main-grid">
         <section className="cash-flow-chart-section">
           <div className="cash-flow-section-heading">
@@ -538,7 +894,8 @@ export function CashFlowForecastPage({
               <h2>Đường số dư dự kiến</h2>
               <p>
                 Kịch bản {activeScenario.label.toLocaleLowerCase("vi-VN")} ·{" "}
-                {horizonDays} ngày tới.
+                {horizonDays} ngày tới
+                {isSimulationActive ? " · có đường kịch bản thử" : ""}.
               </p>
             </div>
           </div>
@@ -546,7 +903,7 @@ export function CashFlowForecastPage({
           <div className="cash-flow-chart">
             <ResponsiveContainer height="100%" width="100%">
               <LineChart
-                data={activeScenario.points}
+                data={chartData}
                 margin={{ bottom: 4, left: 4, right: 12, top: 8 }}
               >
                 <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" />
@@ -564,7 +921,11 @@ export function CashFlowForecastPage({
                 <Tooltip
                   formatter={(value, name) => [
                     formatMoney(Number(value)),
-                    name === "balance" ? "Số dư" : String(name),
+                    name === "balance"
+                      ? "Đường cơ sở"
+                      : name === "simulatedBalance"
+                        ? "Kịch bản thử"
+                        : String(name),
                   ]}
                   labelFormatter={(label) => formatDate(String(label))}
                 />
@@ -577,6 +938,17 @@ export function CashFlowForecastPage({
                   strokeWidth={3}
                   type="monotone"
                 />
+                {isSimulationActive && (
+                  <Line
+                    dataKey="simulatedBalance"
+                    dot={false}
+                    name="simulatedBalance"
+                    stroke="var(--warning)"
+                    strokeDasharray="6 4"
+                    strokeWidth={2.5}
+                    type="monotone"
+                  />
+                )}
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -629,12 +1001,67 @@ export function CashFlowForecastPage({
         </section>
       </div>
 
+      <section className="cash-flow-account-section">
+        <div className="cash-flow-section-heading">
+          <div>
+            <h2>Dự báo theo tài khoản</h2>
+            <p>
+              Phân bổ khoản định kỳ và các điều chỉnh thử đã gắn tài khoản;
+              nhịp thu chi chung vẫn nằm ở dự báo tổng.
+            </p>
+          </div>
+        </div>
+
+        {accountProjections.length === 0 ? (
+          <div className="cash-flow-empty">
+            <WalletCards aria-hidden="true" size={26} />
+            <strong>Chưa có số dư tài khoản để phân bổ</strong>
+            <span>
+              Thêm số dư trong Sổ tài khoản để biết khoản mua sẽ trừ từ đâu.
+            </span>
+          </div>
+        ) : (
+          <div className="cash-flow-account-grid">
+            {accountProjections.map((account) => (
+              <article className="cash-flow-account-item" key={account.id}>
+                <div>
+                  <span>{account.name}</span>
+                  <strong>{formatMoney(account.balance)}</strong>
+                </div>
+                <ArrowRight aria-hidden="true" size={18} />
+                <div>
+                  <span>Sau khoản đã phân bổ</span>
+                  <strong
+                    className={
+                      account.projectedBalance < 0
+                        ? "is-negative"
+                        : "is-positive"
+                    }
+                  >
+                    {formatMoney(account.projectedBalance)}
+                  </strong>
+                </div>
+                <small
+                  className={
+                    account.plannedChange < 0
+                      ? "is-negative"
+                      : "is-positive"
+                  }
+                >
+                  {formatSignedMoney(account.plannedChange)}
+                </small>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
+
       <section className="cash-flow-plan-section">
         <div className="cash-flow-section-heading">
           <div>
-            <h2>Khoản thu chi dự kiến</h2>
+            <h2>Khoản định kỳ và dự kiến</h2>
             <p>
-              Lịch thanh toán và nguồn tiền chắc chắn trong tương lai.
+              Lịch thanh toán, trả góp và nguồn tiền chắc chắn trong tương lai.
             </p>
           </div>
           <button
@@ -691,6 +1118,12 @@ export function CashFlowForecastPage({
                   <p>
                     Từ {formatDate(plan.startDate)} ·{" "}
                     {CASH_FLOW_PLAN_TYPE_LABELS[plan.type]}
+                    {plan.accountId
+                      ? ` · ${
+                          accountNameMap.get(plan.accountId) ??
+                          "Tài khoản đã ẩn"
+                        }`
+                      : ""}
                   </p>
                 </div>
                 <strong
@@ -751,7 +1184,7 @@ export function CashFlowForecastPage({
             </p>
           </div>
           <span>
-            {activeScenario.points.length} ngày · {activeScenario.label}
+            {displayedScenario.points.length} ngày · {displayedScenario.label}
           </span>
         </div>
 
@@ -816,8 +1249,9 @@ export function CashFlowForecastPage({
           <p>
             Kịch bản thực tế dùng 65% nhịp 7 ngày và 35% nhịp 30 ngày. Kịch bản
             thận trọng giảm 20% thu, tăng 15% chi; kịch bản tích cực tăng 15%
-            thu, giảm 10% chi. Đây là ước tính hỗ trợ lập kế hoạch, không phải
-            số tiền chắc chắn.
+            thu, giảm 10% chi. Ngân sách là mức chi dự phòng, mục tiêu là tiền
+            cần dành riêng; khoản định kỳ được cộng đúng lịch. Đây là ước tính
+            hỗ trợ lập kế hoạch, không phải số tiền chắc chắn.
           </p>
         </div>
         <CheckCircle2 aria-hidden="true" size={18} />
@@ -825,6 +1259,7 @@ export function CashFlowForecastPage({
 
       {isPlanFormOpen && (
         <CashFlowPlanForm
+          accounts={accountBalances}
           onClose={() => {
             setIsPlanFormOpen(false);
             setEditingPlan(null);

@@ -20,6 +20,7 @@ type MoneyPageShellProps = {
   onOpenIncome: () => void;
   onOpenBalanceCheck: () => void;
   onOpenAccountLedger: () => void;
+  onOpenAccountReconciliation: () => void;
   onOpenAutomation: () => void;
   onOpenCashFlow: () => void;
   onOpenChangeLog: () => void;
@@ -43,6 +44,7 @@ export function MoneyPageShell({
   onOpenIncome,
   onOpenBalanceCheck,
   onOpenAccountLedger,
+  onOpenAccountReconciliation,
   onOpenAutomation,
   onOpenCashFlow,
   onOpenChangeLog,
@@ -74,6 +76,7 @@ export function MoneyPageShell({
     addReturnTarget === "desktop" ? desktopAddButtonRef : addButtonRef;
 
   const openAnalysis = useCallback(() => {
+    sessionStorage.setItem("money-diary:open-ai-pending", "1");
     navigateTo("home");
     window.setTimeout(() => {
       window.dispatchEvent(new Event("money-diary:open-ai"));
@@ -90,7 +93,6 @@ export function MoneyPageShell({
           email={email}
           isCloudRefreshing={isCloudRefreshing}
           navigateTo={navigateTo}
-          onExportReport={onExportReport}
           onLogout={onLogout}
           onOpenAccount={() => {
             setMoreReturnTarget("desktopAccount");
@@ -160,6 +162,7 @@ export function MoneyPageShell({
         onLogout={onLogout}
         onOpenAnalysis={openAnalysis}
         onOpenAccountLedger={onOpenAccountLedger}
+        onOpenAccountReconciliation={onOpenAccountReconciliation}
         onOpenAutomation={onOpenAutomation}
         onOpenCashFlow={onOpenCashFlow}
         onOpenBalanceChecks={() => navigateTo("balanceChecks")}

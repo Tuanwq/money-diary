@@ -7,6 +7,7 @@ import {
   FileText,
   LogOut,
   RefreshCcw,
+  Scale,
   TrendingUp,
   UserRound,
   WalletCards,
@@ -26,6 +27,7 @@ type MoneyMoreSheetProps = {
   onLogout: () => void;
   onOpenAnalysis: () => void;
   onOpenAccountLedger: () => void;
+  onOpenAccountReconciliation: () => void;
   onOpenAutomation: () => void;
   onOpenCashFlow: () => void;
   onOpenBalanceChecks: () => void;
@@ -47,6 +49,7 @@ export function MoneyMoreSheet({
   onLogout,
   onOpenAnalysis,
   onOpenAccountLedger,
+  onOpenAccountReconciliation,
   onOpenAutomation,
   onOpenCashFlow,
   onOpenBalanceChecks,
@@ -64,6 +67,11 @@ export function MoneyMoreSheet({
       icon: WalletCards,
       label: "Sổ tài khoản",
       onClick: onOpenAccountLedger,
+    },
+    {
+      icon: Scale,
+      label: "Kiểm kê tài khoản",
+      onClick: onOpenAccountReconciliation,
     },
     {
       icon: Workflow,
