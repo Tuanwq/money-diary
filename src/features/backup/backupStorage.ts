@@ -1,4 +1,8 @@
 import { supabase } from "../../lib/supabase";
+import {
+  isMoneyCloudSyncEnabled,
+  LOCAL_ONLY_SYNC_STATUS,
+} from "../../config/moneyCloudSync";
 import { safeSetStorageJson } from "../../utils/safeStorage";
 import type { BackupKind, BackupRecord } from "./backupModel";
 import {
@@ -225,6 +229,14 @@ export async function loadBackupRecords(
 ): Promise<BackupLoadResult> {
   const deviceRecords = await listDeviceRecords(ownerId);
 
+  if (!isMoneyCloudSyncEnabled) {
+    return {
+      cloudAvailable: false,
+      cloudError: `${LOCAL_ONLY_SYNC_STATUS}. Backup không được gửi lên cloud.`,
+      records: mergeBackupRecords(deviceRecords, []),
+    };
+  }
+
   try {
     const cloudRecords = await listCloudRecords(ownerId);
 
@@ -247,6 +259,13 @@ export async function saveBackupRecord(
 ): Promise<BackupCloudResult> {
   await putDeviceRecord(record);
 
+  if (!isMoneyCloudSyncEnabled) {
+    return {
+      cloudAvailable: false,
+      cloudError: `${LOCAL_ONLY_SYNC_STATUS}. Backup chỉ được lưu local.`,
+    };
+  }
+
   try {
     await putCloudRecord(record);
     return { cloudAvailable: true, cloudError: "" };
@@ -263,6 +282,13 @@ export async function deleteBackupRecord(
   id: string
 ): Promise<BackupCloudResult> {
   await deleteDeviceRecords([id]);
+
+  if (!isMoneyCloudSyncEnabled) {
+    return {
+      cloudAvailable: false,
+      cloudError: `${LOCAL_ONLY_SYNC_STATUS}.`,
+    };
+  }
 
   try {
     await deleteCloudRecords(ownerId, [id]);
@@ -281,6 +307,13 @@ export async function enforceBackupRetention(
   const deviceRecords = await listDeviceRecords(ownerId);
   const deviceExpiredIds = getExpiredBackupIds(deviceRecords);
   await deleteDeviceRecords(deviceExpiredIds);
+
+  if (!isMoneyCloudSyncEnabled) {
+    return {
+      cloudAvailable: false,
+      cloudError: `${LOCAL_ONLY_SYNC_STATUS}.`,
+    };
+  }
 
   try {
     const cloudRecords = await listCloudRecords(ownerId);

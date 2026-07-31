@@ -20,7 +20,12 @@ async function transpileTsFile(sourcePath, targetPath) {
 
   await writeFile(
     targetPath,
-    output.replace("../../../utils/date", "../../../utils/date.js"),
+    output
+      .replace("../../../utils/date", "../../../utils/date.js")
+      .replace(
+        "../../../utils/safeStorage",
+        "../../../utils/safeStorage.js"
+      ),
     "utf8"
   );
 }
@@ -70,6 +75,10 @@ try {
   await transpileTsFile(
     join(rootDir, "src", "utils", "date.ts"),
     join(tempDir, "src", "utils", "date.js")
+  );
+  await transpileTsFile(
+    join(rootDir, "src", "utils", "safeStorage.ts"),
+    join(tempDir, "src", "utils", "safeStorage.js")
   );
   await transpileTsFile(
     join(rootDir, "src", "features", "daymark", "utils", "daymarkStreak.ts"),

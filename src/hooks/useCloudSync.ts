@@ -10,6 +10,10 @@ import {
   defaultGoals,
 } from "../constants";
 import { supabase, supabaseEnvError } from "../lib/supabase";
+import {
+  isMoneyCloudSyncEnabled,
+  LOCAL_ONLY_SYNC_STATUS,
+} from "../config/moneyCloudSync";
 import { getCloudRenderState } from "./cloudSyncState";
 import type {
   BalanceCheckEntry,
@@ -50,10 +54,14 @@ export function useCloudSync({
   const [session, setSession] = useState<Session | null>(null);
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
-  const [cloudLoaded, setCloudLoaded] = useState(false);
+  const [cloudLoaded, setCloudLoaded] = useState(!isMoneyCloudSyncEnabled);
   const [isCloudRefreshing, setIsCloudRefreshing] = useState(false);
   const [syncStatus, setSyncStatus] = useState(
-    supabaseEnvError ? "Thiếu cấu hình Supabase" : "Chưa đồng bộ"
+    !isMoneyCloudSyncEnabled
+      ? LOCAL_ONLY_SYNC_STATUS
+      : supabaseEnvError
+        ? "Thiếu cấu hình Supabase"
+        : "Chưa đồng bộ"
   );
   const [hadLocalDataAtMount] = useState(() => {
     if (
@@ -74,7 +82,7 @@ export function useCloudSync({
     ].some((key) => localStorage.getItem(key) !== null);
   });
   const localDirtyRef = useRef(false);
-  const cloudLoadedRef = useRef(false);
+  const cloudLoadedRef = useRef(!isMoneyCloudSyncEnabled);
   const cloudRequestRef = useRef<Promise<void> | null>(null);
   const userId = session?.user?.id;
   const activeUserIdRef = useRef(userId);
@@ -123,6 +131,13 @@ export function useCloudSync({
 
   const loadCloudData = useCallback(
     (userId: string, mode: CloudLoadMode = "initial") => {
+      if (!isMoneyCloudSyncEnabled) {
+        cloudLoadedRef.current = true;
+        setCloudLoaded(true);
+        setSyncStatus(LOCAL_ONLY_SYNC_STATUS);
+        return Promise.resolve();
+      }
+
       if (cloudRequestRef.current) {
         return cloudRequestRef.current;
       }
@@ -260,6 +275,11 @@ export function useCloudSync({
   );
 
   const retryCloudLoad = useCallback(() => {
+    if (!isMoneyCloudSyncEnabled) {
+      setSyncStatus(LOCAL_ONLY_SYNC_STATUS);
+      return Promise.resolve();
+    }
+
     if (!userId) return Promise.resolve();
     const mode = cloudLoadedRef.current || hadLocalDataAtMount
       ? "background"
@@ -268,7 +288,7 @@ export function useCloudSync({
   }, [hadLocalDataAtMount, loadCloudData, userId]);
 
   useEffect(() => {
-    if (!userId) return;
+    if (!isMoneyCloudSyncEnabled || !userId) return;
 
     const timeout = window.setTimeout(() => {
       void loadCloudData(
@@ -281,7 +301,7 @@ export function useCloudSync({
   }, [hadLocalDataAtMount, userId, loadCloudData]);
 
   useEffect(() => {
-    if (!userId || !cloudLoaded) return;
+    if (!isMoneyCloudSyncEnabled || !userId || !cloudLoaded) return;
 
     const timeout = setTimeout(async () => {
       setSyncStatus("Đang lưu...");
@@ -318,7 +338,7 @@ export function useCloudSync({
   ]);
 
   useEffect(() => {
-    if (!userId) return;
+    if (!isMoneyCloudSyncEnabled || !userId) return;
 
     let refreshing = false;
 
@@ -357,6 +377,12 @@ export function useCloudSync({
   }, [hadLocalDataAtMount, userId, loadCloudData]);
 
   function markLocalChanged(message = "Có thay đổi, đang chờ đồng bộ...") {
+    if (!isMoneyCloudSyncEnabled) {
+      localDirtyRef.current = false;
+      setSyncStatus(LOCAL_ONLY_SYNC_STATUS);
+      return;
+    }
+
     localDirtyRef.current = true;
     setSyncStatus(message);
   }
@@ -419,11 +445,13 @@ export function useCloudSync({
 
     await supabase.auth.signOut();
 
-    cloudLoadedRef.current = false;
+    cloudLoadedRef.current = !isMoneyCloudSyncEnabled;
     setSession(null);
-    setCloudLoaded(false);
+    setCloudLoaded(!isMoneyCloudSyncEnabled);
     setIsCloudRefreshing(false);
-    setSyncStatus("Chưa đồng bộ");
+    setSyncStatus(
+      isMoneyCloudSyncEnabled ? "Chưa đồng bộ" : LOCAL_ONLY_SYNC_STATUS
+    );
   }
 
   const { cloudLoadError, isCloudLoading } = getCloudRenderState({
@@ -443,6 +471,7 @@ export function useCloudSync({
     isCloudLoading,
     isCloudRefreshing,
     retryCloudLoad,
+    isMoneyCloudSyncEnabled,
     syncStatus,
     supabaseEnvError,
     setSyncStatus,

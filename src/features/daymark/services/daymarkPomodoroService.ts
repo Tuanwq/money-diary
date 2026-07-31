@@ -1,4 +1,7 @@
 import { supabase } from "../../../lib/supabase";
+import { isCloudDataSyncEnabled } from "../../../config/moneyCloudSync";
+import { safeSetStorageJson } from "../../../utils/safeStorage";
+import { addLocalTaskFocusSeconds } from "./daymarkTasksService";
 import type { DayMarkTask, PomodoroMode, PomodoroSessionRecord } from "../types/daymark";
 
 type RecordPomodoroSessionInput = {
@@ -12,11 +15,28 @@ type RecordPomodoroSessionInput = {
   userId: string;
 };
 
+const DAYMARK_LOCAL_POMODORO_SESSIONS_KEY =
+  "daymark_local_pomodoro_sessions";
+
+function readLocalSessions() {
+  try {
+    const saved = localStorage.getItem(DAYMARK_LOCAL_POMODORO_SESSIONS_KEY);
+    const parsed = saved ? (JSON.parse(saved) as unknown) : [];
+    return Array.isArray(parsed) ? (parsed as PomodoroSessionRecord[]) : [];
+  } catch {
+    return [];
+  }
+}
+
 export async function addTaskActualFocusSeconds(
   taskId: string,
   seconds: number
 ) {
   if (seconds <= 0) return null;
+
+  if (!isCloudDataSyncEnabled) {
+    return addLocalTaskFocusSeconds(taskId, seconds);
+  }
 
   const { data: currentTask, error: selectError } = await supabase
     .from("daymark_tasks")
@@ -55,6 +75,34 @@ export async function recordPomodoroSession({
   taskId,
   userId,
 }: RecordPomodoroSessionInput) {
+  if (!isCloudDataSyncEnabled) {
+    const now = new Date().toISOString();
+    const session: PomodoroSessionRecord = {
+      completed,
+      created_at: now,
+      duration_seconds: durationSeconds,
+      ended_at: endedAt,
+      id: crypto.randomUUID(),
+      mode,
+      started_at: startedAt,
+      task_date: taskDate,
+      task_id: taskId,
+      updated_at: now,
+      user_id: userId,
+    };
+
+    safeSetStorageJson(DAYMARK_LOCAL_POMODORO_SESSIONS_KEY, [
+      session,
+      ...readLocalSessions(),
+    ]);
+
+    if (mode === "focus" && taskId && durationSeconds > 0) {
+      addLocalTaskFocusSeconds(taskId, durationSeconds);
+    }
+
+    return session;
+  }
+
   const { data, error } = await supabase
     .from("daymark_pomodoro_sessions")
     .insert({

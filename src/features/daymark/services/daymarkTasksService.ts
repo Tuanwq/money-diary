@@ -1,4 +1,6 @@
 import { supabase } from "../../../lib/supabase";
+import { isCloudDataSyncEnabled } from "../../../config/moneyCloudSync";
+import { safeSetStorageJson } from "../../../utils/safeStorage";
 import type { DayMarkTask, DayMarkTaskInput } from "../types/daymark";
 import { getTaskDurationMinutes, normalizeTaskInput } from "../utils/daymarkUtils";
 
@@ -6,6 +8,33 @@ type DayMarkTaskInsert = Omit<
   DayMarkTask,
   "created_at" | "id" | "updated_at"
 >;
+
+const DAYMARK_LOCAL_TASKS_KEY = "daymark_local_tasks";
+
+function readLocalTasks() {
+  try {
+    const saved = localStorage.getItem(DAYMARK_LOCAL_TASKS_KEY);
+    const parsed = saved ? (JSON.parse(saved) as unknown) : [];
+    return Array.isArray(parsed) ? (parsed as DayMarkTask[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeLocalTasks(tasks: DayMarkTask[]) {
+  safeSetStorageJson(DAYMARK_LOCAL_TASKS_KEY, tasks);
+}
+
+function createLocalTask(userId: string, input: DayMarkTaskInput): DayMarkTask {
+  const now = new Date().toISOString();
+
+  return {
+    ...buildTaskInsert(userId, input),
+    id: crypto.randomUUID(),
+    created_at: now,
+    updated_at: now,
+  };
+}
 
 function notifyTasksChanged() {
   window.dispatchEvent(new Event("daymark:tasks-changed"));
@@ -60,6 +89,16 @@ function buildTaskUpdate(input: Partial<DayMarkTaskInput>) {
 }
 
 export async function listDayMarkTasksByDate(userId: string, date: string) {
+  if (!isCloudDataSyncEnabled) {
+    return readLocalTasks()
+      .filter((task) => task.user_id === userId && task.task_date === date)
+      .sort(
+        (left, right) =>
+          left.start_time.localeCompare(right.start_time) ||
+          left.created_at.localeCompare(right.created_at)
+      );
+  }
+
   const { data, error } = await supabase
     .from("daymark_tasks")
     .select("*")
@@ -78,6 +117,21 @@ export async function listDayMarkTasksInRange(
   fromDate: string,
   toDate: string
 ) {
+  if (!isCloudDataSyncEnabled) {
+    return readLocalTasks()
+      .filter(
+        (task) =>
+          task.user_id === userId &&
+          task.task_date >= fromDate &&
+          task.task_date <= toDate
+      )
+      .sort(
+        (left, right) =>
+          left.task_date.localeCompare(right.task_date) ||
+          left.start_time.localeCompare(right.start_time)
+      );
+  }
+
   const { data, error } = await supabase
     .from("daymark_tasks")
     .select("*")
@@ -96,6 +150,13 @@ export async function createDayMarkTask(
   userId: string,
   input: DayMarkTaskInput
 ) {
+  if (!isCloudDataSyncEnabled) {
+    const task = createLocalTask(userId, input);
+    writeLocalTasks([...readLocalTasks(), task]);
+    notifyTasksChanged();
+    return task;
+  }
+
   const { data, error } = await supabase
     .from("daymark_tasks")
     .insert(buildTaskInsert(userId, input))
@@ -114,6 +175,13 @@ export async function createDayMarkTasks(
 ) {
   if (inputs.length === 0) return [];
 
+  if (!isCloudDataSyncEnabled) {
+    const tasks = inputs.map((input) => createLocalTask(userId, input));
+    writeLocalTasks([...readLocalTasks(), ...tasks]);
+    notifyTasksChanged();
+    return tasks;
+  }
+
   const { data, error } = await supabase
     .from("daymark_tasks")
     .insert(inputs.map((input) => buildTaskInsert(userId, input)))
@@ -129,6 +197,24 @@ export async function updateDayMarkTask(
   taskId: string,
   input: Partial<DayMarkTaskInput>
 ) {
+  if (!isCloudDataSyncEnabled) {
+    let updatedTask: DayMarkTask | null = null;
+    const tasks = readLocalTasks().map((task) => {
+      if (task.id !== taskId) return task;
+
+      updatedTask = {
+        ...task,
+        ...buildTaskUpdate(input),
+      } as DayMarkTask;
+      return updatedTask;
+    });
+
+    if (!updatedTask) throw new Error("Không tìm thấy nhiệm vụ local.");
+    writeLocalTasks(tasks);
+    notifyTasksChanged();
+    return updatedTask;
+  }
+
   const { data, error } = await supabase
     .from("daymark_tasks")
     .update(buildTaskUpdate(input))
@@ -143,8 +229,35 @@ export async function updateDayMarkTask(
 }
 
 export async function deleteDayMarkTask(taskId: string) {
+  if (!isCloudDataSyncEnabled) {
+    writeLocalTasks(readLocalTasks().filter((task) => task.id !== taskId));
+    notifyTasksChanged();
+    return;
+  }
+
   const { error } = await supabase.from("daymark_tasks").delete().eq("id", taskId);
 
   if (error) throw error;
   notifyTasksChanged();
+}
+
+export function addLocalTaskFocusSeconds(taskId: string, seconds: number) {
+  let updatedTask: DayMarkTask | null = null;
+  const tasks = readLocalTasks().map((task) => {
+    if (task.id !== taskId) return task;
+
+    updatedTask = {
+      ...task,
+      actual_focus_seconds: Math.max(task.actual_focus_seconds + seconds, 0),
+      updated_at: new Date().toISOString(),
+    };
+    return updatedTask;
+  });
+
+  if (updatedTask) {
+    writeLocalTasks(tasks);
+    notifyTasksChanged();
+  }
+
+  return updatedTask;
 }

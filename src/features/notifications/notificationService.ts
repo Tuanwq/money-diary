@@ -1,4 +1,8 @@
 import { supabase } from "../../lib/supabase";
+import {
+  isCloudDataSyncEnabled,
+  isMoneyCloudSyncEnabled,
+} from "../../config/moneyCloudSync";
 import { registerAppServiceWorker } from "../../pwa/appPwa";
 import { safeSetStorageJson } from "../../utils/safeStorage";
 import {
@@ -147,7 +151,7 @@ export async function loadMoneyDiaryNotificationSettings(userId?: string) {
     DEFAULT_MONEY_DIARY_NOTIFICATION_SETTINGS
   );
 
-  if (!userId) return local;
+  if (!isMoneyCloudSyncEnabled || !userId) return local;
 
   const { data, error } = await supabase
     .from("money_diary_notification_settings")
@@ -172,7 +176,7 @@ export async function saveMoneyDiaryNotificationSettings(
       detail: { appIdentifier: "money_diary" },
     })
   );
-  if (!userId) return;
+  if (!isMoneyCloudSyncEnabled || !userId) return;
 
   const { error } = await supabase
     .from("money_diary_notification_settings")
@@ -187,7 +191,7 @@ export async function loadDayMarkNotificationSettings(userId?: string) {
     DEFAULT_DAYMARK_NOTIFICATION_SETTINGS
   );
 
-  if (!userId) return local;
+  if (!isCloudDataSyncEnabled || !userId) return local;
 
   const { data, error } = await supabase
     .from("daymark_notification_settings")
@@ -212,7 +216,7 @@ export async function saveDayMarkNotificationSettings(
       detail: { appIdentifier: "daymark" },
     })
   );
-  if (!userId) return;
+  if (!isCloudDataSyncEnabled || !userId) return;
 
   const { error } = await supabase.from("daymark_notification_settings").upsert({
     user_id: userId,
@@ -287,7 +291,10 @@ export async function enableNotificationsForDevice(
     });
   }
 
-  if (userId) {
+  if (
+    userId &&
+    isCloudDataSyncEnabled
+  ) {
     const json = subscription.toJSON();
     const { error } = await supabase.from("push_subscriptions").upsert(
       {
@@ -323,7 +330,11 @@ export async function disableNotificationsForDevice(
   );
   const subscription = await registration?.pushManager.getSubscription();
 
-  if (subscription && userId) {
+  if (
+    subscription &&
+    userId &&
+    isCloudDataSyncEnabled
+  ) {
     await supabase
       .from("push_subscriptions")
       .update({ is_active: false, last_seen_at: new Date().toISOString() })
@@ -420,6 +431,8 @@ export async function syncNotificationJobs(
   appIdentifier: AppIdentifier,
   drafts: NotificationJobDraft[]
 ) {
+  if (!isCloudDataSyncEnabled) return;
+
   const { data: existingRows, error: selectError } = await supabase
     .from("notification_jobs")
     .select("dedupe_key,status")

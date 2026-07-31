@@ -11,6 +11,10 @@ import {
   STORAGE_HUB_SETTINGS_KEY,
 } from "../constants/hanoiHub";
 import { supabase } from "../lib/supabase";
+import {
+  isMoneyCloudSyncEnabled,
+  LOCAL_ONLY_SYNC_STATUS,
+} from "../config/moneyCloudSync";
 import { getDateString, getToday, toDate } from "../utils/date";
 import {
   buildHubAnalyticsRows,
@@ -486,7 +490,9 @@ export function HubPage({
   const [isDeletingShift, setIsDeletingShift] = useState(false);
   const [deleteShiftError, setDeleteShiftError] = useState("");
   const [hubCloudStatus, setHubCloudStatus] = useState(
-    "Hub đang lưu trên thiết bị"
+    isMoneyCloudSyncEnabled
+      ? "Hub đang lưu trên thiết bị"
+      : LOCAL_ONLY_SYNC_STATUS
   );
   const [hubCloudReady, setHubCloudReady] = useState(false);
   const [form, setForm] = useState<HubForm>(() => createForm());
@@ -535,6 +541,8 @@ export function HubPage({
   }, [calculatorForm]);
 
   useEffect(() => {
+    if (!isMoneyCloudSyncEnabled) return;
+
     let active = true;
 
     async function loadHubCloudData() {
@@ -597,7 +605,7 @@ export function HubPage({
   }, []);
 
   useEffect(() => {
-    if (!hubCloudReady) return;
+    if (!isMoneyCloudSyncEnabled || !hubCloudReady) return;
 
     const timeout = window.setTimeout(async () => {
       const { data: sessionData } = await supabase.auth.getSession();
@@ -1234,7 +1242,7 @@ export function HubPage({
       const { data: sessionData } = await supabase.auth.getSession();
       const userId = sessionData.session?.user.id;
 
-      if (hubCloudReady && userId) {
+      if (isMoneyCloudSyncEnabled && hubCloudReady && userId) {
         setHubCloudStatus("Đang xóa ca trên Hub cloud...");
         const { error } = await supabase.from("money_diary_state").upsert({
           user_id: userId,

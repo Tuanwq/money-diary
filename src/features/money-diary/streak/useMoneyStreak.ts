@@ -4,6 +4,7 @@ import {
   STORAGE_HUB_SETTINGS_KEY,
 } from "../../../constants/hanoiHub";
 import { supabase } from "../../../lib/supabase";
+import { isMoneyCloudSyncEnabled } from "../../../config/moneyCloudSync";
 import type { HubEntry, HubSettings } from "../../../types/hub";
 import { mergeHubEntries, mergeHubSettings } from "../../../utils/hubSync";
 import { safeSetStorageJson } from "../../../utils/safeStorage";
@@ -51,7 +52,9 @@ export function useMoneyStreak() {
     readLocalHubStreakSource()
   );
   const [now, setNow] = useState(() => new Date());
-  const [isCloudLoading, setIsCloudLoading] = useState(true);
+  const [isCloudLoading, setIsCloudLoading] = useState(
+    isMoneyCloudSyncEnabled
+  );
   const [isRestoring, setIsRestoring] = useState(false);
   const [restoreError, setRestoreError] = useState("");
   const summary = useMemo(
@@ -89,6 +92,8 @@ export function useMoneyStreak() {
   }, [reloadLocalData]);
 
   useEffect(() => {
+    if (!isMoneyCloudSyncEnabled) return;
+
     let active = true;
 
     async function loadCloudHubData() {
@@ -156,7 +161,7 @@ export function useMoneyStreak() {
         const { data: sessionData } = await supabase.auth.getSession();
         const userId = sessionData.session?.user.id;
 
-        if (userId) {
+        if (isMoneyCloudSyncEnabled && userId) {
           const { error } = await supabase.from("money_diary_state").upsert({
             user_id: userId,
             hub_settings: nextSettings,

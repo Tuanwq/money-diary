@@ -671,6 +671,7 @@ export default function App() {
     isCloudLoading,
     isCloudRefreshing,
     retryCloudLoad,
+    isMoneyCloudSyncEnabled,
     syncStatus,
     setSyncStatus,
     markLocalChanged,
@@ -690,6 +691,9 @@ export default function App() {
     completedGoals,
     setCompletedGoals,
   });
+  const cloudDataUserId = isMoneyCloudSyncEnabled
+    ? session?.user.id
+    : undefined;
   const {
     accounts: financialAccounts,
     archiveAccount,
@@ -699,7 +703,7 @@ export default function App() {
     saveAccount,
     saveTransaction: saveAccountTransaction,
     transactions: accountTransactions,
-  } = useAccountLedger(session?.user.id);
+  } = useAccountLedger(cloudDataUserId);
   const {
     checks: accountReconciliations,
     cloudStatus: accountReconciliationCloudStatus,
@@ -707,7 +711,7 @@ export default function App() {
     markLineAdjusted: markReconciliationLineAdjusted,
     replaceReconciliationState,
     saveCheck: saveAccountReconciliation,
-  } = useAccountReconciliations(session?.user.id);
+  } = useAccountReconciliations(cloudDataUserId);
   const {
     clearLogs: clearAutomationLogs,
     cloudStatus: automationCloudStatus,
@@ -720,7 +724,7 @@ export default function App() {
     rules: automationRules,
     saveRule: saveAutomationRule,
     toggleRule: toggleAutomationRule,
-  } = useAutomationRules(session?.user.id);
+  } = useAutomationRules(cloudDataUserId);
   const {
     cloudStatus: cashFlowCloudStatus,
     deletePlan: deleteCashFlowPlan,
@@ -728,7 +732,7 @@ export default function App() {
     replaceCashFlowState,
     savePlan: saveCashFlowPlan,
     togglePlan: toggleCashFlowPlan,
-  } = useCashFlowPlans(session?.user.id);
+  } = useCashFlowPlans(cloudDataUserId);
   const backupSource = useMemo(
     () =>
       buildBackupSourceData({
@@ -765,7 +769,7 @@ export default function App() {
   useAutomaticBackups({
     source: backupSource,
     syncStatus,
-    userId: session?.user.id,
+    userId: cloudDataUserId,
   });
   const automationAccountIds = useMemo(
     () =>
@@ -798,7 +802,7 @@ export default function App() {
     expenses,
     goals,
     syncStatus,
-    userId: session?.user.id,
+    userId: cloudDataUserId,
   });
   const hubDiaryMigrationDoneRef = useRef(false);
   const balanceCheckDraftDirtyRef = useRef(false);
@@ -1091,7 +1095,7 @@ async function restoreBackup(
   const restoreAutomation = sections.includes("automation");
   const restoreCashFlow = sections.includes("cashFlow");
 
-  if (restoreHub && session?.user.id) {
+  if (restoreHub && isMoneyCloudSyncEnabled && session?.user.id) {
     const { error } = await supabase.from("money_diary_state").upsert({
       hub_change_logs: snapshot.data.hub.changeLogs.slice(0, 200),
       hub_entries: snapshot.data.hub.entries,
