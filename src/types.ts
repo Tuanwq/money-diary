@@ -76,6 +76,7 @@ export type Goals = {
 
 export type Page =
   | "accounts"
+  | "analytics"
   | "reconciliation"
   | "automation"
   | "cashFlow"
@@ -200,6 +201,7 @@ export type AppChangePatch = {
 export type AppChangeLog = {
   id: string;
   action: AppChangeAction;
+  canRestore?: boolean;
   title: string;
   description: string;
   date?: string;

@@ -2,6 +2,7 @@ import {
   addDaysToDateString,
   getToday,
 } from "../../../utils/date";
+import { safeSetStorageItem } from "../../../utils/safeStorage";
 import type { DayMarkTask } from "../types/daymark";
 
 export const DEFAULT_STREAK_COMPLETION_RATE = 50;
@@ -39,7 +40,7 @@ export function readStreakCompletionRate() {
 export function writeStreakCompletionRate(value: number) {
   const nextValue = clampStreakCompletionRate(value);
 
-  localStorage.setItem(DAYMARK_STREAK_RATE_STORAGE_KEY, String(nextValue));
+  safeSetStorageItem(DAYMARK_STREAK_RATE_STORAGE_KEY, String(nextValue));
   window.dispatchEvent(
     new CustomEvent("daymark-streak-rate-change", { detail: nextValue })
   );

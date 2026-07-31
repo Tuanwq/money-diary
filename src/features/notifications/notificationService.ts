@@ -1,5 +1,6 @@
 import { supabase } from "../../lib/supabase";
 import { registerAppServiceWorker } from "../../pwa/appPwa";
+import { safeSetStorageJson } from "../../utils/safeStorage";
 import {
   APP_NOTIFICATION_CONFIG,
   DEFAULT_DAYMARK_NOTIFICATION_SETTINGS,
@@ -157,7 +158,7 @@ export async function loadMoneyDiaryNotificationSettings(userId?: string) {
   if (error || !data) return local;
 
   const settings = mapMoneySettingsRow(data as MoneySettingsRow);
-  localStorage.setItem(MONEY_SETTINGS_STORAGE_KEY, JSON.stringify(settings));
+  safeSetStorageJson(MONEY_SETTINGS_STORAGE_KEY, settings);
   return settings;
 }
 
@@ -165,7 +166,7 @@ export async function saveMoneyDiaryNotificationSettings(
   userId: string | undefined,
   settings: MoneyDiaryNotificationSettings
 ) {
-  localStorage.setItem(MONEY_SETTINGS_STORAGE_KEY, JSON.stringify(settings));
+  safeSetStorageJson(MONEY_SETTINGS_STORAGE_KEY, settings);
   window.dispatchEvent(
     new CustomEvent("app-notification-settings-updated", {
       detail: { appIdentifier: "money_diary" },
@@ -197,7 +198,7 @@ export async function loadDayMarkNotificationSettings(userId?: string) {
   if (error || !data) return local;
 
   const settings = mapDayMarkSettingsRow(data as DayMarkSettingsRow);
-  localStorage.setItem(DAYMARK_SETTINGS_STORAGE_KEY, JSON.stringify(settings));
+  safeSetStorageJson(DAYMARK_SETTINGS_STORAGE_KEY, settings);
   return settings;
 }
 
@@ -205,7 +206,7 @@ export async function saveDayMarkNotificationSettings(
   userId: string | undefined,
   settings: DayMarkNotificationSettings
 ) {
-  localStorage.setItem(DAYMARK_SETTINGS_STORAGE_KEY, JSON.stringify(settings));
+  safeSetStorageJson(DAYMARK_SETTINGS_STORAGE_KEY, settings);
   window.dispatchEvent(
     new CustomEvent("app-notification-settings-updated", {
       detail: { appIdentifier: "daymark" },

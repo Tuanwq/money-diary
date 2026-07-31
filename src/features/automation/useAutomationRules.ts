@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "../../lib/supabase";
+import { safeSetStorageJson } from "../../utils/safeStorage";
 import {
   AUTOMATION_STORAGE_KEY,
   createDefaultAutomationState,
@@ -30,7 +31,7 @@ export function useAutomationRules(userId?: string) {
 
   useEffect(() => {
     latestStateRef.current = state;
-    localStorage.setItem(AUTOMATION_STORAGE_KEY, JSON.stringify(state));
+    safeSetStorageJson(AUTOMATION_STORAGE_KEY, state);
   }, [state]);
 
   useEffect(() => {

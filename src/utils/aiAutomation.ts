@@ -27,8 +27,10 @@ import { formatMoney } from "./money";
 
 export type AiAutomationInsights = {
   weeklyReport: string;
+  weeklyReportDashboard: AiFinanceReportDashboard;
   weeklyReportSections: AiFinanceReportSection[];
   monthlyReport: string;
+  monthlyReportDashboard: AiFinanceReportDashboard;
   monthlyReportSections: AiFinanceReportSection[];
   tomorrowPlan: string[];
   anomalies: string[];
@@ -39,6 +41,36 @@ export type AiFinanceReportSection = {
   id: "overview" | "performance" | "hub" | "expense" | "recommendation";
   items: string[];
   title: string;
+};
+
+export type AiFinanceReportDashboardMetric = {
+  detail: string;
+  id:
+    | "income"
+    | "workIncome"
+    | "expense"
+    | "net"
+    | "averageNet"
+    | "incomePerHour";
+  label: string;
+  positiveWhenUp: boolean;
+  previousValue: number;
+  value: number;
+};
+
+export type AiFinanceReportDashboard = {
+  expenseBreakdown: Array<{
+    label: string;
+    value: number;
+  }>;
+  fromDate: string;
+  metrics: AiFinanceReportDashboardMetric[];
+  performance: Array<{
+    label: string;
+    value: string;
+  }>;
+  title: string;
+  toDate: string;
 };
 
 export type AiFinanceQuestionResult = {
@@ -235,6 +267,50 @@ function buildReport({
   });
   const topOtherExpense = otherExpenseBreakdown[0];
   const needPerDay = getNeedPerDay({ entries, expenses, goals });
+  const previousAverageNet = getAverage(
+    previousTotals.net,
+    Math.max(previousRows.length, 1)
+  );
+  const previousIncomePerHour =
+    previousTotals.hours > 0
+      ? Math.round(previousTotals.workIncome / previousTotals.hours)
+      : 0;
+  const periodExpenses = expenses.filter(
+    (expense) => expense.date >= fromDate && expense.date <= toDate
+  );
+  const mealBreakdown = [
+    {
+      label: "Ăn sáng",
+      value: periodExpenses.reduce(
+        (total, expense) => total + expense.breakfast,
+        0
+      ),
+    },
+    {
+      label: "Ăn trưa",
+      value: periodExpenses.reduce(
+        (total, expense) => total + expense.lunch,
+        0
+      ),
+    },
+    {
+      label: "Ăn tối",
+      value: periodExpenses.reduce(
+        (total, expense) => total + expense.dinner,
+        0
+      ),
+    },
+  ];
+  const expenseBreakdown = [
+    ...mealBreakdown,
+    ...otherExpenseBreakdown.map((item) => ({
+      label: item.label,
+      value: item.total,
+    })),
+  ]
+    .filter((item) => item.value > 0)
+    .sort((left, right) => right.value - left.value)
+    .slice(0, 6);
   const overviewItems = [
     `Thu ${formatMoney(totals.income)}, chi ${formatMoney(
       totals.expense
@@ -341,6 +417,87 @@ function buildReport({
     (section) => section.items.length > 0
   );
   const reportTitle = `${title} (${fromDate} đến ${toDate})`;
+  const dashboard: AiFinanceReportDashboard = {
+    expenseBreakdown,
+    fromDate,
+    metrics: [
+      {
+        detail: `${activeDays}/${rows.length} ngày có dữ liệu`,
+        id: "income",
+        label: "Tổng thu",
+        positiveWhenUp: true,
+        previousValue: previousTotals.income,
+        value: totals.income,
+      },
+      {
+        detail: "Thu nhập công việc và tiền thưởng",
+        id: "workIncome",
+        label: "Tiền làm được",
+        positiveWhenUp: true,
+        previousValue: previousTotals.workIncome,
+        value: totals.workIncome,
+      },
+      {
+        detail:
+          totals.income > 0
+            ? `Chiếm ${Math.round(
+                (totals.expense / totals.income) * 100
+              )}% tổng thu`
+            : "Chưa có tổng thu để đối chiếu",
+        id: "expense",
+        label: "Tổng chi",
+        positiveWhenUp: false,
+        previousValue: previousTotals.expense,
+        value: totals.expense,
+      },
+      {
+        detail: `Thu ${formatMoney(totals.income)} - chi ${formatMoney(
+          totals.expense
+        )}`,
+        id: "net",
+        label: "Tiền ròng",
+        positiveWhenUp: true,
+        previousValue: previousTotals.net,
+        value: totals.net,
+      },
+      {
+        detail: `Trên ${rows.length} ngày trong kỳ`,
+        id: "averageNet",
+        label: "Ròng trung bình/ngày",
+        positiveWhenUp: true,
+        previousValue: previousAverageNet,
+        value: averageNet,
+      },
+      {
+        detail: `${totals.hours} giờ · ${totals.orders} đơn`,
+        id: "incomePerHour",
+        label: "Lợi nhuận/giờ",
+        positiveWhenUp: true,
+        previousValue: previousIncomePerHour,
+        value: incomePerHour,
+      },
+    ],
+    performance: [
+      {
+        label: "Ngày có dữ liệu",
+        value: `${activeDays}/${rows.length}`,
+      },
+      {
+        label: "Tổng giờ làm",
+        value: `${totals.hours} giờ`,
+      },
+      {
+        label: "Tổng số đơn",
+        value: `${totals.orders} đơn`,
+      },
+      {
+        label: "Số ca Hub",
+        value: `${hubSummary.shifts} ca`,
+      },
+    ],
+    title,
+    toDate,
+  };
   const text = [
     reportTitle,
     ...sections.flatMap((section) => [
@@ -350,6 +507,7 @@ function buildReport({
   ].join("\n");
 
   return {
+    dashboard,
     sections,
     text,
   };
@@ -541,8 +699,10 @@ export function buildAiAutomationInsights(
 
   return {
     weeklyReport: weeklyReport.text,
+    weeklyReportDashboard: weeklyReport.dashboard,
     weeklyReportSections: weeklyReport.sections,
     monthlyReport: monthlyReport.text,
+    monthlyReportDashboard: monthlyReport.dashboard,
     monthlyReportSections: monthlyReport.sections,
     tomorrowPlan: buildTomorrowPlan(options),
     anomalies: buildAnomalies(options),

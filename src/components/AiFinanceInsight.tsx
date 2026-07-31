@@ -259,7 +259,6 @@ export function AiFinanceInsight({
     reportMode === "week"
       ? automation.weeklyReportSections
       : automation.monthlyReportSections;
-
   useEffect(() => {
     function openFromMoneyNavigation() {
       setIsOpen(true);

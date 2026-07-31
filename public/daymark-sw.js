@@ -1,7 +1,7 @@
 const APP = {
   app: "daymark",
   badge: "/icons/daymark-badge-96.png",
-  cache: "daymark-shell-4",
+  cache: "daymark-shell-5",
   icon: "/icons/daymark-192.png",
   scopePath: "/daymark",
   startUrl: "/daymark/today",
@@ -14,6 +14,37 @@ const SHELL_ASSETS = [
   APP.icon,
   APP.badge,
 ];
+
+function isValidAssetResponse(response, pathname) {
+  if (!response?.ok) return false;
+
+  const contentType = (
+    response.headers.get("content-type") ?? ""
+  ).toLowerCase();
+
+  if (pathname.endsWith(".js")) {
+    return (
+      contentType.includes("javascript") ||
+      contentType.includes("ecmascript")
+    );
+  }
+
+  if (pathname.endsWith(".css")) return contentType.includes("text/css");
+  if (pathname.startsWith("/icons/")) return contentType.startsWith("image/");
+
+  return !contentType.includes("text/html");
+}
+
+async function fetchAndCacheAsset(request, pathname) {
+  const response = await fetch(request);
+  if (!isValidAssetResponse(response, pathname)) {
+    throw new Error(`Invalid PWA asset response for ${pathname}`);
+  }
+
+  const cache = await caches.open(APP.cache);
+  await cache.put(request, response.clone());
+  return response;
+}
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -51,8 +82,13 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(
       fetch(request)
         .then((response) => {
-          const copy = response.clone();
-          void caches.open(APP.cache).then((cache) => cache.put(request, copy));
+          const contentType = (
+            response.headers.get("content-type") ?? ""
+          ).toLowerCase();
+          if (response.ok && contentType.includes("text/html")) {
+            const copy = response.clone();
+            void caches.open(APP.cache).then((cache) => cache.put(request, copy));
+          }
           return response;
         })
         .catch(
@@ -71,11 +107,7 @@ self.addEventListener("fetch", (event) => {
       caches.match(request).then(
         (cached) =>
           cached ??
-          fetch(request).then((response) => {
-            const copy = response.clone();
-            void caches.open(APP.cache).then((cache) => cache.put(request, copy));
-            return response;
-          })
+          fetchAndCacheAsset(request, url.pathname)
       )
     );
   }

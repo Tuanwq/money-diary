@@ -40,7 +40,6 @@ import {
 } from "react";
 import {
   ITEMS_PER_PAGE,
-  STORAGE_APP_CHANGE_LOGS_KEY,
   STORAGE_OTHER_EXPENSE_LABELS_KEY,
 } from "./constants";
 import {
@@ -117,6 +116,16 @@ import {
   createOtherExpenseItemForm,
   type OtherExpenseItemForm,
 } from "./utils/otherExpenseForms";
+import {
+  APP_CHANGE_LOG_ITEM_BUDGET_BYTES,
+  limitAppChangeLogs,
+  loadAppChangeLogs,
+  saveAppChangeLogs,
+} from "./utils/appChangeLogStorage";
+import {
+  estimateStorageBytes,
+  safeSetStorageJson,
+} from "./utils/safeStorage";
 
 const LazyDayMarkApp = lazy(() =>
   import("./features/daymark/DayMarkApp").then((module) => ({
@@ -126,6 +135,11 @@ const LazyDayMarkApp = lazy(() =>
 const LazyAccountLedgerPage = lazy(() =>
   import("./features/account-ledger/AccountLedgerPage").then((module) => ({
     default: module.AccountLedgerPage,
+  }))
+);
+const LazyFinancialAnalyticsPage = lazy(() =>
+  import("./features/analytics/FinancialAnalyticsPage").then((module) => ({
+    default: module.FinancialAnalyticsPage,
   }))
 );
 const LazyAccountReconciliationPage = lazy(() =>
@@ -341,6 +355,19 @@ function createAppChangePatch<T>({
   beforeSummary: string;
   afterSummary: string;
 }): AppChangePatch {
+  if (
+    estimateStorageBytes({ before, after }) >
+    APP_CHANGE_LOG_ITEM_BUDGET_BYTES
+  ) {
+    return {
+      key,
+      before: null,
+      after: null,
+      beforeSummary,
+      afterSummary,
+    };
+  }
+
   return {
     key,
     before: cloneForChangeLog(before),
@@ -606,9 +633,8 @@ export default function App() {
     balanceChecks,
     setBalanceChecks,
   } = useMoneyDiaryData();
-  const [appChangeLogs, setAppChangeLogs] = useState<AppChangeLog[]>(() =>
-    loadLocalJson<AppChangeLog[]>(STORAGE_APP_CHANGE_LOGS_KEY, [])
-  );
+  const [appChangeLogs, setAppChangeLogs] =
+    useState<AppChangeLog[]>(loadAppChangeLogs);
   const [balanceCheckForm, setBalanceCheckForm] = useState({
     date: getToday(),
     cash: "",
@@ -937,10 +963,7 @@ useEffect(() => {
 }, [selectedDate, balanceChecks, balanceCheckForm.date]);
 
 useEffect(() => {
-  localStorage.setItem(
-    STORAGE_APP_CHANGE_LOGS_KEY,
-    JSON.stringify(appChangeLogs.slice(0, 300))
-  );
+  saveAppChangeLogs(appChangeLogs);
 }, [appChangeLogs]);
 
 function getCurrentAppSnapshot(): AppDataSnapshot {
@@ -962,13 +985,31 @@ function createChangeLog(input: Omit<AppChangeLog, "id" | "createdAt">) {
 }
 
 function recordAppChange(input: Omit<AppChangeLog, "id" | "createdAt">) {
-  setAppChangeLogs((prev) => [createChangeLog(input), ...prev].slice(0, 300));
+  const canRestore =
+    input.canRestore ??
+    input.patches.every(
+      (patch) => patch.before !== null && patch.after !== null
+    );
+
+  setAppChangeLogs((prev) =>
+    limitAppChangeLogs([
+      createChangeLog({ ...input, canRestore }),
+      ...prev,
+    ])
+  );
 }
 
 function restoreChangeLog(id: string) {
   const log = appChangeLogs.find((item) => item.id === id);
 
   if (!log || log.restoredAt) return;
+
+  if (log.canRestore === false) {
+    alert(
+      "Bản lịch sử này quá lớn nên chỉ được lưu để đối chiếu, không thể khôi phục tự động."
+    );
+    return;
+  }
 
   const confirmed = confirm(
     `Khôi phục thay đổi "${log.title}"?\n\nCác phần liên quan sẽ quay về trạng thái trước thay đổi này.`
@@ -1014,21 +1055,26 @@ function restoreChangeLog(id: string) {
   });
   const now = new Date().toISOString();
 
-  setAppChangeLogs((prev) => [
-    createChangeLog({
-      action: "restore",
-      title: `Khôi phục: ${log.title}`,
-      description: `Đã đưa dữ liệu về trạng thái trước thay đổi lúc ${new Date(
-        log.createdAt
-      ).toLocaleString("vi-VN")}.`,
-      date: log.date,
-      originalChangeId: log.id,
-      patches: restorePatches,
-    }),
-    ...prev.map((item) =>
-      item.id === log.id ? { ...item, restoredAt: now } : item
-    ),
-  ]);
+  setAppChangeLogs((prev) =>
+    limitAppChangeLogs([
+      createChangeLog({
+        action: "restore",
+        canRestore: restorePatches.every(
+          (patch) => patch.before !== null && patch.after !== null
+        ),
+        title: `Khôi phục: ${log.title}`,
+        description: `Đã đưa dữ liệu về trạng thái trước thay đổi lúc ${new Date(
+          log.createdAt
+        ).toLocaleString("vi-VN")}.`,
+        date: log.date,
+        originalChangeId: log.id,
+        patches: restorePatches,
+      }),
+      ...prev.map((item) =>
+        item.id === log.id ? { ...item, restoredAt: now } : item
+      ),
+    ])
+  );
 
   markLocalChanged("Đã khôi phục dữ liệu từ lịch sử thay đổi, đang lưu cloud...");
   setSyncStatus("Đã khôi phục dữ liệu");
@@ -1061,10 +1107,10 @@ async function restoreBackup(
     setEntries(snapshot.data.journal.entries);
     setExpenses(snapshot.data.journal.expenses);
     setBalanceChecks(snapshot.data.journal.balanceChecks);
-    setAppChangeLogs(snapshot.data.journal.appChangeLogs);
-    localStorage.setItem(
+    setAppChangeLogs(limitAppChangeLogs(snapshot.data.journal.appChangeLogs));
+    safeSetStorageJson(
       STORAGE_OTHER_EXPENSE_LABELS_KEY,
-      JSON.stringify(snapshot.data.journal.otherExpenseLabels)
+      snapshot.data.journal.otherExpenseLabels
     );
   }
 
@@ -1074,21 +1120,21 @@ async function restoreBackup(
   }
 
   if (restoreHub) {
-    localStorage.setItem(
+    safeSetStorageJson(
       STORAGE_HUB_ENTRIES_KEY,
-      JSON.stringify(snapshot.data.hub.entries)
+      snapshot.data.hub.entries
     );
-    localStorage.setItem(
+    safeSetStorageJson(
       STORAGE_HUB_SETTINGS_KEY,
-      JSON.stringify(snapshot.data.hub.settings)
+      snapshot.data.hub.settings
     );
-    localStorage.setItem(
+    safeSetStorageJson(
       STORAGE_HUB_CHANGE_LOGS_KEY,
-      JSON.stringify(snapshot.data.hub.changeLogs)
+      snapshot.data.hub.changeLogs
     );
-    localStorage.setItem(
+    safeSetStorageJson(
       STORAGE_HUB_CALCULATOR_KEY,
-      JSON.stringify(snapshot.data.hub.calculator)
+      snapshot.data.hub.calculator
     );
   }
 
@@ -3507,6 +3553,7 @@ if (route.kind === "daymark") {
       onExportReport={exportToWord}
       onLogout={handleLogout}
       onOpenBalanceCheck={goToTodayBalanceCheck}
+      onOpenAnalytics={() => navigateTo("analytics")}
       onOpenAccountLedger={() => navigateTo("accounts")}
       onOpenAccountReconciliation={() => navigateTo("reconciliation")}
       onOpenAutomation={() => navigateTo("automation")}
@@ -3532,6 +3579,20 @@ if (route.kind === "daymark") {
               saveAccount={saveAccount}
               saveTransaction={saveAccountTransaction}
               transactions={accountTransactions}
+            />
+          )}
+          {page === "analytics" && (
+            <LazyFinancialAnalyticsPage
+              accounts={financialAccounts}
+              accountTransactions={accountTransactions}
+              actualMoney={actualMoney}
+              balanceChecks={balanceChecks}
+              completedGoals={completedGoals}
+              entries={entries}
+              expenses={expenses}
+              goals={goals}
+              hubEntries={backupSource.hub.entries}
+              hubSettings={backupSource.hub.settings}
             />
           )}
           {page === "reconciliation" && (

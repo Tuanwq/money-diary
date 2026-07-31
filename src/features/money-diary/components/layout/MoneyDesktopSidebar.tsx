@@ -1,5 +1,6 @@
 import {
   BookOpenText,
+  ChartColumnBig,
   ChartNoAxesCombined,
   ChevronRight,
   Goal,
@@ -66,6 +67,12 @@ export function MoneyDesktopSidebar({
       icon: House,
       label: "Tổng quan",
       onClick: () => navigateTo("home"),
+    },
+    {
+      active: currentPage === "analytics",
+      icon: ChartColumnBig,
+      label: "Thống kê",
+      onClick: () => navigateTo("analytics"),
     },
     {
       active: currentPage === "goals",

@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { safeSetStorageItem } from "../../utils/safeStorage";
 import {
   createBackupRecord,
   createBackupSnapshot,
@@ -32,7 +33,7 @@ export function useAutomaticBackups({
 
   useEffect(() => {
     if (!isSynced(syncStatus)) return;
-    localStorage.setItem(
+    safeSetStorageItem(
       STORAGE_LAST_CLOUD_SYNC_AT_KEY,
       new Date().toISOString()
     );

@@ -18,6 +18,7 @@
     "test:money-streak": "node scripts/moneyStreak.test.mjs",
     "test:notifications": "node scripts/moneyNotifications.test.mjs",
     "test:pwa": "node scripts/pwaAssets.test.mjs",
+    "test:storage": "node --experimental-strip-types scripts/appChangeLogStorage.test.mjs",
     "test:streak": "node scripts/daymarkStreak.test.mjs",
     "test:update": "node --experimental-strip-types scripts/appUpdate.test.mjs",
     "preview": "vite preview"

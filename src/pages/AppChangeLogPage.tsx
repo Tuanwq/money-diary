@@ -122,6 +122,11 @@ export function AppChangeLogPage({
                         Đã khôi phục
                       </span>
                     )}
+                    {log.canRestore === false && (
+                      <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-bold text-amber-700">
+                        Chỉ xem
+                      </span>
+                    )}
                   </div>
 
                   <h3 className="mt-3 break-words text-lg font-bold">
@@ -139,14 +144,14 @@ export function AppChangeLogPage({
                   <button
                     type="button"
                     onClick={() => restoreChangeLog(log.id)}
-                    disabled={Boolean(log.restoredAt)}
+                    disabled={Boolean(log.restoredAt) || log.canRestore === false}
                     className={`rounded-xl px-4 py-2 text-sm font-bold ${
-                      log.restoredAt
+                      log.restoredAt || log.canRestore === false
                         ? "cursor-not-allowed bg-slate-100 text-slate-400"
                         : "bg-slate-900 text-white hover:bg-slate-700"
                     }`}
                   >
-                    Khôi phục
+                    {log.canRestore === false ? "Không thể khôi phục" : "Khôi phục"}
                   </button>
                 )}
               </div>

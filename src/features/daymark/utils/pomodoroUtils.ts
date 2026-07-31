@@ -1,4 +1,5 @@
 import { getToday } from "../../../utils/date";
+import { safeSetStorageJson } from "../../../utils/safeStorage";
 import type {
   PomodoroMode,
   PomodoroSettings,
@@ -88,7 +89,7 @@ export function readStoredPomodoroState(): PomodoroTimerState {
 }
 
 export function writeStoredPomodoroState(state: PomodoroTimerState) {
-  localStorage.setItem(POMODORO_STORAGE_KEY, JSON.stringify(state));
+  safeSetStorageJson(POMODORO_STORAGE_KEY, state);
 }
 
 export function getDisplayRemainingSeconds(

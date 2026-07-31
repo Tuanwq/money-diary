@@ -2,6 +2,7 @@ import {
   Bell,
   Bot,
   BookCheck,
+  ChartColumnBig,
   ClipboardCheck,
   FileClock,
   FileText,
@@ -26,6 +27,7 @@ type MoneyMoreSheetProps = {
   onExportReport: () => void;
   onLogout: () => void;
   onOpenAnalysis: () => void;
+  onOpenAnalytics: () => void;
   onOpenAccountLedger: () => void;
   onOpenAccountReconciliation: () => void;
   onOpenAutomation: () => void;
@@ -48,6 +50,7 @@ export function MoneyMoreSheet({
   onExportReport,
   onLogout,
   onOpenAnalysis,
+  onOpenAnalytics,
   onOpenAccountLedger,
   onOpenAccountReconciliation,
   onOpenAutomation,
@@ -62,6 +65,11 @@ export function MoneyMoreSheet({
   toggleThemeMode,
 }: MoneyMoreSheetProps) {
   const actions = [
+    {
+      icon: ChartColumnBig,
+      label: "Thống kê tổng hợp",
+      onClick: onOpenAnalytics,
+    },
     { icon: BookCheck, label: "Chốt ngày", onClick: onOpenCloseDay },
     {
       icon: WalletCards,

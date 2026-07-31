@@ -14,6 +14,7 @@ import type {
   ExpenseEntry,
   Goals,
 } from "../types";
+import { safeSetStorageJson } from "../utils/safeStorage";
 
 function loadJson<T>(key: string, fallback: T): T {
   const saved = localStorage.getItem(key);
@@ -46,17 +47,11 @@ export function useMoneyDiaryData() {
   );
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_ENTRIES_KEY, JSON.stringify(entries));
-    localStorage.setItem(STORAGE_EXPENSES_KEY, JSON.stringify(expenses));
-    localStorage.setItem(STORAGE_GOALS_KEY, JSON.stringify(goals));
-    localStorage.setItem(
-      STORAGE_BALANCE_CHECKS_KEY,
-      JSON.stringify(balanceChecks)
-    );
-    localStorage.setItem(
-      STORAGE_COMPLETED_GOALS_KEY,
-      JSON.stringify(completedGoals)
-    );
+    safeSetStorageJson(STORAGE_ENTRIES_KEY, entries);
+    safeSetStorageJson(STORAGE_EXPENSES_KEY, expenses);
+    safeSetStorageJson(STORAGE_GOALS_KEY, goals);
+    safeSetStorageJson(STORAGE_BALANCE_CHECKS_KEY, balanceChecks);
+    safeSetStorageJson(STORAGE_COMPLETED_GOALS_KEY, completedGoals);
   }, [entries, expenses, balanceChecks, goals, completedGoals]);
 
   return {

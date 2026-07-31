@@ -17290,3 +17290,106 @@ textarea {
     border-right: 0;
   }
 }
+
+.app-error-screen {
+  align-items: center;
+  background: var(--background, #f5f7f4);
+  box-sizing: border-box;
+  color: var(--text-primary, #1c271f);
+  display: flex;
+  justify-content: center;
+  min-height: 100dvh;
+  padding: 1rem;
+}
+
+.app-error-card {
+  background: var(--surface, #fff);
+  border: 1px solid var(--border, #dce4dc);
+  border-radius: 1rem;
+  box-shadow: 0 12px 32px rgb(28 39 31 / 10%);
+  max-width: 32rem;
+  padding: clamp(1.25rem, 4vw, 2rem);
+  width: 100%;
+}
+
+.app-error-card__eyebrow {
+  color: var(--primary-text, #3f6446);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  margin: 0 0 0.25rem;
+}
+
+.app-error-card h1 {
+  font-size: clamp(1.375rem, 5vw, 1.875rem);
+  margin: 0;
+}
+
+.app-error-card > p:not(.app-error-card__eyebrow) {
+  color: var(--text-secondary, #5f6e63);
+  line-height: 1.6;
+  margin: 0.75rem 0 0;
+}
+
+.app-error-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+}
+
+.app-error-card__actions button {
+  min-height: 2.75rem;
+}
+
+.storage-write-notice {
+  align-items: center;
+  background: var(--warning-soft, #fff7e8);
+  border: 1px solid var(--warning-border, #ecd39f);
+  border-radius: 0.875rem;
+  bottom: calc(
+    var(--bottom-nav-height, 0px) +
+      var(--bottom-nav-offset, 0px) +
+      1rem +
+      env(safe-area-inset-bottom)
+  );
+  box-shadow: 0 10px 28px rgb(28 39 31 / 14%);
+  color: var(--text-primary, #1c271f);
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+  left: 50%;
+  max-width: min(34rem, calc(100vw - 2rem));
+  padding: 0.875rem 1rem;
+  position: fixed;
+  transform: translateX(-50%);
+  width: max-content;
+  z-index: 1000;
+}
+
+.storage-write-notice strong {
+  display: block;
+  font-size: 0.875rem;
+}
+
+.storage-write-notice p {
+  color: var(--text-secondary, #5f6e63);
+  font-size: 0.8125rem;
+  margin: 0.2rem 0 0;
+}
+
+.storage-write-notice button {
+  align-self: center;
+  flex: 0 0 auto;
+  min-height: 2.5rem;
+}
+
+@media (max-width: 520px) {
+  .app-error-card__actions {
+    display: grid;
+  }
+
+  .storage-write-notice {
+    align-items: stretch;
+    width: calc(100vw - 2rem);
+  }
+}

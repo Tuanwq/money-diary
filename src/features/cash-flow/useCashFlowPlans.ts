@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "../../lib/supabase";
+import { safeSetStorageJson } from "../../utils/safeStorage";
 import {
   CASH_FLOW_STORAGE_KEY,
   createDefaultCashFlowState,
@@ -27,7 +28,7 @@ export function useCashFlowPlans(userId?: string) {
 
   useEffect(() => {
     latestStateRef.current = state;
-    localStorage.setItem(CASH_FLOW_STORAGE_KEY, JSON.stringify(state));
+    safeSetStorageJson(CASH_FLOW_STORAGE_KEY, state);
   }, [state]);
 
   useEffect(() => {

@@ -6,6 +6,7 @@ import {
 import { supabase } from "../../../lib/supabase";
 import type { HubEntry, HubSettings } from "../../../types/hub";
 import { mergeHubEntries, mergeHubSettings } from "../../../utils/hubSync";
+import { safeSetStorageJson } from "../../../utils/safeStorage";
 import {
   calculateMoneyStreak,
   restoreMoneyStreakDate,
@@ -41,11 +42,8 @@ function readLocalHubStreakSource(): HubStreakSource {
 }
 
 function writeLocalHubStreakSource(source: HubStreakSource) {
-  localStorage.setItem(STORAGE_HUB_ENTRIES_KEY, JSON.stringify(source.entries));
-  localStorage.setItem(
-    STORAGE_HUB_SETTINGS_KEY,
-    JSON.stringify(source.settings)
-  );
+  safeSetStorageJson(STORAGE_HUB_ENTRIES_KEY, source.entries);
+  safeSetStorageJson(STORAGE_HUB_SETTINGS_KEY, source.settings);
 }
 
 export function useMoneyStreak() {

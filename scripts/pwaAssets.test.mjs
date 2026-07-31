@@ -104,6 +104,9 @@ async function assertAppAssets({
   assert.match(worker, new RegExp(`app: "${app === "daymark" ? "daymark" : "money_diary"}"`));
   assert.match(worker, new RegExp(`scopePath: "${expectedScope}"`));
   assert.match(worker, /SKIP_WAITING/);
+  assert.match(worker, /isValidAssetResponse/);
+  assert.match(worker, /contentType\.includes\("text\/html"\)/);
+  assert.match(worker, /response\?\.ok/);
 }
 
 await assertAppAssets({

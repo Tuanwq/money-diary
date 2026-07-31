@@ -4,6 +4,7 @@ import {
   DEFAULT_OTHER_EXPENSE_LABELS,
   STORAGE_OTHER_EXPENSE_LABELS_KEY,
 } from "../constants";
+import { safeSetStorageJson } from "../utils/safeStorage";
 
 type OtherExpenseLabelManagerProps = {
   value: string;
@@ -72,7 +73,7 @@ export function OtherExpenseLabelManager({
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    window.localStorage.setItem(STORAGE_OTHER_EXPENSE_LABELS_KEY, JSON.stringify(labels));
+    safeSetStorageJson(STORAGE_OTHER_EXPENSE_LABELS_KEY, labels);
   }, [labels]);
 
   function addLabel() {

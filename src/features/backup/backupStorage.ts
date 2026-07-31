@@ -1,4 +1,5 @@
 import { supabase } from "../../lib/supabase";
+import { safeSetStorageJson } from "../../utils/safeStorage";
 import type { BackupKind, BackupRecord } from "./backupModel";
 import {
   getExpiredBackupIds,
@@ -32,7 +33,7 @@ function readFallbackRecords(): BackupRecord[] {
 }
 
 function writeFallbackRecords(records: BackupRecord[]) {
-  localStorage.setItem(FALLBACK_STORAGE_KEY, JSON.stringify(records));
+  safeSetStorageJson(FALLBACK_STORAGE_KEY, records);
 }
 
 function openBackupDb() {

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { safeSetStorageItem } from "../utils/safeStorage";
 
 export type ThemeMode = "dark" | "light" | "system";
 
@@ -28,7 +29,7 @@ export function useThemeMode() {
     }
 
     applyTheme();
-    localStorage.setItem(STORAGE_THEME_MODE_KEY, themeMode);
+    safeSetStorageItem(STORAGE_THEME_MODE_KEY, themeMode);
 
     if (themeMode !== "system") return;
 

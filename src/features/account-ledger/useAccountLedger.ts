@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "../../lib/supabase";
+import { safeSetStorageJson } from "../../utils/safeStorage";
 import {
   ACCOUNT_LEDGER_STORAGE_KEY,
   createDefaultLedger,
@@ -29,7 +30,7 @@ export function useAccountLedger(userId?: string) {
 
   useEffect(() => {
     latestLedgerRef.current = ledger;
-    localStorage.setItem(ACCOUNT_LEDGER_STORAGE_KEY, JSON.stringify(ledger));
+    safeSetStorageJson(ACCOUNT_LEDGER_STORAGE_KEY, ledger);
   }, [ledger]);
 
   useEffect(() => {

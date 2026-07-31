@@ -19,6 +19,7 @@ type MoneyPageShellProps = {
   onOpenExpense: () => void;
   onOpenIncome: () => void;
   onOpenBalanceCheck: () => void;
+  onOpenAnalytics: () => void;
   onOpenAccountLedger: () => void;
   onOpenAccountReconciliation: () => void;
   onOpenAutomation: () => void;
@@ -43,6 +44,7 @@ export function MoneyPageShell({
   onOpenExpense,
   onOpenIncome,
   onOpenBalanceCheck,
+  onOpenAnalytics,
   onOpenAccountLedger,
   onOpenAccountReconciliation,
   onOpenAutomation,
@@ -161,6 +163,7 @@ export function MoneyPageShell({
         onExportReport={onExportReport}
         onLogout={onLogout}
         onOpenAnalysis={openAnalysis}
+        onOpenAnalytics={onOpenAnalytics}
         onOpenAccountLedger={onOpenAccountLedger}
         onOpenAccountReconciliation={onOpenAccountReconciliation}
         onOpenAutomation={onOpenAutomation}

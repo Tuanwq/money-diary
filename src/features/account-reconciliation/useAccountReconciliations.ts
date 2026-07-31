@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "../../lib/supabase";
+import { safeSetStorageJson } from "../../utils/safeStorage";
 import {
   ACCOUNT_RECONCILIATION_STORAGE_KEY,
   createDefaultReconciliationData,
@@ -30,10 +31,7 @@ export function useAccountReconciliations(userId?: string) {
 
   useEffect(() => {
     latestStateRef.current = state;
-    localStorage.setItem(
-      ACCOUNT_RECONCILIATION_STORAGE_KEY,
-      JSON.stringify(state)
-    );
+    safeSetStorageJson(ACCOUNT_RECONCILIATION_STORAGE_KEY, state);
   }, [state]);
 
   useEffect(() => {

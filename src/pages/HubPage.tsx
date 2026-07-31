@@ -36,6 +36,7 @@ import {
   mergeHubSettings,
 } from "../utils/hubSync";
 import { formatMoney, formatMoneyInput, parseMoneyInput } from "../utils/money";
+import { safeSetStorageJson } from "../utils/safeStorage";
 import type { ExpenseEntry, Mood } from "../types";
 import type {
   HubChangeLog,
@@ -518,25 +519,19 @@ export function HubPage({
   const saveShiftLockRef = useRef(false);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_HUB_ENTRIES_KEY, JSON.stringify(entries));
+    safeSetStorageJson(STORAGE_HUB_ENTRIES_KEY, entries);
   }, [entries]);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_HUB_SETTINGS_KEY, JSON.stringify(settings));
+    safeSetStorageJson(STORAGE_HUB_SETTINGS_KEY, settings);
   }, [settings]);
 
   useEffect(() => {
-    localStorage.setItem(
-      STORAGE_HUB_CHANGE_LOGS_KEY,
-      JSON.stringify(changeLogs.slice(0, 200))
-    );
+    safeSetStorageJson(STORAGE_HUB_CHANGE_LOGS_KEY, changeLogs.slice(0, 100));
   }, [changeLogs]);
 
   useEffect(() => {
-    localStorage.setItem(
-      STORAGE_HUB_CALCULATOR_KEY,
-      JSON.stringify(calculatorForm)
-    );
+    safeSetStorageJson(STORAGE_HUB_CALCULATOR_KEY, calculatorForm);
   }, [calculatorForm]);
 
   useEffect(() => {
