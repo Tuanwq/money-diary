@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  HUB_INITIAL_EDIT_ENTRY_SESSION_KEY,
   HUB_INITIAL_TAB_SESSION_KEY,
   DEFAULT_HUB_SETTINGS,
   DEFAULT_JOIN_PRICES,
@@ -505,6 +506,9 @@ export function HubPage({
   const [editingHubEntryId, setEditingHubEntryId] = useState<string | null>(
     null
   );
+  const [requestedEditEntryId, setRequestedEditEntryId] = useState<string | null>(
+    () => sessionStorage.getItem(HUB_INITIAL_EDIT_ENTRY_SESSION_KEY)
+  );
   const [listTimeFilter, setListTimeFilter] =
     useState<HubTimeFilter>("today");
   const [listCustomFromDate, setListCustomFromDate] = useState(getToday());
@@ -523,6 +527,25 @@ export function HubPage({
   const [showIncomeDetails, setShowIncomeDetails] = useState(false);
   const [isSavingShift, setIsSavingShift] = useState(false);
   const saveShiftLockRef = useRef(false);
+
+  useEffect(() => {
+    if (!requestedEditEntryId) return;
+
+    const requestedEntry = entries.find(
+      (entry) => entry.id === requestedEditEntryId
+    );
+
+    if (!requestedEntry) return;
+
+    sessionStorage.removeItem(HUB_INITIAL_EDIT_ENTRY_SESSION_KEY);
+    queueMicrotask(() => {
+      setRequestedEditEntryId(null);
+      setForm(createFormFromEntry(requestedEntry));
+      setEditingHubEntryId(requestedEntry.id);
+      setShowIncomeDetails(true);
+      setTab("add");
+    });
+  }, [entries, requestedEditEntryId]);
 
   useEffect(() => {
     safeSetStorageJson(STORAGE_HUB_ENTRIES_KEY, entries);

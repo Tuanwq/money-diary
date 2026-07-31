@@ -16,25 +16,38 @@ export function MoneySyncStatus({
     normalizedStatus.includes("lỗi") ||
     normalizedStatus.includes("chưa thể") ||
     normalizedStatus.includes("thiếu cấu hình");
-  const isSyncing = isRefreshing;
-  const isSynced = normalizedStatus.includes("đã đồng bộ");
+  const isOffline = normalizedStatus.includes("ngoại tuyến");
+  const isSyncing =
+    isRefreshing || normalizedStatus.includes("đang đồng bộ");
+  const isSynced =
+    normalizedStatus.includes("đã đồng bộ") ||
+    normalizedStatus.includes("và đồng bộ");
   const label = hasError
     ? "Chưa thể đồng bộ"
-    : isSyncing
-      ? "Đang đồng bộ"
-      : normalizedStatus.includes("đang tải")
-        ? "Đang tải"
-        : normalizedStatus.includes("đang lưu")
-          ? "Đang lưu"
-          : normalizedStatus.includes("thay đổi") ||
-              normalizedStatus.includes("chờ đồng bộ")
-            ? "Chờ đồng bộ"
-            : isSynced
-              ? "Đã đồng bộ"
-              : "Chưa đồng bộ";
-  const SyncIcon = hasError ? CloudOff : isSyncing ? RefreshCw : Cloud;
+    : isOffline
+      ? "Ngoại tuyến"
+      : isSyncing
+        ? "Đang đồng bộ"
+        : normalizedStatus.includes("đang tải")
+          ? "Đang tải"
+          : normalizedStatus.includes("đang lưu")
+            ? "Đang lưu"
+            : normalizedStatus.includes("thay đổi") ||
+                normalizedStatus.includes("chờ đồng bộ")
+              ? "Chờ đồng bộ"
+              : isSynced
+                ? "Đã đồng bộ"
+                : "Chưa đồng bộ";
+  const SyncIcon =
+    hasError || isOffline ? CloudOff : isSyncing ? RefreshCw : Cloud;
   const className = `money-sync-status ${
-    hasError ? "is-error" : isSyncing ? "is-refreshing" : ""
+    hasError
+      ? "is-error"
+      : isOffline
+        ? "is-offline"
+        : isSyncing
+          ? "is-refreshing"
+          : ""
   }`;
 
   if (hasError) {

@@ -9,6 +9,7 @@ import {
   LogOut,
   RefreshCcw,
   Scale,
+  ShieldCheck,
   TrendingUp,
   UserRound,
   WalletCards,
@@ -32,6 +33,7 @@ type MoneyMoreSheetProps = {
   onOpenAccountReconciliation: () => void;
   onOpenAutomation: () => void;
   onOpenCashFlow: () => void;
+  onOpenDataHealth: () => void;
   onOpenBalanceChecks: () => void;
   onOpenChangeLog: () => void;
   onOpenCloseDay: () => void;
@@ -55,6 +57,7 @@ export function MoneyMoreSheet({
   onOpenAccountReconciliation,
   onOpenAutomation,
   onOpenCashFlow,
+  onOpenDataHealth,
   onOpenBalanceChecks,
   onOpenChangeLog,
   onOpenCloseDay,
@@ -90,6 +93,11 @@ export function MoneyMoreSheet({
       icon: TrendingUp,
       label: "Dự báo dòng tiền",
       onClick: onOpenCashFlow,
+    },
+    {
+      icon: ShieldCheck,
+      label: "Sức khỏe dữ liệu",
+      onClick: onOpenDataHealth,
     },
     ...(mode === "more"
       ? [

@@ -40,6 +40,7 @@ assert.equal(
 );
 
 assert.equal(getMoneyStateFromPath("/money/history").page, "history");
+assert.equal(getMoneyStateFromPath("/money/data-health").page, "dataHealth");
 assert.equal(getMoneyStateFromPath("/money/history/journal").page, "history");
 assert.equal(getMoneyStateFromPath("/money/history/expenses").page, "expenses");
 assert.equal(

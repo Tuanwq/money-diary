@@ -55,6 +55,7 @@ export function MoneyMobileNavigation({
       active:
         currentPage === "accounts" ||
         currentPage === "analytics" ||
+        currentPage === "dataHealth" ||
         currentPage === "reconciliation" ||
         currentPage === "automation" ||
         currentPage === "cashFlow" ||

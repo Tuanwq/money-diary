@@ -11,6 +11,7 @@ type MoneyNavigationTarget = Pick<AppHistoryState, "page" | "goalScreen">;
 const moneyPagePaths: Record<Page, string> = {
   accounts: "/money/accounts",
   analytics: "/money/analytics",
+  dataHealth: "/money/data-health",
   reconciliation: "/money/reconciliation",
   automation: "/money/automation",
   cashFlow: "/money/cash-flow",
@@ -68,6 +69,9 @@ export function getMoneyStateFromPath(pathname: string): AppHistoryState {
 
   if (segment === "accounts") return { page: "accounts", goalScreen: "menu" };
   if (segment === "analytics") return { page: "analytics", goalScreen: "menu" };
+  if (segment === "data-health") {
+    return { page: "dataHealth", goalScreen: "menu" };
+  }
   if (segment === "reconciliation") {
     return { page: "reconciliation", goalScreen: "menu" };
   }

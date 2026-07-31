@@ -1,3 +1,5 @@
+import { captureAppError } from "../features/error-monitoring/appErrorMonitor";
+
 const PWA_RECOVERY_SESSION_KEY = "money-diary:pwa-recovery-attempt";
 const RECOVERY_COOLDOWN_MS = 30_000;
 
@@ -43,6 +45,28 @@ export async function clearPwaShellCaches() {
   );
 }
 
+export async function recoverApplicationShell() {
+  await clearPwaShellCaches();
+
+  if (!("serviceWorker" in navigator)) return;
+
+  const registrations = await navigator.serviceWorker.getRegistrations();
+  await Promise.all(
+    registrations.map(async (registration) => {
+      try {
+        await registration.update();
+        registration.waiting?.postMessage({ type: "SKIP_WAITING" });
+      } catch (error) {
+        captureAppError({
+          category: "pwa",
+          error,
+          message: "Không thể cập nhật service worker khi khôi phục",
+        });
+      }
+    })
+  );
+}
+
 async function recoverFromStaleAsset() {
   if (!canAttemptRecovery()) return;
 
@@ -69,6 +93,11 @@ async function recoverFromStaleAsset() {
 
 export function installPwaRecovery() {
   const handlePreloadError = (event: Event) => {
+    captureAppError({
+      category: "pwa",
+      detail: event.type,
+      message: "Không tải được tài nguyên giao diện mới",
+    });
     event.preventDefault();
     void recoverFromStaleAsset();
   };
@@ -76,6 +105,11 @@ export function installPwaRecovery() {
   const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
     if (!RECOVERABLE_ASSET_ERROR.test(getErrorMessage(event.reason))) return;
 
+    captureAppError({
+      category: "pwa",
+      error: event.reason,
+      message: "Phiên bản PWA đang dùng tài nguyên cũ",
+    });
     event.preventDefault();
     void recoverFromStaleAsset();
   };

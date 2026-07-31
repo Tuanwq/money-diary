@@ -3,6 +3,8 @@ import { HubSelectionPage } from "./features/hub/pages/HubSelectionPage";
 import { calculateAccountBalance } from "./features/account-ledger/accountLedgerModel";
 import { useAccountLedger } from "./features/account-ledger/useAccountLedger";
 import { useAccountReconciliations } from "./features/account-reconciliation/useAccountReconciliations";
+import { ACCOUNT_RECONCILIATION_FOCUS_DATE_SESSION_KEY } from "./features/account-reconciliation/accountReconciliationModel";
+import type { DataHealthIssueAction } from "./features/data-health/dataHealthModel";
 import type { AutomationExecution } from "./features/automation/automationModel";
 import { useAutomationEngine } from "./features/automation/useAutomationEngine";
 import { useAutomationRules } from "./features/automation/useAutomationRules";
@@ -44,6 +46,7 @@ import {
 } from "./constants";
 import {
   DEFAULT_HUB_SETTINGS,
+  HUB_INITIAL_EDIT_ENTRY_SESSION_KEY,
   STORAGE_HUB_CALCULATOR_KEY,
   STORAGE_HUB_CHANGE_LOGS_KEY,
   STORAGE_HUB_ENTRIES_KEY,
@@ -140,6 +143,11 @@ const LazyAccountLedgerPage = lazy(() =>
 const LazyFinancialAnalyticsPage = lazy(() =>
   import("./features/analytics/FinancialAnalyticsPage").then((module) => ({
     default: module.FinancialAnalyticsPage,
+  }))
+);
+const LazyDataHealthPage = lazy(() =>
+  import("./features/data-health/DataHealthPage").then((module) => ({
+    default: module.DataHealthPage,
   }))
 );
 const LazyAccountReconciliationPage = lazy(() =>
@@ -1933,6 +1941,63 @@ function handleDataWarningAction(warning: DataWarning) {
   navigateTo(warning.actionPage, warning.actionGoalScreen ?? "menu");
 }
 
+function handleDataHealthIssueAction(action: DataHealthIssueAction) {
+  if (action.kind === "journal") {
+    const entry = entries.find(
+      (item) => item.id === action.recordId || item.date === action.date
+    );
+
+    if (entry) {
+      editEntry(entry);
+    } else {
+      openCloseDay(action.date);
+    }
+    return;
+  }
+
+  if (action.kind === "expense") {
+    const expense = expenses.find(
+      (item) => item.id === action.recordId || item.date === action.date
+    );
+
+    if (expense) {
+      editExpense(expense);
+    } else {
+      openCloseDay(action.date);
+    }
+    return;
+  }
+
+  if (action.kind === "balanceCheck") {
+    openBalanceCheckOverlay(action.date, "edit");
+    return;
+  }
+
+  if (action.kind === "hub") {
+    sessionStorage.setItem(
+      HUB_INITIAL_EDIT_ENTRY_SESSION_KEY,
+      action.entryId
+    );
+    navigateTo("hub");
+    return;
+  }
+
+  if (action.kind === "reconciliation") {
+    sessionStorage.setItem(
+      ACCOUNT_RECONCILIATION_FOCUS_DATE_SESSION_KEY,
+      action.date
+    );
+    navigateTo("reconciliation");
+    return;
+  }
+
+  navigateTo(
+    "goals",
+    action.screen,
+    action.screen === "subGoals" ? action.goalId : undefined
+  );
+}
+
 function openBalanceCheckOverlay(
   date: string,
   mode: BalanceCheckOverlayMode = "edit"
@@ -3562,6 +3627,7 @@ if (route.kind === "daymark") {
       onOpenAccountReconciliation={() => navigateTo("reconciliation")}
       onOpenAutomation={() => navigateTo("automation")}
       onOpenCashFlow={() => navigateTo("cashFlow")}
+      onOpenDataHealth={() => navigateTo("dataHealth")}
       onOpenChangeLog={() => navigateTo("changes")}
       onOpenCloseDay={() => openCloseDay()}
       onOpenExpense={goToTodayEntryForm}
@@ -3597,6 +3663,21 @@ if (route.kind === "daymark") {
               goals={goals}
               hubEntries={backupSource.hub.entries}
               hubSettings={backupSource.hub.settings}
+            />
+          )}
+          {page === "dataHealth" && (
+            <LazyDataHealthPage
+              accounts={financialAccounts}
+              accountTransactions={accountTransactions}
+              balanceChecks={balanceChecks}
+              completedGoals={completedGoals}
+              entries={entries}
+              expenses={expenses}
+              goals={goals}
+              hubEntries={backupSource.hub.entries}
+              hubSettings={backupSource.hub.settings}
+              onIssueAction={handleDataHealthIssueAction}
+              reconciliations={accountReconciliations}
             />
           )}
           {page === "reconciliation" && (

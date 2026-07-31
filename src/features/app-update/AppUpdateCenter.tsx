@@ -1,17 +1,26 @@
 import {
   Bell,
+  Bug,
   CheckCircle2,
   Cloud,
+  Copy,
   Database,
   Download,
   HardDrive,
   MonitorSmartphone,
   RefreshCw,
+  RotateCcw,
   Server,
   Wifi,
   WifiOff,
 } from "lucide-react";
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import {
+  clearAppErrorRecords,
+  getAppErrorRecords,
+  subscribeToAppErrors,
+} from "../error-monitoring/appErrorMonitor";
+import { recoverApplicationShell } from "../../pwa/pwaRecovery";
 import { useAppUpdate } from "./useAppUpdate";
 import type {
   AppUpdateDiagnostics,
@@ -192,6 +201,35 @@ export function AppUpdateCenter({ syncStatus }: { syncStatus?: string }) {
   const statusContent = updateStatusContent[status];
   const diagnosticItems = buildDiagnosticItems(diagnostics, syncStatus);
   const isBusy = status === "checking" || status === "updating";
+  const [runtimeErrors, setRuntimeErrors] = useState(getAppErrorRecords);
+  const [copiedCode, setCopiedCode] = useState("");
+  const [isRecovering, setIsRecovering] = useState(false);
+
+  useEffect(
+    () => subscribeToAppErrors(() => setRuntimeErrors(getAppErrorRecords())),
+    []
+  );
+
+  async function copyErrorCode(code: string) {
+    try {
+      await navigator.clipboard.writeText(code);
+      setCopiedCode(code);
+      window.setTimeout(() => setCopiedCode(""), 1500);
+    } catch {
+      setCopiedCode("");
+    }
+  }
+
+  async function recoverApplication() {
+    if (!navigator.onLine) return;
+    setIsRecovering(true);
+
+    try {
+      await recoverApplicationShell();
+    } finally {
+      window.location.reload();
+    }
+  }
 
   return (
     <section className="app-update-center">
@@ -294,8 +332,73 @@ export function AppUpdateCenter({ syncStatus }: { syncStatus?: string }) {
         ))}
       </div>
 
+      <section className="app-runtime-errors" aria-labelledby="runtime-error-title">
+        <header className="app-runtime-errors__header">
+          <div>
+            <span className="app-update-center__eyebrow">
+              <Bug aria-hidden="true" size={17} />
+              Theo dõi lỗi thực tế
+            </span>
+            <h3 id="runtime-error-title">Lỗi gần đây trên thiết bị</h3>
+            <p>Mã lỗi kèm đúng phiên bản giúp xác định thiết bị đang dùng bản nào.</p>
+          </div>
+          <div className="app-runtime-errors__actions">
+            {runtimeErrors.length > 0 && (
+              <button
+                type="button"
+                className="notification-secondary-button"
+                onClick={() => clearAppErrorRecords()}
+              >
+                Xóa lịch sử lỗi
+              </button>
+            )}
+            <button
+              type="button"
+              className="notification-secondary-button"
+              disabled={isRecovering || diagnostics?.isOnline === false}
+              onClick={() => void recoverApplication()}
+              title="Xóa cache giao diện, cập nhật service worker và giữ nguyên dữ liệu"
+            >
+              <RotateCcw aria-hidden="true" size={17} />
+              {isRecovering ? "Đang khôi phục..." : "Khôi phục ứng dụng"}
+            </button>
+          </div>
+        </header>
+
+        {runtimeErrors.length === 0 ? (
+          <div className="app-runtime-errors__empty">
+            <CheckCircle2 aria-hidden="true" size={18} />
+            Chưa ghi nhận lỗi trên thiết bị này.
+          </div>
+        ) : (
+          <div className="app-runtime-errors__list">
+            {runtimeErrors.slice(0, 5).map((record) => (
+              <article className={`app-runtime-error is-${record.category}`} key={record.id}>
+                <div className="app-runtime-error__main">
+                  <button
+                    type="button"
+                    className="app-runtime-error__code"
+                    onClick={() => void copyErrorCode(record.code)}
+                    title="Sao chép mã lỗi"
+                  >
+                    <Copy aria-hidden="true" size={14} />
+                    {copiedCode === record.code ? "Đã sao chép" : record.code}
+                  </button>
+                  <strong>{record.message}</strong>
+                  <span>
+                    v{record.version} · {record.commit} · {new Date(record.createdAt).toLocaleString("vi-VN")}
+                    {record.count > 1 ? ` · lặp ${record.count} lần` : ""}
+                  </span>
+                </div>
+                <span className="app-runtime-error__route">{record.route}</span>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
+
       <p className="app-update-center__note">
-        Cập nhật ứng dụng không xóa nhật ký, mục tiêu hoặc dữ liệu đã đồng bộ.
+        Cập nhật hoặc khôi phục giao diện không xóa nhật ký, mục tiêu hay dữ liệu trên thiết bị.
       </p>
     </section>
   );

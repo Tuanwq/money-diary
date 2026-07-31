@@ -24,6 +24,7 @@ import {
   AppUpdateContext,
   type AppUpdateContextValue,
 } from "./appUpdateContext";
+import { captureAppError } from "../error-monitoring/appErrorMonitor";
 
 const UPDATE_CHECK_INTERVAL_MS = 5 * 60 * 1000;
 
@@ -131,6 +132,11 @@ export function AppUpdateProvider({ children }: { children: ReactNode }) {
         setStatus("current");
       }
     } catch (updateError) {
+      captureAppError({
+        category: "pwa",
+        error: updateError,
+        message: "Không thể kiểm tra phiên bản PWA trên máy chủ",
+      });
       if (registration?.waiting) {
         markUpdateAvailable(
           `service-worker:${registration.waiting.scriptURL}`
@@ -182,6 +188,11 @@ export function AppUpdateProvider({ children }: { children: ReactNode }) {
 
       window.location.reload();
     } catch (updateError) {
+      captureAppError({
+        category: "pwa",
+        error: updateError,
+        message: "Không thể kích hoạt phiên bản ứng dụng mới",
+      });
       setError(getErrorMessage(updateError));
       setStatus("error");
     }

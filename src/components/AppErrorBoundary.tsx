@@ -1,11 +1,13 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
-import { clearPwaShellCaches } from "../pwa/pwaRecovery";
+import { captureAppError } from "../features/error-monitoring/appErrorMonitor";
+import { recoverApplicationShell } from "../pwa/pwaRecovery";
 
 type AppErrorBoundaryProps = {
   children: ReactNode;
 };
 
 type AppErrorBoundaryState = {
+  errorCode: string;
   hasError: boolean;
   isRecovering: boolean;
 };
@@ -15,6 +17,7 @@ export class AppErrorBoundary extends Component<
   AppErrorBoundaryState
 > {
   state: AppErrorBoundaryState = {
+    errorCode: "",
     hasError: false,
     isRecovering: false,
   };
@@ -25,6 +28,12 @@ export class AppErrorBoundary extends Component<
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error("Money Diary gặp lỗi hiển thị", error, errorInfo);
+    const record = captureAppError({
+      category: "render",
+      detail: errorInfo.componentStack,
+      error,
+    });
+    this.setState({ errorCode: record.code });
   }
 
   private reloadInterface = () => {
@@ -35,19 +44,7 @@ export class AppErrorBoundary extends Component<
     this.setState({ isRecovering: true });
 
     try {
-      await clearPwaShellCaches();
-      if ("serviceWorker" in navigator) {
-        const registrations = await navigator.serviceWorker.getRegistrations();
-        await Promise.all(
-          registrations.map(async (registration) => {
-            try {
-              await registration.update();
-            } catch {
-              // Cache cleanup and reload are enough for offline worker errors.
-            }
-          })
-        );
-      }
+      await recoverApplicationShell();
     } finally {
       window.location.reload();
     }
@@ -65,6 +62,11 @@ export class AppErrorBoundary extends Component<
             Dữ liệu trên thiết bị không bị xóa. Bạn có thể tải lại giao diện,
             hoặc làm mới cache PWA nếu lỗi vẫn còn.
           </p>
+          {this.state.errorCode && (
+            <p className="app-error-card__code">
+              Mã lỗi: <strong>{this.state.errorCode}</strong>
+            </p>
+          )}
           <div className="app-error-card__actions">
             <button type="button" onClick={this.reloadInterface}>
               Tải lại giao diện
@@ -72,12 +74,12 @@ export class AppErrorBoundary extends Component<
             <button
               type="button"
               className="secondary-button"
-              disabled={this.state.isRecovering}
+              disabled={this.state.isRecovering || !navigator.onLine}
               onClick={() => void this.refreshPwa()}
             >
               {this.state.isRecovering
-                ? "Đang làm mới..."
-                : "Làm mới ứng dụng"}
+                ? "Đang khôi phục..."
+                : "Khôi phục ứng dụng"}
             </button>
           </div>
         </section>

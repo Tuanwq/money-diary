@@ -5328,6 +5328,10 @@ textarea {
   color: var(--money-expense);
 }
 
+.money-sync-status.is-offline {
+  color: var(--warning);
+}
+
 .money-sync-status.is-refreshing {
   opacity: 0;
   animation: money-sync-indicator-reveal 1ms linear 250ms forwards;
@@ -14676,6 +14680,129 @@ textarea {
   color: var(--danger);
 }
 
+.app-runtime-errors {
+  border-top: 1px solid var(--border);
+  display: grid;
+  gap: 0.8rem;
+  min-width: 0;
+  padding-top: 1rem;
+}
+
+.app-runtime-errors__header {
+  align-items: flex-start;
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+}
+
+.app-runtime-errors__header h3,
+.app-runtime-errors__header p {
+  margin: 0;
+}
+
+.app-runtime-errors__header h3 {
+  font-size: 1rem;
+  margin-top: 0.25rem;
+}
+
+.app-runtime-errors__header p {
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  line-height: 1.5;
+  margin-top: 0.25rem;
+}
+
+.app-runtime-errors__actions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.app-runtime-errors__empty {
+  align-items: center;
+  background: var(--success-soft);
+  border: 1px solid var(--success-border);
+  border-radius: 12px;
+  color: var(--success);
+  display: flex;
+  font-size: 0.8rem;
+  gap: 0.5rem;
+  min-height: 44px;
+  padding: 0.65rem 0.8rem;
+}
+
+.app-runtime-errors__list {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.app-runtime-error {
+  align-items: center;
+  background: var(--surface-subtle);
+  border-bottom: 1px solid var(--border);
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: minmax(0, 1fr) minmax(8rem, auto);
+  min-width: 0;
+  padding: 0.7rem 0.8rem;
+}
+
+.app-runtime-error:last-child {
+  border-bottom: 0;
+}
+
+.app-runtime-error__main {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.65rem;
+  min-width: 0;
+}
+
+.app-runtime-error__main strong {
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.app-runtime-error__main > span,
+.app-runtime-error__route {
+  color: var(--text-secondary);
+  font-size: 0.68rem;
+}
+
+.app-runtime-error__code {
+  align-items: center;
+  background: var(--danger-soft);
+  border: 1px solid var(--danger-border);
+  border-radius: 8px;
+  color: var(--danger);
+  cursor: pointer;
+  display: inline-flex;
+  font-family: inherit;
+  font-size: 0.7rem;
+  font-weight: 600;
+  gap: 0.3rem;
+  min-height: 30px;
+  padding: 0.25rem 0.45rem;
+}
+
+.app-runtime-error.is-sync .app-runtime-error__code,
+.app-runtime-error.is-pwa .app-runtime-error__code {
+  background: var(--warning-soft);
+  border-color: var(--warning-border);
+  color: var(--warning);
+}
+
+.app-runtime-error__route {
+  overflow: hidden;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .app-update-center__note {
   color: var(--text-secondary);
   font-size: 0.75rem;
@@ -15132,6 +15259,7 @@ textarea {
   }
 
   .app-update-center__header,
+  .app-runtime-errors__header,
   .notification-settings-header {
     align-items: stretch;
     flex-direction: column;
@@ -15150,6 +15278,21 @@ textarea {
   .app-update-center__actions {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .app-runtime-errors__actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    width: 100%;
+  }
+
+  .app-runtime-error {
+    align-items: start;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .app-runtime-error__route {
+    text-align: left;
   }
 
   .app-update-center__builds {
@@ -17328,6 +17471,11 @@ textarea {
   color: var(--text-secondary, #5f6e63);
   line-height: 1.6;
   margin: 0.75rem 0 0;
+}
+
+.app-error-card__code strong {
+  color: var(--danger, #c74343);
+  font-variant-numeric: tabular-nums;
 }
 
 .app-error-card__actions {

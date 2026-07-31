@@ -5,6 +5,8 @@ import type {
 
 export const ACCOUNT_RECONCILIATION_STORAGE_KEY =
   "money_diary_account_reconciliations";
+export const ACCOUNT_RECONCILIATION_FOCUS_DATE_SESSION_KEY =
+  "money-diary-account-reconciliation-focus-date";
 
 export type ReconciliationReason =
   | "unrecorded_income"

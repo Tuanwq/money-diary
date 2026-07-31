@@ -77,6 +77,7 @@ export type Goals = {
 export type Page =
   | "accounts"
   | "analytics"
+  | "dataHealth"
   | "reconciliation"
   | "automation"
   | "cashFlow"

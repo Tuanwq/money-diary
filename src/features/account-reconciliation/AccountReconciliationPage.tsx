@@ -29,6 +29,7 @@ import {
   type FinancialAccountType,
 } from "../account-ledger/accountLedgerModel";
 import {
+  ACCOUNT_RECONCILIATION_FOCUS_DATE_SESSION_KEY,
   RECONCILIATION_REASON_LABELS,
   buildReconciliationLine,
   createReconciliationAdjustmentTransaction,
@@ -116,6 +117,14 @@ export function AccountReconciliationPage({
   saveTransaction: (transaction: AccountTransaction) => void;
   transactions: AccountTransaction[];
 }) {
+  const [initialFocusDate] = useState(() => {
+    const requestedDate = sessionStorage.getItem(
+      ACCOUNT_RECONCILIATION_FOCUS_DATE_SESSION_KEY
+    );
+    sessionStorage.removeItem(ACCOUNT_RECONCILIATION_FOCUS_DATE_SESSION_KEY);
+
+    return requestedDate || getToday();
+  });
   const activeAccounts = useMemo(
     () => accounts.filter((account) => !account.archivedAt),
     [accounts]
@@ -129,8 +138,10 @@ export function AccountReconciliationPage({
       ),
     [checks]
   );
-  const [selectedDate, setSelectedDate] = useState(getToday());
-  const initialCheck = sortedChecks.find((check) => check.date === getToday());
+  const [selectedDate, setSelectedDate] = useState(initialFocusDate);
+  const initialCheck = sortedChecks.find(
+    (check) => check.date === initialFocusDate
+  );
   const [draftLines, setDraftLines] = useState<Record<string, DraftLine>>(() =>
     createDraftLines(activeAccounts, initialCheck)
   );
