@@ -5,6 +5,8 @@ import {
   useState,
 } from "react";
 import type { AiFinanceInsightProps } from "../components/AiFinanceInsight";
+import type { AccountTransaction, FinancialAccount } from "../features/account-ledger/accountLedgerModel.ts";
+import { PhotoFinanceExperience } from "../features/photo-finance/components/PhotoFinanceExperience.tsx";
 import { HUB_INITIAL_TAB_SESSION_KEY } from "../constants/hanoiHub";
 import type {
   CashFlowGoalCommitment,
@@ -69,6 +71,11 @@ function DeferredAiFinanceInsight(props: AiFinanceInsightProps) {
 }
 
 type HomePageProps = {
+  financialAccounts: FinancialAccount[];
+  accountTransactions: AccountTransaction[];
+  photoOwnerId?: string;
+  onDeleteAccountTransaction: (transactionId: string) => void;
+  onSaveAccountTransaction: (transaction: AccountTransaction) => void;
   entries: DailyEntry[];
   expenses: ExpenseEntry[];
   balanceChecks: BalanceCheckEntry[];
@@ -121,6 +128,11 @@ type HomePageProps = {
 };
 
 export function HomePage({
+  financialAccounts,
+  accountTransactions,
+  photoOwnerId,
+  onDeleteAccountTransaction,
+  onSaveAccountTransaction,
   entries,
   expenses,
   balanceChecks,
@@ -207,6 +219,11 @@ export function HomePage({
         selectedDate={selectedDate}
         today={todayString}
       />
+      <PhotoFinanceExperience accounts={financialAccounts} entries={entries}
+        expenses={expenses} ownerId={photoOwnerId}
+        onDeleteTransaction={onDeleteAccountTransaction}
+        onSaveTransaction={onSaveAccountTransaction}
+        transactions={accountTransactions} />
 
       <MoneyStreakCard
         isCloudLoading={moneyStreak.isCloudLoading}

@@ -2,6 +2,7 @@ import { useBrowserRoute } from "./app/router/useBrowserRoute";
 import { HubSelectionPage } from "./features/hub/pages/HubSelectionPage";
 import { calculateAccountBalance } from "./features/account-ledger/accountLedgerModel";
 import { useAccountLedger } from "./features/account-ledger/useAccountLedger";
+import { deleteAccountTransactionWithPhotos } from "./features/photo-finance/services/photoTransactionService.ts";
 import { useAccountReconciliations } from "./features/account-reconciliation/useAccountReconciliations";
 import { ACCOUNT_RECONCILIATION_FOCUS_DATE_SESSION_KEY } from "./features/account-reconciliation/accountReconciliationModel";
 import type { DataHealthIssueAction } from "./features/data-health/dataHealthModel";
@@ -3645,7 +3646,10 @@ if (route.kind === "daymark") {
               accounts={financialAccounts}
               archiveAccount={archiveAccount}
               cloudStatus={accountLedgerCloudStatus}
-              deleteTransaction={deleteAccountTransaction}
+              deleteTransaction={(transactionId) => {
+                void deleteAccountTransactionWithPhotos(transactionId,
+                  cloudDataUserId, deleteAccountTransaction).catch(console.error);
+              }}
               saveAccount={saveAccount}
               saveTransaction={saveAccountTransaction}
               transactions={accountTransactions}
@@ -3729,6 +3733,11 @@ if (route.kind === "daymark") {
           )}
           {page === "home" && (
             <HomePage
+              financialAccounts={financialAccounts}
+              accountTransactions={accountTransactions}
+              photoOwnerId={cloudDataUserId}
+              onDeleteAccountTransaction={deleteAccountTransaction}
+              onSaveAccountTransaction={saveAccountTransaction}
               entries={entries}
               expenses={expenses}
               balanceChecks={balanceChecks}

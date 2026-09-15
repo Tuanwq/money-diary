@@ -29,6 +29,9 @@ export type AccountTransaction = {
   toAccountId?: string;
   type: AccountTransactionType;
   updatedAt: string;
+  /** Photo Finance owns this transaction; legacy diary amounts are never written for it. */
+  source?: "photo_finance";
+  occurredAt?: string;
 };
 
 export type AccountLedgerData = {
