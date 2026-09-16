@@ -107,6 +107,7 @@
 .photo-finance-hint { margin: -7px 0 0; color: var(--pf-muted); font-size: 12px; }
 .photo-finance-preview { width: 100%; max-height: 330px; border-radius: 14px; object-fit: contain; background: var(--pf-soft); }
 .photo-finance-retry { padding: 10px; border-radius: 10px; background: var(--pf-soft); font-size: 13px; }
+.photo-finance-retry button { display: block; margin-top: 6px; color: var(--pf-accent); font-weight: 800; text-decoration: underline; }
 .photo-finance-form-grid { display: grid; gap: 10px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .photo-finance-form-grid label,
 .photo-finance-form-grid fieldset { display: grid; gap: 5px; font-size: 12px; font-weight: 750; min-width: 0; }

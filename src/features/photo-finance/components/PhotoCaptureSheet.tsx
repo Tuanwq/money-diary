@@ -6,13 +6,14 @@ import type { createPhotoAttachmentRepository } from "../services/photoAttachmen
 import { PhotoTransactionForm } from "./PhotoTransactionForm.tsx";
 
 export function PhotoCaptureSheet({ accounts, existing, initialDate, isOpen, ownerId,
-  repository, dayHasPhotos, onClose, onSaved, onSaveTransaction, formKey }: {
+  repository, dayHasPhotos, onClose, onSaved, onSaveTransaction, onStartNew, formKey }: {
   accounts: FinancialAccount[]; existing?: AccountTransaction;
   initialDate?: string; isOpen: boolean; ownerId?: string;
   repository: ReturnType<typeof createPhotoAttachmentRepository>;
   dayHasPhotos: (date: string) => boolean;
   onClose: () => void; onSaved: (transactionId: string) => void;
   onSaveTransaction: (transaction: AccountTransaction) => void;
+  onStartNew: () => void;
   formKey: number;
 }) {
   useEffect(() => {
@@ -33,7 +34,7 @@ export function PhotoCaptureSheet({ accounts, existing, initialDate, isOpen, own
       <PhotoTransactionForm accounts={accounts} existing={existing} initialDate={initialDate}
         key={`${existing?.id ?? "new"}-${formKey}`} ownerId={ownerId} repository={repository}
         dayHasPhotos={dayHasPhotos}
-        onSaved={onSaved} onSaveTransaction={onSaveTransaction} />
+        onSaved={onSaved} onSaveTransaction={onSaveTransaction} onStartNew={onStartNew} />
     </section>
   </div>, document.body);
 }

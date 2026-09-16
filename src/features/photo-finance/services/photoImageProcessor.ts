@@ -15,10 +15,12 @@ function canvasBlob(canvas: HTMLCanvasElement, quality: number) {
   });
 }
 
-function renderImage(bitmap: ImageBitmap, maxEdge: number) {
-  const scale = Math.min(1, maxEdge / Math.max(bitmap.width, bitmap.height));
-  const width = Math.max(1, Math.round(bitmap.width * scale));
-  const height = Math.max(1, Math.round(bitmap.height * scale));
+function renderImage(image: ImageBitmap | HTMLImageElement, maxEdge: number) {
+  const sourceWidth = image instanceof HTMLImageElement ? image.naturalWidth : image.width;
+  const sourceHeight = image instanceof HTMLImageElement ? image.naturalHeight : image.height;
+  const scale = Math.min(1, maxEdge / Math.max(sourceWidth, sourceHeight));
+  const width = Math.max(1, Math.round(sourceWidth * scale));
+  const height = Math.max(1, Math.round(sourceHeight * scale));
   const canvas = document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;
@@ -26,8 +28,27 @@ function renderImage(bitmap: ImageBitmap, maxEdge: number) {
   if (!context) throw new Error("Thiết bị không hỗ trợ xử lý ảnh.");
   context.fillStyle = "white";
   context.fillRect(0, 0, width, height);
-  context.drawImage(bitmap, 0, 0, width, height);
+  context.drawImage(image, 0, 0, width, height);
   return { canvas, width, height };
+}
+
+async function decodePhoto(file: File): Promise<{ image: ImageBitmap | HTMLImageElement; dispose: () => void }> {
+  if (typeof createImageBitmap === "function") {
+    try {
+      const bitmap = await createImageBitmap(file);
+      return { image: bitmap, dispose: () => bitmap.close() };
+    } catch { /* Fallback for browsers/codecs without createImageBitmap support. */ }
+  }
+  const url = URL.createObjectURL(file);
+  const image = new Image();
+  try {
+    await new Promise<void>((resolve, reject) => {
+      image.onload = () => resolve();
+      image.onerror = () => reject(new Error("Không đọc được ảnh. Hãy thử JPG hoặc chọn ảnh khác."));
+      image.src = url;
+    });
+    return { image, dispose: () => URL.revokeObjectURL(url) };
+  } catch (error) { URL.revokeObjectURL(url); throw error; }
 }
 
 /** Re-encodes into two small files; no money/category/note is painted on pixels. */
@@ -36,16 +57,12 @@ export async function processPhoto(file: File): Promise<ProcessedPhoto> {
     throw new Error("Chỉ nhận ảnh JPG, PNG hoặc WebP.");
   if (file.size === 0 || file.size > MAX_INPUT_BYTES)
     throw new Error("Ảnh trống hoặc lớn hơn 25 MB. Hãy chọn ảnh khác.");
-  if (typeof createImageBitmap !== "function")
-    throw new Error("Thiết bị chưa hỗ trợ đọc ảnh này. Hãy chọn ảnh từ thư viện.");
-  let bitmap: ImageBitmap;
-  try { bitmap = await createImageBitmap(file); }
-  catch { throw new Error("Không đọc được ảnh. Hãy thử JPG hoặc chọn ảnh khác."); }
+  const decoded = await decodePhoto(file);
   try {
-    const display = renderImage(bitmap, 1600);
-    const thumbnail = renderImage(bitmap, 320);
+    const display = renderImage(decoded.image, 1600);
+    const thumbnail = renderImage(decoded.image, 320);
     return { display: await canvasBlob(display.canvas, 0.82),
       thumbnail: await canvasBlob(thumbnail.canvas, 0.68),
       width: display.width, height: display.height };
-  } finally { bitmap.close(); }
+  } finally { decoded.dispose(); }
 }

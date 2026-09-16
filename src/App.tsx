@@ -3648,7 +3648,10 @@ if (route.kind === "daymark") {
               cloudStatus={accountLedgerCloudStatus}
               deleteTransaction={(transactionId) => {
                 void deleteAccountTransactionWithPhotos(transactionId,
-                  cloudDataUserId, deleteAccountTransaction).catch(console.error);
+                  cloudDataUserId, deleteAccountTransaction).catch((cause) => {
+                    console.error(cause);
+                    window.alert("Chưa xóa được giao dịch vì ảnh liên kết cần dọn trước. Hãy thử lại.");
+                  });
               }}
               saveAccount={saveAccount}
               saveTransaction={saveAccountTransaction}

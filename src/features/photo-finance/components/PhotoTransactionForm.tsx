@@ -8,7 +8,7 @@ import type { createPhotoAttachmentRepository } from "../services/photoAttachmen
 type Repository = ReturnType<typeof createPhotoAttachmentRepository>;
 
 export function PhotoTransactionForm({ accounts, existing, initialDate, ownerId,
-  repository, dayHasPhotos, onSaved, onSaveTransaction }: {
+  repository, dayHasPhotos, onSaved, onSaveTransaction, onStartNew }: {
   accounts: FinancialAccount[];
   existing?: AccountTransaction;
   initialDate?: string;
@@ -17,6 +17,7 @@ export function PhotoTransactionForm({ accounts, existing, initialDate, ownerId,
   dayHasPhotos: (date: string) => boolean;
   onSaved: (transactionId: string) => void;
   onSaveTransaction: (transaction: AccountTransaction) => void;
+  onStartNew: () => void;
 }) {
   const now = new Date();
   const [kind, setKind] = useState<"income" | "expense">(
@@ -28,26 +29,30 @@ export function PhotoTransactionForm({ accounts, existing, initialDate, ownerId,
   const [date, setDate] = useState(existing?.date ?? initialDate ?? vietnamFinancialDate(now));
   const [time, setTime] = useState(existing?.occurredAt
     ? vietnamFinancialTime(new Date(existing.occurredAt)) : vietnamFinancialTime(now));
-  const [file, setFile] = useState<File | null>(null);
-  const [previewUrl, setPreviewUrl] = useState("");
+  const [selectedPhoto, setSelectedPhoto] = useState<{ file: File; url: string } | null>(null);
   const [savedId, setSavedId] = useState<string | null>(null);
   const [working, setWorking] = useState(false);
   const [error, setError] = useState("");
   const lockRef = useRef(false);
+  const objectUrlRef = useRef("");
+  const file = selectedPhoto?.file ?? null;
+  const previewUrl = selectedPhoto?.url ?? "";
   const activeAccounts = accounts.filter((account) => !account.archivedAt);
   const canEdit = !savedId;
 
-  useEffect(() => {
-    if (!file) return;
-    const url = URL.createObjectURL(file);
-    const timer = window.setTimeout(() => setPreviewUrl(url), 0);
-    return () => { window.clearTimeout(timer); URL.revokeObjectURL(url); };
-  }, [file]);
+  useEffect(() => () => {
+    const current = objectUrlRef.current;
+    if (current) window.setTimeout(() => URL.revokeObjectURL(current), 1000);
+  }, []);
 
   function chooseFile(next: File | undefined) {
     if (!next) return;
     setError("");
-    setFile(next);
+    const previous = objectUrlRef.current;
+    const url = URL.createObjectURL(next);
+    objectUrlRef.current = url;
+    setSelectedPhoto({ file: next, url });
+    if (previous) window.setTimeout(() => URL.revokeObjectURL(previous), 1000);
   }
 
   async function submit(event: React.FormEvent) {
@@ -97,7 +102,8 @@ export function PhotoTransactionForm({ accounts, existing, initialDate, ownerId,
     </div>
     <p className="photo-finance-hint">Nếu camera không mở hoặc bị từ chối quyền, hãy chọn ảnh từ thư viện.</p>
     {previewUrl && <img className="photo-finance-preview" src={previewUrl} alt="Ảnh sắp lưu" />}
-    {savedId && <p className="photo-finance-retry" role="status">Giao dịch đã lưu. Tải ảnh lại sẽ dùng cùng giao dịch, không tạo khoản tiền thứ hai.</p>}
+    {savedId && <p className="photo-finance-retry" role="status">Giao dịch đã lưu. Tải ảnh lại sẽ dùng cùng giao dịch, không tạo khoản tiền thứ hai.
+      <button onClick={onStartNew} type="button">Bắt đầu khoảnh khắc khác</button></p>}
     <div className="photo-finance-form-grid">
       <fieldset disabled={!canEdit}><legend>Loại giao dịch</legend>
         <label><input checked={kind === "expense"} onChange={() => { setKind("expense"); setCategory("Ăn uống"); }} type="radio" /> Chi tiêu</label>

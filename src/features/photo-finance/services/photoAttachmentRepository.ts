@@ -29,7 +29,8 @@ export function createPhotoAttachmentRepository(client: SupabaseClient = supabas
       await requireOwner(client, ownerId);
       const { data, error } = await client.from("money_diary_financial_attachments")
         .select("id,owner_id,source_type,source_id,storage_path,thumbnail_path,is_cover,width,height,created_at")
-        .eq("owner_id", ownerId).order("created_at", { ascending: false });
+        .eq("owner_id", ownerId).is("deleted_at", null)
+        .order("created_at", { ascending: false });
       if (error) throw error;
       return ((data ?? []) as AttachmentRow[]).map(fromRow);
     },
@@ -75,11 +76,29 @@ export function createPhotoAttachmentRepository(client: SupabaseClient = supabas
       await requireOwner(client, ownerId);
       if (attachment.ownerId !== ownerId) throw new Error("Ảnh không thuộc tài khoản này.");
       const { error } = await client.from("money_diary_financial_attachments")
-        .delete().eq("id", attachment.id).eq("owner_id", ownerId);
+        .update({ deleted_at: new Date().toISOString() })
+        .eq("id", attachment.id).eq("owner_id", ownerId);
       if (error) throw error;
       const removed = await client.storage.from(PHOTO_FINANCE_BUCKET)
         .remove([attachment.storagePath, attachment.thumbnailPath]);
-      if (removed.error) throw removed.error;
+      if (removed.error) throw new Error("Ảnh đã ẩn; dọn file sẽ được thử lại khi tải dữ liệu.");
+      const deleted = await client.from("money_diary_financial_attachments")
+        .delete().eq("id", attachment.id).eq("owner_id", ownerId);
+      if (deleted.error) throw deleted.error;
+    },
+
+    async retryPendingDeletes(ownerId: string) {
+      await requireOwner(client, ownerId);
+      const { data, error } = await client.from("money_diary_financial_attachments")
+        .select("id,storage_path,thumbnail_path")
+        .eq("owner_id", ownerId).not("deleted_at", "is", null);
+      if (error) return;
+      for (const item of data ?? []) {
+        const removed = await client.storage.from(PHOTO_FINANCE_BUCKET)
+          .remove([item.storage_path, item.thumbnail_path]);
+        if (!removed.error) await client.from("money_diary_financial_attachments")
+          .delete().eq("id", item.id).eq("owner_id", ownerId);
+      }
     },
 
     async deleteForTransaction(ownerId: string, transactionId: string) {

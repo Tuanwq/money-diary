@@ -91,6 +91,7 @@ export function PhotoFinanceExperience({ accounts, entries, expenses, ownerId,
       initialDate={captureDate} isOpen={captureOpen} ownerId={ownerId}
       repository={photos.repository} dayHasPhotos={dayHasPhotos}
       onClose={closeCapture} onSaved={(id) => void photoSaved(id)}
+      onStartNew={() => { setEditing(undefined); setFormKey((value) => value + 1); }}
       onSaveTransaction={onSaveTransaction} />
   </div>;
 }

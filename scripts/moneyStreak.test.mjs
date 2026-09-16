@@ -101,9 +101,14 @@ try {
     join(tempDir, "src", "constants", "hanoiHub.js")
   );
   await transpile(
+    join(rootDir, "src", "utils", "hubDailyRewards.ts"),
+    join(tempDir, "src", "utils", "hubDailyRewards.js")
+  );
+  await transpile(
     join(rootDir, "src", "utils", "hubIncome.ts"),
     join(tempDir, "src", "utils", "hubIncome.js"),
-    [["../constants/hanoiHub", "../constants/hanoiHub.js"]]
+    [["../constants/hanoiHub", "../constants/hanoiHub.js"],
+      ["./hubDailyRewards", "./hubDailyRewards.js"]]
   );
   await transpile(
     join(

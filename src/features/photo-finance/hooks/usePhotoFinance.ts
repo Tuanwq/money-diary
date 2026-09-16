@@ -18,6 +18,7 @@ export function usePhotoFinance(ownerId?: string) {
     }
     setStatus("loading");
     try {
+      await repository.retryPendingDeletes(ownerId);
       const items = await repository.list(ownerId);
       const signed = await Promise.allSettled(items.map((item) =>
         repository.signedImage(item.thumbnailPath)));

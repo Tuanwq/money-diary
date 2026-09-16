@@ -6,6 +6,6 @@ export async function deleteAccountTransactionWithPhotos(
   ownerId: string | undefined,
   deleteTransaction: (transactionId: string) => void
 ) {
-  deleteTransaction(transactionId);
   if (ownerId) await createPhotoAttachmentRepository().deleteForTransaction(ownerId, transactionId);
+  deleteTransaction(transactionId);
 }

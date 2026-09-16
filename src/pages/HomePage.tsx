@@ -6,7 +6,6 @@ import {
 } from "react";
 import type { AiFinanceInsightProps } from "../components/AiFinanceInsight";
 import type { AccountTransaction, FinancialAccount } from "../features/account-ledger/accountLedgerModel.ts";
-import { PhotoFinanceExperience } from "../features/photo-finance/components/PhotoFinanceExperience.tsx";
 import { HUB_INITIAL_TAB_SESSION_KEY } from "../constants/hanoiHub";
 import type {
   CashFlowGoalCommitment,
@@ -39,6 +38,10 @@ const LazyAiFinanceInsight = lazy(() =>
   import("../components/AiFinanceInsight").then((module) => ({
     default: module.AiFinanceInsight,
   }))
+);
+const LazyPhotoFinanceExperience = lazy(() =>
+  import("../features/photo-finance/components/PhotoFinanceExperience.tsx")
+    .then((module) => ({ default: module.PhotoFinanceExperience }))
 );
 
 function DeferredAiFinanceInsight(props: AiFinanceInsightProps) {
@@ -219,11 +222,13 @@ export function HomePage({
         selectedDate={selectedDate}
         today={todayString}
       />
-      <PhotoFinanceExperience accounts={financialAccounts} entries={entries}
-        expenses={expenses} ownerId={photoOwnerId}
-        onDeleteTransaction={onDeleteAccountTransaction}
-        onSaveTransaction={onSaveAccountTransaction}
-        transactions={accountTransactions} />
+      <Suspense fallback={<div className="app-card rounded-2xl p-4">Đang mở lịch tài chính...</div>}>
+        <LazyPhotoFinanceExperience accounts={financialAccounts} entries={entries}
+          expenses={expenses} ownerId={photoOwnerId}
+          onDeleteTransaction={onDeleteAccountTransaction}
+          onSaveTransaction={onSaveAccountTransaction}
+          transactions={accountTransactions} />
+      </Suspense>
 
       <MoneyStreakCard
         isCloudLoading={moneyStreak.isCloudLoading}

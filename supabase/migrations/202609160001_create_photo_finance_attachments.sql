@@ -20,6 +20,7 @@ create table if not exists public.money_diary_financial_attachments (
   width integer not null check (width > 0),
   height integer not null check (height > 0),
   created_at timestamptz not null default now(),
+  deleted_at timestamptz,
   check (storage_path like owner_id::text || '/%'),
   check (thumbnail_path like owner_id::text || '/%')
 );
@@ -27,6 +28,9 @@ create index if not exists financial_attachments_owner_source_idx
   on public.money_diary_financial_attachments(owner_id, source_type, source_id);
 create index if not exists financial_attachments_owner_time_idx
   on public.money_diary_financial_attachments(owner_id, created_at desc);
+create index if not exists financial_attachments_cleanup_idx
+  on public.money_diary_financial_attachments(owner_id, deleted_at)
+  where deleted_at is not null;
 
 alter table public.money_diary_financial_attachments enable row level security;
 drop policy if exists financial_attachments_select_own on public.money_diary_financial_attachments;
