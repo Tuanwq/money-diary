@@ -26,11 +26,14 @@ import {
 import {
   ACCOUNT_TYPE_LABELS,
   TRANSACTION_CATEGORIES,
+  TRANSACTION_PURPOSE_LABELS,
   TRANSACTION_TYPE_LABELS,
   calculateAccountBalance,
+  getDefaultTransactionPurpose,
   getLedgerSummary,
   type AccountTransaction,
   type AccountTransactionType,
+  type TransactionPurpose,
   type FinancialAccount,
   type FinancialAccountType,
 } from "./accountLedgerModel";
@@ -219,6 +222,9 @@ function TransactionForm({
     transaction?.category ?? TRANSACTION_CATEGORIES[type][0]
   );
   const [note, setNote] = useState(transaction?.note ?? "");
+  const [purpose, setPurpose] = useState<TransactionPurpose | "">(
+    transaction?.purpose ?? (transaction ? "" : getDefaultTransactionPurpose(type))
+  );
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -232,6 +238,7 @@ function TransactionForm({
   function changeType(nextType: AccountTransactionType) {
     setType(nextType);
     setCategory(TRANSACTION_CATEGORIES[nextType][0]);
+    setPurpose(getDefaultTransactionPurpose(nextType));
   }
 
   function handleSubmit(event: React.FormEvent) {
@@ -248,9 +255,15 @@ function TransactionForm({
       return;
     }
 
+    if (!purpose) {
+      alert("Hãy chọn giao dịch này ảnh hưởng đến mục tiêu như thế nào.");
+      return;
+    }
+
     const now = new Date().toISOString();
 
     onSave({
+      ...transaction,
       accountId,
       amount: parsedAmount,
       category,
@@ -258,6 +271,7 @@ function TransactionForm({
       date,
       id: transaction?.id ?? crypto.randomUUID(),
       note: note.trim(),
+      purpose,
       ...(type === "transfer" ? { toAccountId } : {}),
       type,
       updatedAt: now,
@@ -375,6 +389,24 @@ function TransactionForm({
                 </option>
               ))}
             </select>
+          </label>
+
+          <label className="ledger-field">
+            <span>Ảnh hưởng mục tiêu</span>
+            <select
+              onChange={(event) => setPurpose(event.target.value as TransactionPurpose)}
+              required
+              value={purpose}
+            >
+              {transaction && !transaction.purpose && <option value="">Chưa phân loại</option>}
+              {type === "income" && <option value="income">{TRANSACTION_PURPOSE_LABELS.income}</option>}
+              {type === "expense" && <>
+                <option value="daily_expense">{TRANSACTION_PURPOSE_LABELS.daily_expense} · trừ tiến độ</option>
+                <option value="goal_allocation">{TRANSACTION_PURPOSE_LABELS.goal_allocation} · không trừ</option>
+              </>}
+              {type === "transfer" && <option value="internal_transfer">{TRANSACTION_PURPOSE_LABELS.internal_transfer} · không trừ</option>}
+            </select>
+            <small>Phân bổ và chuyển nội bộ không làm giảm tiền đã kiếm được cho mục tiêu.</small>
           </label>
 
           <label className="ledger-field ledger-field-wide">
@@ -756,6 +788,9 @@ export function AccountLedgerPage({
                       {targetAccount ? ` → ${targetAccount.name}` : ""}
                     </span>
                     {transaction.note && <small>{transaction.note}</small>}
+                    {transaction.purpose && (
+                      <small>{TRANSACTION_PURPOSE_LABELS[transaction.purpose]}</small>
+                    )}
                   </div>
                   <time dateTime={transaction.date}>
                     {formatDate(transaction.date)}

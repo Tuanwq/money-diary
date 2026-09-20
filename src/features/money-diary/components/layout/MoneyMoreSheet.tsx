@@ -1,6 +1,5 @@
 import {
   Bell,
-  Bot,
   BookCheck,
   ChartColumnBig,
   ClipboardCheck,
@@ -9,11 +8,8 @@ import {
   LogOut,
   RefreshCcw,
   Scale,
-  ShieldCheck,
-  TrendingUp,
   UserRound,
   WalletCards,
-  Workflow,
 } from "lucide-react";
 import type { RefObject } from "react";
 import { ThemeToggle } from "../../../../components/ThemeToggle";
@@ -27,13 +23,9 @@ type MoneyMoreSheetProps = {
   onClose: () => void;
   onExportReport: () => void;
   onLogout: () => void;
-  onOpenAnalysis: () => void;
   onOpenAnalytics: () => void;
   onOpenAccountLedger: () => void;
   onOpenAccountReconciliation: () => void;
-  onOpenAutomation: () => void;
-  onOpenCashFlow: () => void;
-  onOpenDataHealth: () => void;
   onOpenBalanceChecks: () => void;
   onOpenChangeLog: () => void;
   onOpenCloseDay: () => void;
@@ -51,13 +43,9 @@ export function MoneyMoreSheet({
   onClose,
   onExportReport,
   onLogout,
-  onOpenAnalysis,
   onOpenAnalytics,
   onOpenAccountLedger,
   onOpenAccountReconciliation,
-  onOpenAutomation,
-  onOpenCashFlow,
-  onOpenDataHealth,
   onOpenBalanceChecks,
   onOpenChangeLog,
   onOpenCloseDay,
@@ -84,21 +72,6 @@ export function MoneyMoreSheet({
       label: "Kiểm kê tài khoản",
       onClick: onOpenAccountReconciliation,
     },
-    {
-      icon: Workflow,
-      label: "Tự động hóa",
-      onClick: onOpenAutomation,
-    },
-    {
-      icon: TrendingUp,
-      label: "Dự báo dòng tiền",
-      onClick: onOpenCashFlow,
-    },
-    {
-      icon: ShieldCheck,
-      label: "Sức khỏe dữ liệu",
-      onClick: onOpenDataHealth,
-    },
     ...(mode === "more"
       ? [
           {
@@ -108,11 +81,6 @@ export function MoneyMoreSheet({
           },
         ]
       : []),
-    {
-      icon: Bot,
-      label: "Phân tích tài chính",
-      onClick: onOpenAnalysis,
-    },
     { icon: FileText, label: "Xuất báo cáo Word", onClick: onExportReport },
     {
       icon: ClipboardCheck,

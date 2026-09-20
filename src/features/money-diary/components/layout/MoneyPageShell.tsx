@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode, type TouchEvent } from "react";
 import type { ThemeMode } from "../../../../hooks/useThemeMode";
 import type { GoalScreen, Page } from "../../../../types";
 import { AddDataSheet } from "./AddDataSheet";
@@ -22,9 +22,6 @@ type MoneyPageShellProps = {
   onOpenAnalytics: () => void;
   onOpenAccountLedger: () => void;
   onOpenAccountReconciliation: () => void;
-  onOpenAutomation: () => void;
-  onOpenCashFlow: () => void;
-  onOpenDataHealth: () => void;
   onOpenChangeLog: () => void;
   onRetrySync: () => void;
   onSwitchApp: () => void;
@@ -48,9 +45,6 @@ export function MoneyPageShell({
   onOpenAnalytics,
   onOpenAccountLedger,
   onOpenAccountReconciliation,
-  onOpenAutomation,
-  onOpenCashFlow,
-  onOpenDataHealth,
   onOpenChangeLog,
   onRetrySync,
   onSwitchApp,
@@ -70,6 +64,7 @@ export function MoneyPageShell({
   const desktopSettingsButtonRef = useRef<HTMLButtonElement | null>(null);
   const moreButtonRef = useRef<HTMLButtonElement | null>(null);
   const mobileAccountButtonRef = useRef<HTMLButtonElement | null>(null);
+  const swipeStartRef = useRef<{ x: number; y: number } | null>(null);
   const moreReturnFocusRef =
     moreReturnTarget === "desktopAccount"
       ? desktopAccountButtonRef
@@ -79,13 +74,29 @@ export function MoneyPageShell({
   const addReturnFocusRef =
     addReturnTarget === "desktop" ? desktopAddButtonRef : addButtonRef;
 
-  const openAnalysis = useCallback(() => {
-    sessionStorage.setItem("money-diary:open-ai-pending", "1");
-    navigateTo("home");
-    window.setTimeout(() => {
-      window.dispatchEvent(new Event("money-diary:open-ai"));
-    }, 0);
-  }, [navigateTo]);
+  function handleSwipeStart(event: TouchEvent<HTMLElement>) {
+    if (currentPage !== "home" && currentPage !== "photoJournal") return;
+    const target = event.target as HTMLElement;
+    if (target.closest("button, a, input, textarea, select, [data-horizontal-gesture]")) {
+      swipeStartRef.current = null;
+      return;
+    }
+    const touch = event.touches[0];
+    swipeStartRef.current = touch ? { x: touch.clientX, y: touch.clientY } : null;
+  }
+
+  function handleSwipeEnd(event: TouchEvent<HTMLElement>) {
+    const start = swipeStartRef.current;
+    swipeStartRef.current = null;
+    if (!start) return;
+    const touch = event.changedTouches[0];
+    if (!touch) return;
+    const deltaX = touch.clientX - start.x;
+    const deltaY = touch.clientY - start.y;
+    if (Math.abs(deltaX) < 64 || Math.abs(deltaX) < Math.abs(deltaY) * 1.35) return;
+    if (currentPage === "home" && deltaX < 0) navigateTo("photoJournal");
+    if (currentPage === "photoJournal" && deltaX > 0) navigateTo("home");
+  }
 
   return (
     <div className="money-shell">
@@ -127,7 +138,20 @@ export function MoneyPageShell({
             syncStatus={syncStatus}
           />
 
-          <main className="money-main-content">{children}</main>
+          <main
+            className={`money-main-content ${
+              currentPage === "home" || currentPage === "photoJournal"
+                ? "money-main-content-swipeable"
+                : ""
+            }`}
+            onTouchCancel={() => {
+              swipeStartRef.current = null;
+            }}
+            onTouchEnd={handleSwipeEnd}
+            onTouchStart={handleSwipeStart}
+          >
+            {children}
+          </main>
         </div>
       </div>
 
@@ -164,13 +188,9 @@ export function MoneyPageShell({
         onClose={() => setIsMoreSheetOpen(false)}
         onExportReport={onExportReport}
         onLogout={onLogout}
-        onOpenAnalysis={openAnalysis}
         onOpenAnalytics={onOpenAnalytics}
         onOpenAccountLedger={onOpenAccountLedger}
         onOpenAccountReconciliation={onOpenAccountReconciliation}
-        onOpenAutomation={onOpenAutomation}
-        onOpenCashFlow={onOpenCashFlow}
-        onOpenDataHealth={onOpenDataHealth}
         onOpenBalanceChecks={() => navigateTo("balanceChecks")}
         onOpenChangeLog={onOpenChangeLog}
         onOpenCloseDay={onOpenCloseDay}

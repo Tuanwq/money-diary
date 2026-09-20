@@ -40,7 +40,8 @@ assert.equal(
 );
 
 assert.equal(getMoneyStateFromPath("/money/history").page, "history");
-assert.equal(getMoneyStateFromPath("/money/data-health").page, "dataHealth");
+assert.equal(getMoneyStateFromPath("/money/photo-journal").page, "photoJournal");
+assert.equal(getMoneyStateFromPath("/money/data-health").page, "home");
 assert.equal(getMoneyStateFromPath("/money/history/journal").page, "history");
 assert.equal(getMoneyStateFromPath("/money/history/expenses").page, "expenses");
 assert.equal(
@@ -48,10 +49,8 @@ assert.equal(
   "balanceChecks"
 );
 assert.equal(getMoneyStateFromPath("/money/expenses").page, "expenses");
-assert.equal(
-  getMoneyStateFromPath("/money/cash-flow").page,
-  "cashFlow"
-);
+assert.equal(getMoneyStateFromPath("/money/cash-flow").page, "home");
+assert.equal(getMoneyStateFromPath("/money/automation").page, "home");
 assert.equal(
   getMoneyStateFromPath("/money/balance-checks").page,
   "balanceChecks"

@@ -1,0 +1,103 @@
+.photo-journal-page {
+  display: grid;
+  min-width: 0;
+  gap: 1rem;
+}
+
+.photo-journal-header {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.photo-journal-back {
+  display: inline-flex;
+  width: max-content;
+  min-height: 40px;
+  align-items: center;
+  gap: 0.45rem;
+  border: 1px solid var(--money-border);
+  border-radius: 999px;
+  background: var(--money-surface);
+  padding: 0 0.85rem;
+  color: var(--money-text-secondary);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.photo-journal-heading span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--money-primary);
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.photo-journal-heading h1 {
+  margin: 0.25rem 0 0;
+  color: var(--money-text);
+  font-size: clamp(1.65rem, 6vw, 2.25rem);
+  line-height: 1.1;
+}
+
+.photo-journal-heading p {
+  margin: 0.4rem 0 0;
+  color: var(--money-text-secondary);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.photo-journal-swipe-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: var(--money-text-secondary);
+  font-size: 0.74rem;
+}
+
+.photo-journal-intro {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  border: 1px solid color-mix(in srgb, var(--money-primary) 18%, var(--money-border));
+  border-radius: 1rem;
+  background: var(--money-primary-soft);
+  padding: 0.85rem 1rem;
+  color: var(--money-primary);
+}
+
+.photo-journal-intro svg {
+  flex: 0 0 auto;
+}
+
+.photo-journal-intro p {
+  margin: 0;
+  color: var(--money-text-secondary);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.photo-journal-intro strong {
+  color: var(--money-text);
+}
+
+.photo-journal-page .photo-finance-experience {
+  margin: 0;
+}
+
+@media (min-width: 768px) {
+  .photo-journal-header {
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .photo-journal-back {
+    margin-top: 0.15rem;
+  }
+
+  .photo-journal-swipe-hint {
+    display: none;
+  }
+}

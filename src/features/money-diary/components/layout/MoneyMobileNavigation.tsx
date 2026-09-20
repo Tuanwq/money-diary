@@ -27,7 +27,7 @@ export function MoneyMobileNavigation({
 }: MoneyMobileNavigationProps) {
   const items = [
     {
-      active: currentPage === "home",
+      active: currentPage === "home" || currentPage === "photoJournal",
       icon: House,
       label: "Tổng quan",
       onClick: () => navigateTo("home"),
@@ -55,10 +55,7 @@ export function MoneyMobileNavigation({
       active:
         currentPage === "accounts" ||
         currentPage === "analytics" ||
-        currentPage === "dataHealth" ||
         currentPage === "reconciliation" ||
-        currentPage === "automation" ||
-        currentPage === "cashFlow" ||
         currentPage === "changes" ||
         currentPage === "settings",
       icon: CircleEllipsis,

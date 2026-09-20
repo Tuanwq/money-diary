@@ -1,218 +1,89 @@
-import {
-  lazy,
-  Suspense,
-  useEffect,
-  useState,
-} from "react";
-import type { AiFinanceInsightProps } from "../components/AiFinanceInsight";
-import type { AccountTransaction, FinancialAccount } from "../features/account-ledger/accountLedgerModel.ts";
-import { HUB_INITIAL_TAB_SESSION_KEY } from "../constants/hanoiHub";
-import type {
-  CashFlowGoalCommitment,
-  CashFlowPlan,
-} from "../features/cash-flow/cashFlowForecastModel";
-import { BalanceCheckSummaryCard } from "../features/money-diary/components/dashboard/BalanceCheckSummaryCard";
+import { ArrowLeft, ArrowRight, CalendarRange, Camera, TrendingDown,
+  TrendingUp, WalletCards } from "lucide-react";
 import { DataCompletionCard } from "../features/money-diary/components/dashboard/DataCompletionCard";
-import { GoalJourney } from "../features/money-diary/components/dashboard/GoalJourney";
 import { GreetingHeader } from "../features/money-diary/components/dashboard/GreetingHeader";
-import { IncomeProgressSection } from "../features/money-diary/components/dashboard/IncomeProgressSection";
 import { MainGoalCard } from "../features/money-diary/components/dashboard/MainGoalCard";
-import { NextSuggestionCard } from "../features/money-diary/components/dashboard/NextSuggestionCard";
-import { QuickActions } from "../features/money-diary/components/dashboard/QuickActions";
 import { RecentTransactions } from "../features/money-diary/components/dashboard/RecentTransactions";
-import { TodayTargetCard } from "../features/money-diary/components/dashboard/TodayTargetCard";
-import { MoneyStreakCard } from "../features/money-diary/streak/MoneyStreakCard";
-import { useMoneyStreak } from "../features/money-diary/streak/useMoneyStreak";
+import { buildManagerMonthlyOverview } from "../features/money-diary/utils/managerDashboardSelectors";
+import type { MainGoalProgressSummary } from "../features/goals/domain/mainGoalProgress";
 import type {
   BalanceCheckEntry,
   DailyEntry,
   ExpenseEntry,
   GoalScreen,
-  Goals,
   Page,
 } from "../types";
 import type { DataWarning } from "../utils/dataWarnings";
-import { getProgress } from "../utils/goals";
-
-const LazyAiFinanceInsight = lazy(() =>
-  import("../components/AiFinanceInsight").then((module) => ({
-    default: module.AiFinanceInsight,
-  }))
-);
-const LazyPhotoFinanceExperience = lazy(() =>
-  import("../features/photo-finance/components/PhotoFinanceExperience.tsx")
-    .then((module) => ({ default: module.PhotoFinanceExperience }))
-);
-
-function DeferredAiFinanceInsight(props: AiFinanceInsightProps) {
-  const [shouldMount, setShouldMount] = useState(
-    () => sessionStorage.getItem("money-diary:open-ai-pending") === "1"
-  );
-
-  useEffect(() => {
-    if (shouldMount) {
-      sessionStorage.removeItem("money-diary:open-ai-pending");
-    }
-
-    function handleOpenAi() {
-      sessionStorage.removeItem("money-diary:open-ai-pending");
-      setShouldMount(true);
-    }
-
-    window.addEventListener("money-diary:open-ai", handleOpenAi);
-    return () =>
-      window.removeEventListener("money-diary:open-ai", handleOpenAi);
-  }, [shouldMount]);
-
-  if (!shouldMount) return null;
-
-  return (
-    <Suspense fallback={null}>
-      <LazyAiFinanceInsight {...props} initialOpen />
-    </Suspense>
-  );
-}
+import { formatMoney } from "../utils/money";
+import "./HomePage.css";
 
 type HomePageProps = {
-  financialAccounts: FinancialAccount[];
-  accountTransactions: AccountTransaction[];
-  photoOwnerId?: string;
-  onDeleteAccountTransaction: (transactionId: string) => void;
-  onSaveAccountTransaction: (transaction: AccountTransaction) => void;
+  actualMoney: number;
+  balanceChecks: BalanceCheckEntry[];
+  cloudLoadError: string | null;
+  dataWarnings: DataWarning[];
   entries: DailyEntry[];
   expenses: ExpenseEntry[];
-  balanceChecks: BalanceCheckEntry[];
-  cashFlowCurrentBalance: number;
-  cashFlowGoalCommitments: CashFlowGoalCommitment[];
-  cashFlowPlans: CashFlowPlan[];
-  cloudLoadError: string | null;
-  isCloudLoading: boolean;
-  isSelectedToday: boolean;
-  selectedDate: string;
-  goals: Goals;
-  daysLeft: number;
-  goToPreviousDay: () => void;
   goToNextDay: () => void;
+  goToPreviousDay: () => void;
   goToToday: () => void;
   handleSelectDate: (value: string) => void;
-  todayString: string;
-  todayGoalPaceRemaining: number;
-  needPerDay: number;
-  todayActualIncome: number;
-  todayDailyIncomeRemaining: number;
-  todayWorkActualIncome: number;
-  todayEntry?: DailyEntry;
-  todayExpense?: ExpenseEntry;
-  todayBalanceCheck?: BalanceCheckEntry;
-  todayExpenseTotal: number;
-  dataWarnings: DataWarning[];
-  goToTodayEntryForm: () => void;
-  goToTodayBalanceCheck: () => void;
-  openCloseDay: (date?: string) => void;
+  isCloudLoading: boolean;
+  isSelectedToday: boolean;
+  mainGoal: MainGoalProgressSummary;
+  mainGoalName: string;
+  navigateTo: (nextPage: Page, nextGoalScreen?: GoalScreen) => void;
   onDataWarningAction: (warning: DataWarning) => void;
-  selectedActualIncome: number;
+  onOpenJournal: () => void;
+  onOpenSelectedBalanceEditor: () => void;
+  openCloseDay: (date?: string) => void;
+  retryCloudLoad: () => void;
+  selectedBalanceCheck?: BalanceCheckEntry;
+  selectedDate: string;
   selectedEntry?: DailyEntry;
   selectedExpense?: ExpenseEntry;
-  selectedBalanceCheck?: BalanceCheckEntry;
-  selectedAppMoney: number;
-  selectedMainIncome: number;
-  selectedBonusMoney: number;
   selectedExpenseTotal: number;
-  selectedReceivedMoney: number;
-  selectedHours: number;
-  weekIncome: number;
-  monthIncome: number;
-  actualMoney: number;
-  totalJourneyMoney: number;
-  onOpenSelectedBalanceDetails: () => void;
-  onOpenSelectedBalanceEditor: () => void;
-  retryCloudLoad: () => void;
-  navigateTo: (nextPage: Page, nextGoalScreen?: GoalScreen) => void;
+  selectedGrossIncome: number;
+  todayString: string;
 };
 
 export function HomePage({
-  financialAccounts,
-  accountTransactions,
-  photoOwnerId,
-  onDeleteAccountTransaction,
-  onSaveAccountTransaction,
+  actualMoney,
+  balanceChecks,
+  cloudLoadError,
+  dataWarnings,
   entries,
   expenses,
-  balanceChecks,
-  cashFlowCurrentBalance,
-  cashFlowGoalCommitments,
-  cashFlowPlans,
-  cloudLoadError,
-  isCloudLoading,
-  isSelectedToday,
-  selectedDate,
-  goals,
-  daysLeft,
-  goToPreviousDay,
   goToNextDay,
+  goToPreviousDay,
   goToToday,
   handleSelectDate,
-  todayString,
-  todayGoalPaceRemaining,
-  needPerDay,
-  todayActualIncome,
-  dataWarnings,
-  goToTodayEntryForm,
-  goToTodayBalanceCheck,
-  openCloseDay,
+  isCloudLoading,
+  isSelectedToday,
+  mainGoal,
+  mainGoalName,
+  navigateTo,
   onDataWarningAction,
-  selectedActualIncome,
+  onOpenJournal,
+  onOpenSelectedBalanceEditor,
+  openCloseDay,
+  retryCloudLoad,
+  selectedBalanceCheck,
+  selectedDate,
   selectedEntry,
   selectedExpense,
-  selectedBalanceCheck,
-  selectedAppMoney,
-  selectedMainIncome,
-  selectedBonusMoney,
   selectedExpenseTotal,
-  selectedReceivedMoney,
-  selectedHours,
-  weekIncome,
-  monthIncome,
-  actualMoney,
-  totalJourneyMoney,
-  onOpenSelectedBalanceDetails,
-  onOpenSelectedBalanceEditor,
-  retryCloudLoad,
-  navigateTo,
+  selectedGrossIncome,
+  todayString,
 }: HomePageProps) {
-  const moneyStreak = useMoneyStreak();
-  const mainGoalProgress = getProgress(actualMoney, goals.bigGoalTarget);
-  const mainGoalRemaining = Math.max(goals.bigGoalTarget - actualMoney, 0);
-  const hasSuggestionData = Boolean(
-    goals.bigGoalTarget > 0 &&
-      (entries.some((entry) => entry.date <= selectedDate) ||
-        expenses.some((expense) => expense.date <= selectedDate))
-  );
-
-  const openIncome = () => navigateTo("hub");
+  const month = buildManagerMonthlyOverview(entries, expenses, selectedDate);
+  const dayNet = selectedGrossIncome - selectedExpenseTotal;
   const openHistory = () => navigateTo("history");
   const openGoal = () => navigateTo("goals", "current");
-  const openStreakCalendar = () => {
-    sessionStorage.setItem(HUB_INITIAL_TAB_SESSION_KEY, "list");
-    navigateTo("hub");
-  };
-
-  function requestNotificationPermission() {
-    navigateTo("settings");
-  }
-
-  function navigateFromFinanceInsight(page: Page, date?: string) {
-    if (page === "closeDay") {
-      openCloseDay(date);
-      return;
-    }
-
-    if (date) handleSelectDate(date);
-    navigateTo(page);
-  }
+  const requestNotificationPermission = () => navigateTo("settings");
 
   return (
-    <div className="money-overview-page">
+    <div className="money-overview-page money-manager-overview">
       <GreetingHeader
         isSelectedToday={isSelectedToday}
         onDateChange={handleSelectDate}
@@ -222,136 +93,69 @@ export function HomePage({
         selectedDate={selectedDate}
         today={todayString}
       />
-      <Suspense fallback={<div className="app-card rounded-2xl p-4">Đang mở lịch tài chính...</div>}>
-        <LazyPhotoFinanceExperience accounts={financialAccounts} entries={entries}
-          expenses={expenses} ownerId={photoOwnerId}
-          onDeleteTransaction={onDeleteAccountTransaction}
-          onSaveTransaction={onSaveAccountTransaction}
-          transactions={accountTransactions} />
-      </Suspense>
 
-      <MoneyStreakCard
-        isCloudLoading={moneyStreak.isCloudLoading}
-        isRestoring={moneyStreak.isRestoring}
-        restoreError={moneyStreak.restoreError}
-        summary={moneyStreak.summary}
-        onOpenCalendar={openStreakCalendar}
-        onRestore={moneyStreak.restoreDate}
-      />
+      <section className="manager-balance-card" aria-labelledby="manager-balance-title">
+        <div className="manager-balance-heading">
+          <span><WalletCards aria-hidden="true" size={17} /> Tổng tiền hiện có</span>
+          <button type="button" onClick={() => navigateTo("accounts")}>Xem tài khoản <ArrowRight size={16} /></button>
+        </div>
+        <strong id="manager-balance-title">{formatMoney(actualMoney)}</strong>
+        <p>Tính từ số dư đầu hành trình và các khoản thu, chi bạn đã ghi.</p>
 
-      <IncomeProgressSection
-        actualMoney={actualMoney}
+        <div className="manager-day-strip" aria-label="Biến động ngày đang xem">
+          <div><span>Thu trong ngày</span><strong className="is-positive">+{formatMoney(selectedGrossIncome)}</strong></div>
+          <div><span>Chi trong ngày</span><strong className="is-negative">−{formatMoney(selectedExpenseTotal)}</strong></div>
+          <div><span>Thay đổi ròng</span><strong className={dayNet < 0 ? "is-negative" : "is-positive"}>
+            {dayNet >= 0 ? "+" : "−"}{formatMoney(Math.abs(dayNet))}
+          </strong></div>
+        </div>
+
+        <button className="manager-journal-entry" onClick={onOpenJournal} type="button">
+          <span><Camera aria-hidden="true" size={20} /><span><strong>Mở Nhật ký tài chính</strong>
+            <small>Chụp ảnh và lưu câu chuyện của khoản tiền</small></span></span>
+          <span className="manager-journal-swipe"><ArrowLeft size={15} /> Vuốt sang trái</span>
+        </button>
+      </section>
+
+      <MainGoalCard name={mainGoalName} onOpenGoals={openGoal} summary={mainGoal} />
+
+      <section className="money-card manager-month-card" aria-labelledby="manager-month-title">
+          <div className="manager-card-title"><span><CalendarRange size={17} /> Tháng đang xem</span>
+            <strong id="manager-month-title">{month.net >= 0 ? "+" : "−"}{formatMoney(Math.abs(month.net))}</strong></div>
+          <div className="manager-month-flow">
+            <div><TrendingUp aria-hidden="true" size={18} /><span>Thu nhập</span><strong>{formatMoney(month.income)}</strong></div>
+            <div><TrendingDown aria-hidden="true" size={18} /><span>Chi tiêu</span><strong>{formatMoney(month.expense)}</strong></div>
+          </div>
+          <div className="manager-month-insight">
+            <span>{month.savingsRate === null ? "Chưa có thu nhập để tính tỷ lệ giữ lại" : `Tỷ lệ giữ lại ${month.savingsRate}%`}</span>
+            <span>{month.topExpense ? `Chi nhiều nhất: ${month.topExpense.label} · ${formatMoney(month.topExpense.amount)}` : "Chưa có khoản chi trong tháng"}</span>
+          </div>
+          <button className="money-text-action" onClick={() => navigateTo("analytics")} type="button">Xem thống kê <ArrowRight size={16} /></button>
+      </section>
+
+      <DataCompletionCard
+        balanceCheck={selectedBalanceCheck}
+        entry={selectedEntry}
         error={cloudLoadError}
-        goals={goals}
+        expense={selectedExpense}
         isLoading={isCloudLoading}
         isSelectedToday={isSelectedToday}
-        monthIncome={monthIncome}
-        selectedActualIncome={selectedActualIncome}
-        selectedBonusMoney={selectedBonusMoney}
-        selectedEntry={selectedEntry}
-        selectedExpenseTotal={selectedExpenseTotal}
-        selectedHours={selectedHours}
-        selectedMainIncome={selectedMainIncome}
-        selectedReceivedMoney={selectedReceivedMoney}
-        totalJourneyMoney={totalJourneyMoney}
+        onAddExpense={() => openCloseDay(selectedDate)}
+        onAddIncome={() => openCloseDay(selectedDate)}
+        onCheckBalance={onOpenSelectedBalanceEditor}
+        onEnableNotifications={requestNotificationPermission}
+        onOpenHistory={openHistory}
         onRetry={retryCloudLoad}
-        weekIncome={weekIncome}
+        onWarningAction={onDataWarningAction}
+        selectedDate={selectedDate}
+        warnings={dataWarnings}
       />
 
-      <div className="money-overview-primary-grid">
-        <MainGoalCard
-          daysLeft={daysLeft}
-          error={cloudLoadError}
-          goals={goals}
-          isLoading={isCloudLoading}
-          name={goals.bigGoalName}
-          onOpenGoals={openGoal}
-          onRetry={retryCloudLoad}
-          onViewDetails={openGoal}
-          progress={mainGoalProgress}
-          remaining={mainGoalRemaining}
-          saved={actualMoney}
-          selectedDate={selectedDate}
-          target={goals.bigGoalTarget}
-        />
-        <div className="money-overview-today-column">
-          <TodayTargetCard
-            earned={todayActualIncome}
-            needed={todayGoalPaceRemaining}
-            onAction={todayGoalPaceRemaining > 0 ? openIncome : openHistory}
-            target={needPerDay}
-          />
-          <DataCompletionCard
-            balanceCheck={selectedBalanceCheck}
-            entry={selectedEntry}
-            error={cloudLoadError}
-            expense={selectedExpense}
-            isLoading={isCloudLoading}
-            isSelectedToday={isSelectedToday}
-            onAddExpense={openCloseDay}
-            onAddIncome={openCloseDay}
-            onCheckBalance={onOpenSelectedBalanceEditor}
-            onEnableNotifications={requestNotificationPermission}
-            onOpenHistory={openHistory}
-            onRetry={retryCloudLoad}
-            onWarningAction={onDataWarningAction}
-            selectedDate={selectedDate}
-            warnings={dataWarnings}
-          />
-        </div>
-      </div>
+      <RecentTransactions entries={entries} expenses={expenses} onViewAll={openHistory} />
 
-      <GoalJourney progress={mainGoalProgress} />
-
-      <div className="money-overview-decision-grid">
-        <BalanceCheckSummaryCard
-          balanceCheck={selectedBalanceCheck}
-          isLoading={isCloudLoading}
-          isSelectedToday={isSelectedToday}
-          onOpenDetails={onOpenSelectedBalanceDetails}
-          onOpenEditor={onOpenSelectedBalanceEditor}
-          selectedDate={selectedDate}
-        />
-
-        <NextSuggestionCard
-          actualMoney={selectedAppMoney}
-          balanceChecks={balanceChecks}
-          entries={entries}
-          expenses={expenses}
-          goals={goals}
-          isDataComplete={hasSuggestionData}
-          isLoading={isCloudLoading}
-          navigateToGoals={openGoal}
-          navigateToHub={openIncome}
-          today={selectedDate}
-        />
-      </div>
-
-      <RecentTransactions
-        entries={entries}
-        expenses={expenses}
-        onViewAll={openHistory}
-      />
-
-      <QuickActions
-        onBalance={goToTodayBalanceCheck}
-        onExpense={goToTodayEntryForm}
-        onHistory={openHistory}
-        onIncome={openIncome}
-      />
-
-      <DeferredAiFinanceInsight
-        balanceChecks={balanceChecks}
-        cashFlowCurrentBalance={cashFlowCurrentBalance}
-        cashFlowGoalCommitments={cashFlowGoalCommitments}
-        cashFlowPlans={cashFlowPlans}
-        entries={entries}
-        expenses={expenses}
-        goals={goals}
-        hideTrigger
-        onNavigate={navigateFromFinanceInsight}
-        today={todayString}
-      />
+      {balanceChecks.length === 0 && <p className="manager-overview-footnote">
+        Kiểm kê số dư định kỳ giúp con số “Tổng tiền hiện có” đáng tin cậy hơn.
+      </p>}
     </div>
   );
 }

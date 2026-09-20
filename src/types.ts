@@ -33,6 +33,18 @@ export type OtherExpenseItem = {
   id: string;
   label: string;
   amount: number;
+  /** Missing on legacy records and therefore treated as a daily expense. */
+  purpose?: "daily_expense" | "goal_allocation";
+};
+
+export type GoalAllocationPlan = {
+  amount: number;
+  createdAt: string;
+  id: string;
+  label: string;
+  note?: string;
+  transactionId?: string;
+  updatedAt?: string;
 };
 
 export type ExpenseBudget = {
@@ -72,6 +84,8 @@ export type Goals = {
 
   subGoals: SubGoal[];
   expenseBudgets?: ExpenseBudget[];
+  /** Describes how earned goal money will be used; never changes earning progress. */
+  bigGoalAllocations?: GoalAllocationPlan[];
 };
 
 export type Page =
@@ -82,6 +96,7 @@ export type Page =
   | "automation"
   | "cashFlow"
   | "home"
+  | "photoJournal"
   | "goals"
   | "entry"
   | "closeDay"

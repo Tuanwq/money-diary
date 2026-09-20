@@ -14,14 +14,16 @@ import type {
   Goals,
   Page,
 } from "../../../../types";
-import { formatReportDate, getDaysLeft } from "../../../../utils/date";
-import { getProgress, getSubGoalSaved } from "../../../../utils/goals";
+import { formatReportDate } from "../../../../utils/date";
+import { getSubGoalSaved } from "../../../../utils/goals";
 import { formatMoney } from "../../../../utils/money";
+import type { MainGoalProgressSummary } from "../../domain/mainGoalProgress";
 
 type GoalsOverviewProps = {
   balanceHistory: BalanceSnapshot[];
   completedGoals: CompletedGoal[];
   goals: Goals;
+  mainGoalProgress: MainGoalProgressSummary;
   navigateTo: (page: Page, goalScreen?: GoalScreen) => void;
   onAddSubGoal: () => void;
   totalSavedForBigGoal: number;
@@ -75,14 +77,15 @@ export function GoalsOverview({
   balanceHistory,
   completedGoals,
   goals,
+  mainGoalProgress,
   navigateTo,
   onAddSubGoal,
   totalSavedForBigGoal,
 }: GoalsOverviewProps) {
   const target = Math.max(goals.bigGoalTarget ?? 0, 0);
-  const progress = getProgress(totalSavedForBigGoal, target);
-  const remaining = Math.max(target - totalSavedForBigGoal, 0);
-  const daysLeft = getDaysLeft(goals.bigGoalDeadline);
+  const progress = mainGoalProgress.progress;
+  const remaining = mainGoalProgress.remainingAmount;
+  const daysLeft = mainGoalProgress.remainingDays;
   const activeSubGoals = goals.subGoals ?? [];
   const totalSubGoalSaved = activeSubGoals.reduce(
     (sum, goal) => sum + getSubGoalSaved(goal),
@@ -148,9 +151,15 @@ export function GoalsOverview({
                 <dd>{daysLeft} ngày</dd>
               </div>
               <div>
-                <dt>Hạn mục tiêu</dt>
-                <dd>{formatReportDate(goals.bigGoalDeadline)}</dd>
+                <dt>Cần thêm mỗi ngày</dt>
+                <dd>{formatMoney(mainGoalProgress.requiredPerDay)}</dd>
               </div>
+            </dl>
+
+            <dl className="goals-overview__hero-metrics">
+              <div><dt>Tổng thu trong kỳ</dt><dd>{formatMoney(mainGoalProgress.goalIncome)}</dd></div>
+              <div><dt>Chi thường ngày</dt><dd>{formatMoney(mainGoalProgress.goalExpenses)}</dd></div>
+              <div><dt>Thu nhập ròng</dt><dd>{formatMoney(mainGoalProgress.goalNetAmount)}</dd></div>
             </dl>
 
             <div className="goals-overview__hero-actions">

@@ -1,0 +1,214 @@
+.money-manager-overview {
+  gap: 1rem;
+}
+
+.manager-balance-card {
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--money-primary) 22%, var(--money-border));
+  border-radius: 1.35rem;
+  background:
+    radial-gradient(circle at 92% 0%, color-mix(in srgb, var(--money-primary) 14%, transparent), transparent 42%),
+    var(--money-surface);
+  padding: clamp(1.1rem, 4vw, 1.65rem);
+  box-shadow: 0 16px 34px rgba(23, 32, 27, 0.06);
+}
+
+.manager-balance-heading,
+.manager-card-title,
+.manager-journal-entry,
+.manager-journal-entry > span,
+.manager-month-flow > div {
+  display: flex;
+  align-items: center;
+}
+
+.manager-balance-heading,
+.manager-card-title,
+.manager-journal-entry {
+  justify-content: space-between;
+  gap: 0.8rem;
+}
+
+.manager-balance-heading > span,
+.manager-card-title > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--money-text-secondary);
+  font-size: 0.78rem;
+  font-weight: 750;
+}
+
+.manager-balance-heading button,
+.money-text-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--money-primary);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.manager-balance-card > strong {
+  display: block;
+  margin-top: 0.65rem;
+  overflow-wrap: anywhere;
+  color: var(--money-text);
+  font-size: clamp(2rem, 10vw, 3.5rem);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.05;
+}
+
+.manager-balance-card > p,
+.manager-goal-card > p {
+  margin: 0.5rem 0 0;
+  color: var(--money-text-secondary);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.manager-day-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px;
+  margin-top: 1.15rem;
+  overflow: hidden;
+  border: 1px solid var(--money-border);
+  border-radius: 1rem;
+  background: var(--money-border);
+}
+
+.manager-day-strip > div {
+  display: grid;
+  min-width: 0;
+  gap: 0.25rem;
+  background: var(--money-surface);
+  padding: 0.75rem 0.6rem;
+}
+
+.manager-day-strip span {
+  color: var(--money-text-secondary);
+  font-size: 0.66rem;
+}
+
+.manager-day-strip strong {
+  overflow-wrap: anywhere;
+  font-size: clamp(0.76rem, 3.3vw, 0.95rem);
+  font-variant-numeric: tabular-nums;
+}
+
+.money-manager-overview .is-positive {
+  color: var(--money-primary);
+}
+
+.money-manager-overview .is-negative {
+  color: #b65c52;
+}
+
+.manager-journal-entry {
+  width: 100%;
+  min-height: 68px;
+  margin-top: 1rem;
+  border-radius: 1rem;
+  background: var(--money-primary);
+  padding: 0.8rem 0.95rem;
+  color: #fff;
+  text-align: left;
+}
+
+.manager-journal-entry > span:first-child {
+  min-width: 0;
+  gap: 0.7rem;
+}
+
+.manager-journal-entry > span:first-child > span {
+  display: grid;
+  min-width: 0;
+  gap: 0.15rem;
+}
+
+.manager-journal-entry strong {
+  font-size: 0.9rem;
+}
+
+.manager-journal-entry small {
+  color: rgba(255, 255, 255, 0.76);
+  font-size: 0.7rem;
+  line-height: 1.35;
+}
+
+.manager-journal-swipe {
+  flex: 0 0 auto;
+  gap: 0.25rem;
+  font-size: 0.7rem;
+  white-space: nowrap;
+}
+
+.manager-month-card {
+  display: grid;
+  align-content: start;
+  gap: 0.9rem;
+}
+
+.manager-card-title > strong {
+  color: var(--money-text);
+  font-size: 1.05rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.manager-month-flow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.65rem;
+}
+
+.manager-month-flow > div {
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  border-radius: 0.85rem;
+  background: var(--money-surface-muted, var(--money-primary-soft));
+  padding: 0.75rem;
+}
+
+.manager-month-flow span {
+  color: var(--money-text-secondary);
+  font-size: 0.72rem;
+}
+
+.manager-month-flow strong {
+  width: 100%;
+  overflow-wrap: anywhere;
+  font-size: 0.95rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.manager-month-insight {
+  display: grid;
+  gap: 0.35rem;
+  color: var(--money-text-secondary);
+  font-size: 0.78rem;
+}
+
+.manager-overview-footnote {
+  margin: 0;
+  color: var(--money-text-secondary);
+  font-size: 0.76rem;
+  text-align: center;
+}
+
+.money-main-content-swipeable {
+  touch-action: pan-y;
+}
+
+@media (max-width: 420px) {
+  .manager-journal-swipe {
+    display: none;
+  }
+}
+
+@media (min-width: 768px) {
+  .manager-journal-swipe {
+    display: none;
+  }
+}

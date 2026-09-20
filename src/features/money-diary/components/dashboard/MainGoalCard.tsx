@@ -1,115 +1,75 @@
-import { ArrowRight, CalendarDays, Target } from "lucide-react";
-import type { Goals } from "../../../../types";
+import { ArrowRight, CalendarDays, CircleDollarSign, Target, TrendingUp } from "lucide-react";
+import type { MainGoalProgressSummary } from "../../../goals/domain/mainGoalProgress.ts";
 import { formatMoney } from "../../../../utils/money";
-import { DashboardSectionState } from "./DashboardSectionState";
-import { GoalDeadlineOptions } from "./GoalDeadlineOptions";
+import "./MainGoalCard.css";
 
 type MainGoalCardProps = {
-  daysLeft: number;
-  error?: string | null;
-  goals: Goals;
-  isLoading?: boolean;
   name: string;
   onOpenGoals: () => void;
-  onRetry?: () => void;
-  onViewDetails: () => void;
-  progress: number;
-  remaining: number;
-  saved: number;
-  selectedDate: string;
-  target: number;
+  summary: MainGoalProgressSummary;
 };
 
-export function MainGoalCard({
-  daysLeft,
-  error,
-  goals,
-  isLoading,
-  name,
-  onOpenGoals,
-  onRetry,
-  onViewDetails,
-  progress,
-  remaining,
-  saved,
-  selectedDate,
-  target,
-}: MainGoalCardProps) {
-  const safeProgress = Math.min(Math.max(progress, 0), 100);
+export function MainGoalCard({ name, onOpenGoals, summary }: MainGoalCardProps) {
+  if (summary.targetAmount <= 0) {
+    return (
+      <section className="money-card manager-main-goal is-empty">
+        <span className="manager-main-goal__eyebrow"><Target size={16} /> Mục tiêu chính</span>
+        <h2>Chưa thiết lập mục tiêu</h2>
+        <p>Đặt số tiền và thời hạn để theo dõi thu nhập ròng cần đạt mỗi ngày.</p>
+        <button className="money-primary-action" onClick={onOpenGoals} type="button">
+          Thiết lập mục tiêu <ArrowRight size={17} />
+        </button>
+      </section>
+    );
+  }
 
   return (
-    <section className="money-card money-main-goal-card" aria-labelledby="main-goal-title">
-      <div className="money-card-heading-row">
-        <div className="money-card-heading-copy">
-          <span className="money-eyebrow">
-            <Target aria-hidden="true" size={16} />
-            Mục tiêu chính
-          </span>
-          <h2 id="main-goal-title">{name || "Chưa đặt tên mục tiêu"}</h2>
+    <section className="money-card manager-main-goal" aria-labelledby="manager-main-goal-title">
+      <header className="manager-main-goal__header">
+        <div>
+          <span className="manager-main-goal__eyebrow"><Target size={16} /> Mục tiêu chính</span>
+          <h2 id="manager-main-goal-title">{name || "Mục tiêu chưa đặt tên"}</h2>
         </div>
-        {!isLoading && !error && target > 0 && (
-          <span className="money-goal-percent">{safeProgress}%</span>
-        )}
+        <strong className="manager-main-goal__percent">{summary.progress}%</strong>
+      </header>
+
+      <div className="manager-main-goal__amount">
+        <strong>{formatMoney(summary.goalNetAmount)}</strong>
+        <span>trên {formatMoney(summary.targetAmount)}</span>
       </div>
 
-      {isLoading || error ? (
-        <DashboardSectionState
-          error={error}
-          isLoading={isLoading}
-          onRetry={onRetry}
-          variant="goals"
-        />
-      ) : target <= 0 ? (
-        <div className="money-main-goal-empty">
-          <p>Chưa có mục tiêu chính để theo dõi.</p>
-          <button type="button" className="money-primary-action" onClick={onOpenGoals}>
-            Thiết lập mục tiêu
-          </button>
-        </div>
-      ) : (
-        <>
-          <div className="money-goal-money">
-            <strong>{formatMoney(saved)}</strong>
-            <span>trên {formatMoney(target)}</span>
-          </div>
+      <div className="manager-main-goal__progress" role="progressbar"
+        aria-label={`Tiến độ mục tiêu ${name}`} aria-valuemin={0} aria-valuemax={100}
+        aria-valuenow={summary.progress}>
+        <span style={{ width: `${summary.progress}%` }} />
+      </div>
 
-          <div
-            className="money-progress-track"
-            role="progressbar"
-            aria-label={`Tiến độ mục tiêu ${name}`}
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-valuenow={safeProgress}
-          >
-            <span style={{ width: `${safeProgress}%` }} />
-          </div>
+      <div className="manager-main-goal__metrics">
+        <div><span>Còn thiếu</span><strong>{formatMoney(summary.remainingAmount)}</strong></div>
+        <div><span><CalendarDays size={14} /> Còn lại</span><strong>{summary.remainingDays} ngày</strong></div>
+        <div className="is-emphasis"><span><TrendingUp size={14} /> Cần thêm mỗi ngày</span>
+          <strong>{formatMoney(summary.requiredPerDay)}</strong></div>
+      </div>
 
-          <div className="money-goal-meta-grid">
-            <div className="money-goal-meta-item">
-              <span>Còn thiếu</span>
-              <strong>{formatMoney(remaining)}</strong>
-            </div>
-            <div className="money-goal-meta-item">
-              <span>
-                <CalendarDays aria-hidden="true" size={15} /> Thời gian còn lại
-              </span>
-              <strong>{daysLeft} ngày</strong>
-            </div>
-          </div>
+      <div className="manager-main-goal__breakdown" aria-label="Cách tính tiến độ mục tiêu">
+        <div><span>Tổng thu trong kỳ</span><strong>+{formatMoney(summary.goalIncome)}</strong></div>
+        <div><span>Chi phí thường ngày</span><strong>−{formatMoney(summary.goalExpenses)}</strong></div>
+        <div><span><CircleDollarSign size={14} /> Thu nhập ròng</span>
+          <strong>{formatMoney(summary.goalNetAmount)}</strong></div>
+      </div>
 
-          <GoalDeadlineOptions
-            goals={goals}
-            mainGoalSaved={saved}
-            onOpenGoals={onOpenGoals}
-            selectedDate={selectedDate}
-          />
-
-          <button type="button" className="money-text-action" onClick={onViewDetails}>
-            <span>Xem chi tiết mục tiêu</span>
-            <ArrowRight aria-hidden="true" size={18} />
-          </button>
-        </>
+      {summary.unclassifiedTransactions > 0 && (
+        <p className="manager-main-goal__notice">
+          {summary.unclassifiedTransactions} giao dịch cũ chưa có mục đích nên chưa được tính vào tiến độ.
+        </p>
       )}
+
+      <footer className="manager-main-goal__footer">
+        <small>Phân bổ mục tiêu và chuyển nội bộ không làm giảm tiến độ.</small>
+        <button className="money-text-action" onClick={onOpenGoals} type="button">
+          Xem chi tiết <ArrowRight size={17} />
+        </button>
+      </footer>
     </section>
   );
 }

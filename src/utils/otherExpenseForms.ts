@@ -4,16 +4,19 @@ export type OtherExpenseItemForm = {
   id: string;
   amount: string;
   label: string;
+  purpose: "daily_expense" | "goal_allocation";
 };
 
 export function createOtherExpenseItemForm(
   amount = "",
-  label = ""
+  label = "",
+  purpose: OtherExpenseItemForm["purpose"] = "daily_expense"
 ): OtherExpenseItemForm {
   return {
     id: crypto.randomUUID(),
     amount,
     label,
+    purpose,
   };
 }
 

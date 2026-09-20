@@ -7,6 +7,7 @@ import {
   getOtherExpenseItemsTotal,
   type OtherExpenseItemForm,
 } from "../utils/otherExpenseForms";
+import "./OtherExpenseItemsInput.css";
 
 type OtherExpenseItemsInputProps = {
   addButtonLabel?: string;
@@ -132,6 +133,19 @@ export function OtherExpenseItemsInput({
                       onChange={(label) => updateItem(item.id, { label })}
                       className="other-expense-item__label"
                     />
+                    <label className="other-expense-item__purpose">
+                      <span>Ảnh hưởng mục tiêu</span>
+                      <select
+                        aria-label={`Ảnh hưởng mục tiêu của khoản khác ${index + 1}`}
+                        onChange={(event) => updateItem(item.id, {
+                          purpose: event.target.value as OtherExpenseItemForm["purpose"],
+                        })}
+                        value={item.purpose}
+                      >
+                        <option value="daily_expense">Chi thường ngày · trừ tiến độ</option>
+                        <option value="goal_allocation">Phân bổ mục tiêu · không trừ</option>
+                      </select>
+                    </label>
                     <button type="button" className="other-expense-item__done" onClick={() => finishEditing(item)}>
                       <Check size={16} aria-hidden="true" />Xong
                     </button>
@@ -142,6 +156,8 @@ export function OtherExpenseItemsInput({
                     <strong>{formatMoney(parseMoneyInput(item.amount))}</strong>
                     <span>Nhãn</span>
                     <strong>{item.label || "Chưa chọn"}</strong>
+                    <span>Đối với mục tiêu</span>
+                    <strong>{item.purpose === "goal_allocation" ? "Phân bổ · không trừ" : "Chi thường ngày · có trừ"}</strong>
                   </div>
                 )}
               </article>

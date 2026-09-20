@@ -1,5 +1,6 @@
 import {
   BookOpenText,
+  Camera,
   ChartColumnBig,
   ChartNoAxesCombined,
   ChevronRight,
@@ -11,9 +12,7 @@ import {
   RefreshCcw,
   Scale,
   Settings,
-  TrendingUp,
   WalletCards,
-  Workflow,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { RefObject } from "react";
@@ -75,6 +74,12 @@ export function MoneyDesktopSidebar({
       onClick: () => navigateTo("analytics"),
     },
     {
+      active: currentPage === "photoJournal",
+      icon: Camera,
+      label: "Nhật ký tài chính",
+      onClick: () => navigateTo("photoJournal"),
+    },
+    {
       active: currentPage === "goals",
       icon: Goal,
       label: "Mục tiêu",
@@ -103,18 +108,6 @@ export function MoneyDesktopSidebar({
       icon: Scale,
       label: "Kiểm kê tài khoản",
       onClick: () => navigateTo("reconciliation"),
-    },
-    {
-      active: currentPage === "automation",
-      icon: Workflow,
-      label: "Tự động hóa",
-      onClick: () => navigateTo("automation"),
-    },
-    {
-      active: currentPage === "cashFlow",
-      icon: TrendingUp,
-      label: "Dự báo dòng tiền",
-      onClick: () => navigateTo("cashFlow"),
     },
     {
       active: ["balanceChecks", "expenses", "history"].includes(currentPage),

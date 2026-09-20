@@ -1,19 +1,11 @@
 import { useBrowserRoute } from "./app/router/useBrowserRoute";
 import { HubSelectionPage } from "./features/hub/pages/HubSelectionPage";
-import { calculateAccountBalance } from "./features/account-ledger/accountLedgerModel";
 import { useAccountLedger } from "./features/account-ledger/useAccountLedger";
 import { deleteAccountTransactionWithPhotos } from "./features/photo-finance/services/photoTransactionService.ts";
 import { useAccountReconciliations } from "./features/account-reconciliation/useAccountReconciliations";
-import { ACCOUNT_RECONCILIATION_FOCUS_DATE_SESSION_KEY } from "./features/account-reconciliation/accountReconciliationModel";
-import type { DataHealthIssueAction } from "./features/data-health/dataHealthModel";
-import type { AutomationExecution } from "./features/automation/automationModel";
-import { useAutomationEngine } from "./features/automation/useAutomationEngine";
 import { useAutomationRules } from "./features/automation/useAutomationRules";
-import type {
-  CashFlowAccountBalance,
-  CashFlowGoalCommitment,
-} from "./features/cash-flow/cashFlowForecastModel";
 import { useCashFlowPlans } from "./features/cash-flow/useCashFlowPlans";
+import { buildMainGoalProgress, buildMainGoalProgressTimeline } from "./features/goals/domain/mainGoalProgress.ts";
 import type { BalanceCheckOverlayMode } from "./features/money-diary/components/balance-check/BalanceCheckOverlay";
 import { MoneyPageShell } from "./features/money-diary/components/layout/MoneyPageShell";
 import { useMoneyDiaryNotificationScheduler } from "./features/notifications/useNotificationScheduler";
@@ -47,7 +39,6 @@ import {
 } from "./constants";
 import {
   DEFAULT_HUB_SETTINGS,
-  HUB_INITIAL_EDIT_ENTRY_SESSION_KEY,
   STORAGE_HUB_CALCULATOR_KEY,
   STORAGE_HUB_CHANGE_LOGS_KEY,
   STORAGE_HUB_ENTRIES_KEY,
@@ -78,28 +69,22 @@ import type {
 import {
   getDateDaysAgo,
   getDateString,
-  getDaysLeft,
   getMonthStart,
   getToday,
   isDateInRange,
   isSameMonth,
-  isThisWeek,
   toDate,
 } from "./utils/date";
 import { getBalanceStatus } from "./utils/balance";
 import {
-  getBonusMoney,
   getExpenseTotal,
-  getMainIncome,
   getNormalIncome,
   getOtherExpenseItems,
-  getReceivedMoney,
   getTotalEntryMoney,
 } from "./utils/entries";
 import {
   buildSubGoalProgressData,
   getGoalTimeProgress,
-  getProgress,
   getSubGoalSaved,
 } from "./utils/goals";
 import {
@@ -146,26 +131,11 @@ const LazyFinancialAnalyticsPage = lazy(() =>
     default: module.FinancialAnalyticsPage,
   }))
 );
-const LazyDataHealthPage = lazy(() =>
-  import("./features/data-health/DataHealthPage").then((module) => ({
-    default: module.DataHealthPage,
-  }))
-);
 const LazyAccountReconciliationPage = lazy(() =>
   import(
     "./features/account-reconciliation/AccountReconciliationPage"
   ).then((module) => ({
     default: module.AccountReconciliationPage,
-  }))
-);
-const LazyAutomationRulesPage = lazy(() =>
-  import("./features/automation/AutomationRulesPage").then((module) => ({
-    default: module.AutomationRulesPage,
-  }))
-);
-const LazyCashFlowForecastPage = lazy(() =>
-  import("./features/cash-flow/CashFlowForecastPage").then((module) => ({
-    default: module.CashFlowForecastPage,
   }))
 );
 const LazyBalanceCheckOverlay = lazy(() =>
@@ -220,6 +190,11 @@ const LazyMoneyDiarySettingsPage = lazy(() =>
     default: module.MoneyDiarySettingsPage,
   }))
 );
+const LazyPhotoJournalPage = lazy(() =>
+  import("./features/photo-finance/pages/PhotoJournalPage").then((module) => ({
+    default: module.PhotoJournalPage,
+  }))
+);
 
 function LazyRouteFallback() {
   return (
@@ -266,6 +241,7 @@ function buildOtherExpenseFormItems(expense?: ExpenseEntry): OtherExpenseItemFor
     id: item.id || crypto.randomUUID(),
     amount: formatMoneyInput(String(item.amount)),
     label: item.label,
+    purpose: item.purpose ?? "daily_expense",
   }));
 }
 
@@ -277,6 +253,7 @@ function normalizeOtherExpenseItems(
       id: item.id || crypto.randomUUID(),
       label: item.label.trim(),
       amount: parseMoneyInput(item.amount),
+      purpose: item.purpose,
     }))
     .filter((item) => item.amount > 0);
 }
@@ -722,25 +699,14 @@ export default function App() {
     saveCheck: saveAccountReconciliation,
   } = useAccountReconciliations(cloudDataUserId);
   const {
-    clearLogs: clearAutomationLogs,
-    cloudStatus: automationCloudStatus,
-    commitExecutions,
-    deleteLog: deleteAutomationLog,
-    deleteRule: deleteAutomationRule,
     logs: automationLogs,
     processedKeys: automationProcessedKeys,
     replaceAutomationState,
     rules: automationRules,
-    saveRule: saveAutomationRule,
-    toggleRule: toggleAutomationRule,
   } = useAutomationRules(cloudDataUserId);
   const {
-    cloudStatus: cashFlowCloudStatus,
-    deletePlan: deleteCashFlowPlan,
     plans: cashFlowPlans,
     replaceCashFlowState,
-    savePlan: saveCashFlowPlan,
-    togglePlan: toggleCashFlowPlan,
   } = useCashFlowPlans(cloudDataUserId);
   const backupSource = useMemo(
     () =>
@@ -779,30 +745,6 @@ export default function App() {
     source: backupSource,
     syncStatus,
     userId: cloudDataUserId,
-  });
-  const automationAccountIds = useMemo(
-    () =>
-      financialAccounts
-        .filter((account) => !account.archivedAt)
-        .map((account) => account.id),
-    [financialAccounts]
-  );
-  const automationSubGoalIds = useMemo(
-    () => (goals.subGoals ?? []).map((goal) => goal.id),
-    [goals.subGoals]
-  );
-  useAutomationEngine({
-    balanceChecks,
-    commitExecutions,
-    entries,
-    expenses,
-    hubEntries: backupSource.hub.entries,
-    onLedgerTransaction: saveAccountTransaction,
-    onSubGoalContribution: handleAutomationSubGoalContribution,
-    processedKeys: automationProcessedKeys,
-    rules: automationRules,
-    validAccountIds: automationAccountIds,
-    validSubGoalIds: automationSubGoalIds,
   });
   useMoneyDiaryNotificationScheduler({
     balanceChecks,
@@ -1177,49 +1119,6 @@ async function restoreBackup(
   }
 }
 
-function handleAutomationSubGoalContribution(
-  execution: AutomationExecution
-) {
-  const now = new Date().toISOString();
-  const contributionId = `automation:${execution.idempotencyKey}`;
-
-  setGoals((current) => ({
-    ...current,
-    subGoals: (current.subGoals ?? []).map((goal) => {
-      if (
-        goal.id !== execution.targetId ||
-        goal.contributions.some(
-          (contribution) => contribution.id === contributionId
-        )
-      ) {
-        return goal;
-      }
-
-      const remaining = Math.max(goal.target - getSubGoalSaved(goal), 0);
-      const amount = Math.min(execution.amount, remaining);
-
-      if (amount <= 0) return goal;
-
-      return {
-        ...goal,
-        contributions: [
-          ...goal.contributions,
-          {
-            amount,
-            createdAt: now,
-            date: execution.date,
-            id: contributionId,
-            note: `Tự động · ${execution.ruleName}`,
-            updatedAt: now,
-          },
-        ],
-        updatedAt: now,
-      };
-    }),
-  }));
-  markLocalChanged("Tự động góp mục tiêu phụ, đang lưu cloud...");
-}
-
   const [form, setForm] = useState({
     date: getToday(),
     diary: "",
@@ -1250,14 +1149,6 @@ function handleAutomationSubGoalContribution(
 
   const selectedEntry = entries.find((entry) => entry.date === selectedDate);
 
-  const selectedMainIncome = selectedEntry ? getMainIncome(selectedEntry) : 0;
-  const selectedBonusMoney = selectedEntry ? getBonusMoney(selectedEntry) : 0;
-  const selectedReceivedMoney = selectedEntry
-    ? getReceivedMoney(selectedEntry)
-    : 0;
-
-  const selectedIncome = selectedMainIncome + selectedBonusMoney;
-  const selectedHours = selectedEntry?.workHours ?? 0;
   const selectedExpense = expenses.find((expense) => expense.date === selectedDate);
   const selectedBalanceCheck = balanceChecks.find(
     (item) => item.date === selectedDate
@@ -1269,35 +1160,11 @@ const selectedExpenseTotal = selectedExpense
     selectedExpense.dinner +
     selectedExpense.other
   : 0;
-
-const selectedActualIncome = selectedIncome - selectedExpenseTotal;
-const todayEntry = entries.find((entry) => entry.date === todayString);
-const todayExpense = expenses.find((expense) => expense.date === todayString);
-const todayBalanceCheck = balanceChecks.find(
-  (item) => item.date === todayString
-);
-const todayMainIncome = todayEntry ? getMainIncome(todayEntry) : 0;
-const todayBonusMoney = todayEntry ? getBonusMoney(todayEntry) : 0;
-const todayReceivedMoney = todayEntry ? getReceivedMoney(todayEntry) : 0;
-const todayExpenseTotal = todayExpense ? getExpenseTotal(todayExpense) : 0;
-const todayWorkActualIncome =
-  todayMainIncome + todayBonusMoney - todayExpenseTotal;
-const todayActualIncome =
-  todayMainIncome + todayBonusMoney + todayReceivedMoney - todayExpenseTotal;
-
-  const weekEntries = entries.filter((entry) =>
-    isThisWeek(entry.date, selectedDateObject)
-  );
+const selectedGrossIncome = selectedEntry ? getTotalEntryMoney(selectedEntry) : 0;
 
   const monthEntries = entries.filter((entry) =>
     isSameMonth(entry.date, selectedDateObject)
   );
-
-  const weekIncome = weekEntries.reduce(
-  (sum, entry) => sum + getTotalEntryMoney(entry),
-  0
-);
-  // const weekHours = weekEntries.reduce((sum, entry) => sum + entry.workHours, 0);
 
   const monthIncome = monthEntries.reduce(
   (sum, entry) => sum + getTotalEntryMoney(entry),
@@ -1637,10 +1504,15 @@ const selectedCompletedGoal = completedGoals.find(
       : selectedCompletedGoalId)
 );
 
-const currentBalanceMovementData = buildBalanceMovementData(
-  currentGoalStartDate,
-  getToday(),
-  goals.bigGoalSaved
+const currentBalanceMovementData = useMemo(
+  () => buildMainGoalProgressTimeline({
+    asOfDate: todayString,
+    entries,
+    expenses,
+    goals,
+    transactions: accountTransactions,
+  }),
+  [accountTransactions, entries, expenses, goals, todayString]
 );
 
 const visibleBalanceMovementData =
@@ -1656,83 +1528,28 @@ const balanceChartTitle =
     : `${balanceChartDays} ngày gần nhất`;
 
 const actualMoney = goals.bigGoalSaved + totalIncome - totalExpense;
-const activeFinancialAccounts = financialAccounts.filter(
-  (account) => !account.archivedAt
+
+const mainGoalProgress = useMemo(
+  () => buildMainGoalProgress({
+    asOfDate: todayString,
+    entries,
+    expenses,
+    goals,
+    transactions: accountTransactions,
+  }),
+  [accountTransactions, entries, expenses, goals, todayString]
 );
-const hasAccountLedgerData =
-  accountTransactions.length > 0 ||
-  activeFinancialAccounts.some((account) => account.openingBalance !== 0);
-const accountLedgerBalance = activeFinancialAccounts.reduce(
-  (total, account) =>
-    total + calculateAccountBalance(account, accountTransactions),
-  0
-);
-const cashFlowCurrentBalance = hasAccountLedgerData
-  ? accountLedgerBalance
-  : actualMoney;
-const cashFlowBalanceSource = hasAccountLedgerData
-  ? "Tổng từ Sổ tài khoản"
-  : "Số dư Money Diary đang tính";
-
-const totalJourneyMoney = totalIncome;
-
-const totalSavedForBigGoal = actualMoney;
-
-  const bigGoalProgress = getProgress(totalSavedForBigGoal, goals.bigGoalTarget);
-  const remainingBigGoal = Math.max(goals.bigGoalTarget - totalSavedForBigGoal, 0);
-  const daysLeft = getDaysLeft(goals.bigGoalDeadline);
+const totalSavedForBigGoal = mainGoalProgress.goalNetAmount;
+const bigGoalProgress = mainGoalProgress.progress;
+const remainingBigGoal = mainGoalProgress.remainingAmount;
+const daysLeft = mainGoalProgress.remainingDays;
   const bigGoalTimeProgress = getGoalTimeProgress(
   goals.bigGoalStartDate ?? getToday(),
   goals.bigGoalDeadline
 );
 
 const isBigGoalBehind = bigGoalProgress + 5 < bigGoalTimeProgress;
-  const needPerDay =
-    daysLeft > 0 ? Math.ceil(remainingBigGoal / daysLeft) : remainingBigGoal;
-const cashFlowAccountBalances: CashFlowAccountBalance[] = hasAccountLedgerData
-  ? activeFinancialAccounts.map((account) => ({
-      balance: calculateAccountBalance(account, accountTransactions),
-      id: account.id,
-      name: account.name,
-    }))
-  : [];
-const cashFlowGoalCommitments: CashFlowGoalCommitment[] = [
-  ...(remainingBigGoal > 0 && goals.bigGoalDeadline
-    ? [
-        {
-          deadline: goals.bigGoalDeadline,
-          id: "main-goal",
-          label: goals.bigGoalName || "Mục tiêu chính",
-          remaining: remainingBigGoal,
-          type: "main" as const,
-        },
-      ]
-    : []),
-  ...(goals.subGoals ?? []).flatMap((goal) => {
-    const remaining = Math.max(goal.target - getSubGoalSaved(goal), 0);
-
-    return remaining > 0 && goal.deadline
-      ? [
-          {
-            deadline: goal.deadline,
-            id: goal.id,
-            label: goal.name,
-            remaining,
-            type: "sub" as const,
-          },
-        ]
-      : [];
-  }),
-];
-
-const todayDailyIncomeRemaining =
-  goals.dailyIncome > 0
-    ? Math.max(goals.dailyIncome - todayWorkActualIncome, 0)
-    : 0;
-const todayGoalPaceRemaining =
-  goals.bigGoalTarget > 0 && remainingBigGoal > 0
-    ? Math.max(needPerDay - todayActualIncome, 0)
-    : 0;
+const needPerDay = mainGoalProgress.requiredPerDay;
 const dataWarnings = useMemo(
   () =>
     buildDataWarnings({
@@ -1940,63 +1757,6 @@ function handleDataWarningAction(warning: DataWarning) {
   }
 
   navigateTo(warning.actionPage, warning.actionGoalScreen ?? "menu");
-}
-
-function handleDataHealthIssueAction(action: DataHealthIssueAction) {
-  if (action.kind === "journal") {
-    const entry = entries.find(
-      (item) => item.id === action.recordId || item.date === action.date
-    );
-
-    if (entry) {
-      editEntry(entry);
-    } else {
-      openCloseDay(action.date);
-    }
-    return;
-  }
-
-  if (action.kind === "expense") {
-    const expense = expenses.find(
-      (item) => item.id === action.recordId || item.date === action.date
-    );
-
-    if (expense) {
-      editExpense(expense);
-    } else {
-      openCloseDay(action.date);
-    }
-    return;
-  }
-
-  if (action.kind === "balanceCheck") {
-    openBalanceCheckOverlay(action.date, "edit");
-    return;
-  }
-
-  if (action.kind === "hub") {
-    sessionStorage.setItem(
-      HUB_INITIAL_EDIT_ENTRY_SESSION_KEY,
-      action.entryId
-    );
-    navigateTo("hub");
-    return;
-  }
-
-  if (action.kind === "reconciliation") {
-    sessionStorage.setItem(
-      ACCOUNT_RECONCILIATION_FOCUS_DATE_SESSION_KEY,
-      action.date
-    );
-    navigateTo("reconciliation");
-    return;
-  }
-
-  navigateTo(
-    "goals",
-    action.screen,
-    action.screen === "subGoals" ? action.goalId : undefined
-  );
 }
 
 function openBalanceCheckOverlay(
@@ -2568,15 +2328,15 @@ function completeCurrentGoal() {
     (item) => item.date >= startDate && item.date <= endDate
   );
 
-  const goalTotalIncome = entriesSnapshot.reduce(
-    (sum, entry) => sum + getTotalEntryMoney(entry),
-    0
-  );
-
-  const goalTotalExpense = expensesSnapshot.reduce(
-    (sum, expense) => sum + getExpenseTotal(expense),
-    0
-  );
+  const completedProgress = buildMainGoalProgress({
+    asOfDate: endDate,
+    entries: entriesSnapshot,
+    expenses: expensesSnapshot,
+    goals,
+    transactions: accountTransactions,
+  });
+  const goalTotalIncome = completedProgress.goalIncome;
+  const goalTotalExpense = completedProgress.goalExpenses;
 
   const goalTotalHours = entriesSnapshot.reduce(
     (sum, entry) => sum + entry.workHours,
@@ -2590,14 +2350,15 @@ function completeCurrentGoal() {
 
   const goalTotalJourneyMoney = goalTotalIncome;
 
-  const goalActualMoney =
-    goals.bigGoalSaved + goalTotalIncome - goalTotalExpense;
+  const goalActualMoney = completedProgress.goalNetAmount;
 
-  const balanceSnapshots = buildBalanceMovementData(
-    startDate,
-    endDate,
-    goals.bigGoalSaved
-  );
+  const balanceSnapshots = buildMainGoalProgressTimeline({
+    asOfDate: endDate,
+    entries: entriesSnapshot,
+    expenses: expensesSnapshot,
+    goals,
+    transactions: accountTransactions,
+  });
 
   const completedGoal: CompletedGoal = {
     id: crypto.randomUUID(),
@@ -3626,9 +3387,6 @@ if (route.kind === "daymark") {
       onOpenAnalytics={() => navigateTo("analytics")}
       onOpenAccountLedger={() => navigateTo("accounts")}
       onOpenAccountReconciliation={() => navigateTo("reconciliation")}
-      onOpenAutomation={() => navigateTo("automation")}
-      onOpenCashFlow={() => navigateTo("cashFlow")}
-      onOpenDataHealth={() => navigateTo("dataHealth")}
       onOpenChangeLog={() => navigateTo("changes")}
       onOpenCloseDay={() => openCloseDay()}
       onOpenExpense={goToTodayEntryForm}
@@ -3672,21 +3430,6 @@ if (route.kind === "daymark") {
               hubSettings={backupSource.hub.settings}
             />
           )}
-          {page === "dataHealth" && (
-            <LazyDataHealthPage
-              accounts={financialAccounts}
-              accountTransactions={accountTransactions}
-              balanceChecks={balanceChecks}
-              completedGoals={completedGoals}
-              entries={entries}
-              expenses={expenses}
-              goals={goals}
-              hubEntries={backupSource.hub.entries}
-              hubSettings={backupSource.hub.settings}
-              onIssueAction={handleDataHealthIssueAction}
-              reconciliations={accountReconciliations}
-            />
-          )}
           {page === "reconciliation" && (
             <LazyAccountReconciliationPage
               accounts={financialAccounts}
@@ -3701,99 +3444,49 @@ if (route.kind === "daymark") {
               transactions={accountTransactions}
             />
           )}
-          {page === "automation" && (
-            <LazyAutomationRulesPage
-              accounts={financialAccounts.filter(
-                (account) => !account.archivedAt
-              )}
-              clearLogs={clearAutomationLogs}
-              cloudStatus={automationCloudStatus}
-              deleteLog={deleteAutomationLog}
-              deleteRule={deleteAutomationRule}
-              expenseLabels={expenseLabelOptions}
-              logs={automationLogs}
-              rules={automationRules}
-              saveRule={saveAutomationRule}
-              subGoals={goals.subGoals ?? []}
-              toggleRule={toggleAutomationRule}
-            />
-          )}
-          {page === "cashFlow" && (
-            <LazyCashFlowForecastPage
-              accountBalances={cashFlowAccountBalances}
-              balanceSource={cashFlowBalanceSource}
-              cloudStatus={cashFlowCloudStatus}
-              currentBalance={cashFlowCurrentBalance}
-              deletePlan={deleteCashFlowPlan}
-              entries={entries}
-              expenseBudgets={goals.expenseBudgets ?? []}
-              expenses={expenses}
-              goalCommitments={cashFlowGoalCommitments}
-              plans={cashFlowPlans}
-              savePlan={saveCashFlowPlan}
-              togglePlan={toggleCashFlowPlan}
-            />
-          )}
           {page === "home" && (
             <HomePage
-              financialAccounts={financialAccounts}
-              accountTransactions={accountTransactions}
-              photoOwnerId={cloudDataUserId}
-              onDeleteAccountTransaction={deleteAccountTransaction}
-              onSaveAccountTransaction={saveAccountTransaction}
+              actualMoney={actualMoney}
+              balanceChecks={balanceChecks}
+              cloudLoadError={cloudLoadError}
+              dataWarnings={dataWarnings}
               entries={entries}
               expenses={expenses}
-              balanceChecks={balanceChecks}
-              cashFlowCurrentBalance={cashFlowCurrentBalance}
-              cashFlowGoalCommitments={cashFlowGoalCommitments}
-              cashFlowPlans={cashFlowPlans}
-              cloudLoadError={cloudLoadError}
-              isCloudLoading={isCloudLoading}
-              isSelectedToday={isSelectedToday}
-              selectedDate={selectedDate}
-              goals={goals}
-              daysLeft={daysLeft}
-              goToPreviousDay={goToPreviousDay}
               goToNextDay={goToNextDay}
+              goToPreviousDay={goToPreviousDay}
               goToToday={goToToday}
               handleSelectDate={handleSelectDate}
-              todayString={todayString}
-              todayGoalPaceRemaining={todayGoalPaceRemaining}
-              needPerDay={needPerDay}
-              todayActualIncome={todayActualIncome}
-              todayDailyIncomeRemaining={todayDailyIncomeRemaining}
-              todayWorkActualIncome={todayWorkActualIncome}
-              todayEntry={todayEntry}
-              todayExpense={todayExpense}
-              todayBalanceCheck={todayBalanceCheck}
-              todayExpenseTotal={todayExpenseTotal}
-              dataWarnings={dataWarnings}
-              goToTodayEntryForm={goToTodayEntryForm}
-              goToTodayBalanceCheck={goToTodayBalanceCheck}
-              openCloseDay={(date) => openCloseDay(date ?? selectedDate)}
+              isCloudLoading={isCloudLoading}
+              isSelectedToday={isSelectedToday}
+              mainGoal={mainGoalProgress}
+              mainGoalName={goals.bigGoalName}
+              navigateTo={navigateTo}
               onDataWarningAction={handleDataWarningAction}
-              selectedActualIncome={selectedActualIncome}
-              selectedEntry={selectedEntry}
-              selectedExpense={selectedExpense}
-              selectedBalanceCheck={selectedBalanceCheck}
-              selectedAppMoney={getAppMoneyAtDate(selectedDate)}
-              selectedMainIncome={selectedMainIncome}
-              selectedBonusMoney={selectedBonusMoney}
-              selectedExpenseTotal={selectedExpenseTotal}
-              selectedReceivedMoney={selectedReceivedMoney}
-              selectedHours={selectedHours}
-              weekIncome={weekIncome}
-              monthIncome={monthIncome}
-              actualMoney={actualMoney}
-              totalJourneyMoney={totalJourneyMoney}
-              onOpenSelectedBalanceDetails={() =>
-                openBalanceCheckOverlay(selectedDate, "details")
-              }
+              onOpenJournal={() => navigateTo("photoJournal")}
               onOpenSelectedBalanceEditor={() =>
                 openBalanceCheckOverlay(selectedDate, "edit")
               }
+              openCloseDay={(date) => openCloseDay(date ?? selectedDate)}
               retryCloudLoad={retryCloudLoad}
-              navigateTo={navigateTo}
+              selectedBalanceCheck={selectedBalanceCheck}
+              selectedDate={selectedDate}
+              selectedEntry={selectedEntry}
+              selectedExpense={selectedExpense}
+              selectedExpenseTotal={selectedExpenseTotal}
+              selectedGrossIncome={selectedGrossIncome}
+              todayString={todayString}
+            />
+          )}
+          {page === "photoJournal" && (
+            <LazyPhotoJournalPage
+              accounts={financialAccounts}
+              entries={entries}
+              expenses={expenses}
+              ownerId={cloudDataUserId}
+              onBack={() => navigateTo("home")}
+              onDeleteTransaction={deleteAccountTransaction}
+              onSaveTransaction={saveAccountTransaction}
+              transactions={accountTransactions}
             />
           )}
           {page === "goals" && (
@@ -3822,6 +3515,7 @@ if (route.kind === "daymark") {
               form={form}
               goalForecast={goalForecast}
               goals={goals}
+              mainGoalProgress={mainGoalProgress}
               goalId={goalId}
               goalScreen={goalScreen}
               getSubGoalAllocationAvailable={getSubGoalAllocationAvailable}

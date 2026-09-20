@@ -1,0 +1,22 @@
+.other-expense-item__purpose {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.other-expense-item__purpose > span {
+  color: var(--money-text-secondary);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.other-expense-item__purpose select {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid var(--money-border);
+  border-radius: 0.75rem;
+  background: var(--money-surface);
+  padding: 0.55rem 0.7rem;
+  color: var(--money-text);
+  font: inherit;
+  font-size: 0.8rem;
+}

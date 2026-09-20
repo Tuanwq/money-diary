@@ -8,6 +8,12 @@ type NavigationOptions = {
 
 type MoneyNavigationTarget = Pick<AppHistoryState, "page" | "goalScreen">;
 
+const retiredMoneyPages = new Set<Page>(["automation", "cashFlow", "dataHealth"]);
+
+function isRetiredMoneyPage(page: unknown) {
+  return typeof page === "string" && retiredMoneyPages.has(page as Page);
+}
+
 const moneyPagePaths: Record<Page, string> = {
   accounts: "/money/accounts",
   analytics: "/money/analytics",
@@ -23,6 +29,7 @@ const moneyPagePaths: Record<Page, string> = {
   goals: "/money/goals",
   history: "/money/history/journal",
   home: "/money",
+  photoJournal: "/money/photo-journal",
   hub: "/money/hub",
   settings: "/money/settings",
 };
@@ -69,14 +76,9 @@ export function getMoneyStateFromPath(pathname: string): AppHistoryState {
 
   if (segment === "accounts") return { page: "accounts", goalScreen: "menu" };
   if (segment === "analytics") return { page: "analytics", goalScreen: "menu" };
-  if (segment === "data-health") {
-    return { page: "dataHealth", goalScreen: "menu" };
-  }
   if (segment === "reconciliation") {
     return { page: "reconciliation", goalScreen: "menu" };
   }
-  if (segment === "automation") return { page: "automation", goalScreen: "menu" };
-  if (segment === "cash-flow") return { page: "cashFlow", goalScreen: "menu" };
   if (segment === "balance-checks") return { page: "balanceChecks", goalScreen: "menu" };
   if (segment === "changes") return { page: "changes", goalScreen: "menu" };
   if (segment === "close-day") return { page: "closeDay", goalScreen: "menu" };
@@ -118,6 +120,9 @@ export function getMoneyStateFromPath(pathname: string): AppHistoryState {
     }
 
     return { page: "history", goalScreen: "menu" };
+  }
+  if (segment === "photo-journal") {
+    return { page: "photoJournal", goalScreen: "menu" };
   }
   if (segment === "hub") return { page: "hub", goalScreen: "menu" };
   if (segment === "settings") return { page: "settings", goalScreen: "menu" };
@@ -183,7 +188,7 @@ export function useAppNavigation() {
     function handleBrowserBack(event: PopStateEvent) {
       const state = event.state as AppHistoryState | null;
 
-      if (state?.page) {
+      if (state?.page && !isRetiredMoneyPage(state.page)) {
         pendingScrollTopRef.current = state.scrollTop ?? 0;
         setPage(state.page);
         setGoalScreen(state.goalScreen ?? "menu");
@@ -219,22 +224,24 @@ export function useAppNavigation() {
     nextGoalId?: string,
     options?: NavigationOptions
   ) {
+    const targetPage: Page = isRetiredMoneyPage(nextPage) ? "home" : nextPage;
+    const targetGoalScreen = targetPage === nextPage ? nextGoalScreen : "menu";
     const nextScrollTop = getNavigationScrollTop(
       { page, goalScreen },
-      { page: nextPage, goalScreen: nextGoalScreen },
+      { page: targetPage, goalScreen: targetGoalScreen },
       window.scrollY,
       options?.scrollTop
     );
     const nextState: AppHistoryState = {
-      page: nextPage,
-      goalScreen: nextGoalScreen,
-      goalId: nextGoalId,
+      page: targetPage,
+      goalScreen: targetGoalScreen,
+      goalId: targetPage === nextPage ? nextGoalId : undefined,
       scrollTop: nextScrollTop,
     };
     const nextPath = window.location.pathname.startsWith("/money")
-      ? nextPage === "goals"
-        ? getGoalScreenPath(nextGoalScreen, nextGoalId)
-        : moneyPagePaths[nextPage]
+      ? targetPage === "goals"
+        ? getGoalScreenPath(targetGoalScreen, nextGoalId)
+        : moneyPagePaths[targetPage]
       : window.location.href;
 
     if (options?.replace) {
@@ -255,9 +262,9 @@ export function useAppNavigation() {
     }
 
     pendingScrollTopRef.current = nextScrollTop;
-    setPage(nextPage);
-    setGoalScreen(nextGoalScreen);
-    setGoalId(nextGoalId);
+    setPage(targetPage);
+    setGoalScreen(targetGoalScreen);
+    setGoalId(targetPage === nextPage ? nextGoalId : undefined);
     setNavigationVersion((current) => current + 1);
   }
 

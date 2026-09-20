@@ -42,6 +42,7 @@ import { GoalMilestonesPage } from "./GoalMilestonesPage";
 import { GoalsLayout } from "../features/goals/components/layout/GoalsLayout";
 import { GoalSheet } from "../features/goals/components/layout/GoalSheet";
 import { GoalsOverview } from "../features/goals/components/overview/GoalsOverview";
+import type { MainGoalProgressSummary } from "../features/goals/domain/mainGoalProgress";
 
 type SubGoalForm = {
   name: string;
@@ -134,6 +135,7 @@ type GoalsPageProps = {
   incomePerHour: number;
   isBigGoalBehind: boolean;
   mainGoalForm: MainGoalForm;
+  mainGoalProgress: MainGoalProgressSummary;
   navigateTo: (
     nextPage: Page,
     nextGoalScreen?: GoalScreen,
@@ -587,6 +589,7 @@ export function GoalsPage({
   incomePerHour,
   isBigGoalBehind,
   mainGoalForm,
+  mainGoalProgress,
   navigateTo,
   needPerDay,
   remainingBigGoal,
@@ -1868,19 +1871,19 @@ export function GoalsPage({
           </div>
 
           <div className="rounded-2xl bg-white p-4 shadow-sm">
-            <p className="text-sm text-slate-500">Tổng tiền hiện tại</p>
+            <p className="text-sm text-slate-500">Tổng thu trong kỳ</p>
             <p className="mt-1 font-bold">
               {formatMoney(
-                currentBalanceMovementData.at(-1)?.totalMoney ?? goals.bigGoalSaved
+                currentBalanceMovementData.at(-1)?.totalMoney ?? 0
               )}
             </p>
           </div>
 
           <div className="rounded-2xl bg-white p-4 shadow-sm">
-            <p className="text-sm text-slate-500">Tiền thực tế hiện có</p>
+            <p className="text-sm text-slate-500">Thu nhập ròng tính vào mục tiêu</p>
             <p className="mt-1 font-bold">
               {formatMoney(
-                currentBalanceMovementData.at(-1)?.actualMoney ?? goals.bigGoalSaved
+                currentBalanceMovementData.at(-1)?.actualMoney ?? 0
               )}
             </p>
           </div>
@@ -2097,6 +2100,7 @@ export function GoalsPage({
     balanceHistory={currentBalanceMovementData}
     completedGoals={completedGoals}
     goals={goals}
+    mainGoalProgress={mainGoalProgress}
     navigateTo={navigateTo}
     onAddSubGoal={() => {
       navigateTo("goals", "subGoals");
@@ -2339,22 +2343,6 @@ export function GoalsPage({
               </div>
 
               <div>
-                <label className="text-sm font-medium">Số tiền đã có sẵn</label>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    value={mainGoalForm.bigGoalSaved}
-                    onChange={(e) =>
-                      setMainGoalForm((prev) => ({
-                        ...prev,
-                        bigGoalSaved: formatMoneyInput(e.target.value),
-                      }))
-                    }
-                    className="mt-1 w-full rounded-xl border px-3 py-2"
-                  />
-              </div>
-
-              <div>
                 <label className="text-sm font-medium">Ngày bắt đầu mục tiêu</label>
                   <input
                     type="date"
@@ -2369,8 +2357,8 @@ export function GoalsPage({
                     className="mt-1 w-full rounded-xl border px-3 py-2"
                   />
                 <p className="mt-1 text-xs text-slate-500">
-                  Biến động tiền sẽ được tính từ ngày này. Khi hoàn thành mục tiêu, hành trình
-                  mới sẽ bắt đầu lại từ đầu.
+                  Thu nhập ròng được tính từ ngày này: tổng thu trừ chi phí thường ngày.
+                  Phân bổ mục tiêu và chuyển nội bộ không làm giảm tiến độ.
                 </p>
               </div>
 

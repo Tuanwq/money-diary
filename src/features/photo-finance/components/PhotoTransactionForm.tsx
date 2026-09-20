@@ -2,7 +2,8 @@ import { useRef, useState } from "react";
 import { ArrowDownLeft, ArrowUpRight, CalendarDays, Camera, Check, ChevronDown,
   Image as ImageIcon, Pencil, RotateCcw, WalletCards, X } from "lucide-react";
 import type { AccountTransaction, FinancialAccount } from "../../account-ledger/accountLedgerModel.ts";
-import { TRANSACTION_CATEGORIES } from "../../account-ledger/accountLedgerModel.ts";
+import { getDefaultTransactionPurpose, TRANSACTION_CATEGORIES,
+  type TransactionPurpose } from "../../account-ledger/accountLedgerModel.ts";
 import { formatMoneyInput, parseMoneyInput } from "../../../utils/money.ts";
 import { vietnamFinancialDate, vietnamFinancialTime, vietnamOccurredAt } from "../services/photoFinanceModel.ts";
 import type { createPhotoAttachmentRepository } from "../services/photoAttachmentRepository.ts";
@@ -28,6 +29,9 @@ export function PhotoTransactionForm({ accounts, existing, initialDate, ownerId,
     existing?.type === "expense" ? "expense" : "income");
   const [amount, setAmount] = useState(existing ? formatMoneyInput(String(existing.amount)) : "");
   const [category, setCategory] = useState(existing?.category ?? "Thu nhập");
+  const [purpose, setPurpose] = useState<TransactionPurpose>(
+    existing?.purpose ?? getDefaultTransactionPurpose(existing?.type === "expense" ? "expense" : "income")
+  );
   const [accountId, setAccountId] = useState(existing?.accountId ?? activeAccounts[0]?.id ?? "");
   const [note, setNote] = useState(existing?.note ?? "");
   const [date, setDate] = useState(existing?.date ?? initialDate ?? vietnamFinancialDate(now));
@@ -72,6 +76,7 @@ export function PhotoTransactionForm({ accounts, existing, initialDate, ownerId,
     if (!canEdit) return;
     setKind(next);
     setCategory(next === "income" ? "Thu nhập" : "Ăn uống");
+    setPurpose(getDefaultTransactionPurpose(next));
   }
 
   async function submit(event: React.FormEvent) {
@@ -106,7 +111,7 @@ export function PhotoTransactionForm({ accounts, existing, initialDate, ownerId,
         const timestamp = new Date().toISOString();
         onSaveTransaction({ id: transactionId, accountId, amount: value, category,
           createdAt: existing?.createdAt ?? timestamp, date,
-          note: note.trim(), type: kind, updatedAt: timestamp,
+          note: note.trim(), purpose, type: kind, updatedAt: timestamp,
           occurredAt, source: existing?.source ?? "photo_finance" });
         setSavedId(transactionId);
       }
@@ -142,6 +147,19 @@ export function PhotoTransactionForm({ accounts, existing, initialDate, ownerId,
         <strong>Ghi lại một khoảnh khắc</strong>
         <span>Ảnh gốc được giữ riêng tư và không bị ghi chữ lên.</span>
       </div>
+
+      {kind === "expense" && <div className="photo-finance-purpose" role="group" aria-label="Ảnh hưởng đến mục tiêu">
+        <button aria-pressed={purpose === "daily_expense"}
+          className={purpose === "daily_expense" ? "is-active" : ""}
+          disabled={!canEdit} onClick={() => setPurpose("daily_expense")} type="button">
+          Chi thường ngày
+        </button>
+        <button aria-pressed={purpose === "goal_allocation"}
+          className={purpose === "goal_allocation" ? "is-active" : ""}
+          disabled={!canEdit} onClick={() => setPurpose("goal_allocation")} type="button">
+          Phân bổ mục tiêu
+        </button>
+      </div>}
       <button aria-label="Mở camera" className="photo-finance-shutter" onClick={() => cameraInputRef.current?.click()}
         disabled={preparingPhoto} type="button"><span /></button>
       <button className="photo-finance-library-button" disabled={preparingPhoto}

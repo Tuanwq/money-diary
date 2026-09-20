@@ -8,6 +8,12 @@ export type FinancialAccountType =
 
 export type AccountTransactionType = "income" | "expense" | "transfer";
 
+export type TransactionPurpose =
+  | "income"
+  | "daily_expense"
+  | "goal_allocation"
+  | "internal_transfer";
+
 export type FinancialAccount = {
   archivedAt?: string;
   createdAt: string;
@@ -26,6 +32,8 @@ export type AccountTransaction = {
   date: string;
   id: string;
   note: string;
+  /** Explicit purpose used by goal calculations. Missing legacy values are left unclassified. */
+  purpose?: TransactionPurpose;
   toAccountId?: string;
   type: AccountTransactionType;
   updatedAt: string;
@@ -55,6 +63,21 @@ export const TRANSACTION_TYPE_LABELS: Record<
   expense: "Chi tiền",
   transfer: "Chuyển tiền",
 };
+
+export const TRANSACTION_PURPOSE_LABELS: Record<TransactionPurpose, string> = {
+  income: "Thu nhập tính vào mục tiêu",
+  daily_expense: "Chi phí thường ngày",
+  goal_allocation: "Phân bổ tiền mục tiêu",
+  internal_transfer: "Chuyển nội bộ",
+};
+
+export function getDefaultTransactionPurpose(
+  type: AccountTransactionType
+): TransactionPurpose {
+  if (type === "income") return "income";
+  if (type === "transfer") return "internal_transfer";
+  return "daily_expense";
+}
 
 export const TRANSACTION_CATEGORIES = {
   income: ["Thu nhập", "Tiền thưởng", "Tiền nhận", "Hoàn tiền", "Khác"],
