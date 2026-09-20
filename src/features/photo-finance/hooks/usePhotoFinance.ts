@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { PhotoAttachment } from "../types/photoFinance.ts";
 import { createPhotoAttachmentRepository } from "../services/photoAttachmentRepository.ts";
+import { photoFinanceErrorMessage } from "../services/photoFinanceErrors.ts";
 
 export function usePhotoFinance(ownerId?: string) {
   const repository = useMemo(() => createPhotoAttachmentRepository(), []);
@@ -16,23 +17,23 @@ export function usePhotoFinance(ownerId?: string) {
       setStatus("needs-login");
       return;
     }
-    setStatus("loading");
+    setStatus((current) => current === "ready" ? current : "loading");
     try {
-      await repository.retryPendingDeletes(ownerId);
+      await repository.retryPendingDeletes(ownerId).catch(() => undefined);
       const items = await repository.list(ownerId);
-      const signed = await Promise.allSettled(items.map((item) =>
-        repository.signedImage(item.thumbnailPath)));
+      const signed = await repository.signedImages(items.map((item) => item.thumbnailPath));
       const urls: Record<string, string> = {};
-      signed.forEach((result, index) => {
-        if (result.status === "fulfilled") urls[items[index].id] = result.value;
+      items.forEach((item) => {
+        const url = signed.get(item.thumbnailPath);
+        if (url) urls[item.id] = url;
       });
       setAttachments(items);
       setThumbnailUrls(urls);
-      setError(signed.some((result) => result.status === "rejected")
+      setError(Object.keys(urls).length < items.length
         ? "Một số ảnh chưa tải được. Bấm thử lại." : "");
       setStatus("ready");
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Không tải được ảnh.");
+      setError(photoFinanceErrorMessage(cause, "Không tải được ảnh."));
       setStatus("error");
     }
   }, [ownerId, repository]);

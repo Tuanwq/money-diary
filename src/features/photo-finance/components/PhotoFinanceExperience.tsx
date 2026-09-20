@@ -44,7 +44,7 @@ export function PhotoFinanceExperience({ accounts, entries, expenses, ownerId,
     await photos.refresh();
     setCaptureOpen(false);
     setFormKey((value) => value + 1);
-    const savedDate = transactions.find((transaction) => transaction.id === transactionId)?.date;
+    const savedDate = transactions.find((transaction) => transaction.id === transactionId)?.date ?? captureDate;
     if (savedDate) setStoryDate(savedDate);
   }
   async function deletePhoto(attachment: PhotoAttachment) {

@@ -5,6 +5,17 @@ export type ProcessedPhoto = {
   height: number;
 };
 
+export function photoBlobDataUrl(blob: Blob) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => typeof reader.result === "string"
+      ? resolve(reader.result)
+      : reject(new Error("Không thể tạo ảnh xem trước."));
+    reader.onerror = () => reject(new Error("Không thể tạo ảnh xem trước."));
+    reader.readAsDataURL(blob);
+  });
+}
+
 const ACCEPTED_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const MAX_INPUT_BYTES = 25 * 1024 * 1024;
 

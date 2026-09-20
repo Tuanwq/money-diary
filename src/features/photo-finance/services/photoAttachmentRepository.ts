@@ -2,7 +2,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabase } from "../../../lib/supabase.ts";
 import { PHOTO_FINANCE_BUCKET, PHOTO_FINANCE_SOURCE_TYPE,
   type PhotoAttachment } from "../types/photoFinance.ts";
-import { processPhoto } from "./photoImageProcessor.ts";
+import { processPhoto, type ProcessedPhoto } from "./photoImageProcessor.ts";
+import { photoFinanceErrorMessage, retryPhotoOperation } from "./photoFinanceErrors.ts";
 
 type AttachmentRow = {
   id: string; owner_id: string; source_type: string; source_id: string;
@@ -18,21 +19,40 @@ function fromRow(row: AttachmentRow): PhotoAttachment {
 }
 
 async function requireOwner(client: SupabaseClient, ownerId: string) {
-  const { data, error } = await client.auth.getUser();
-  if (error || data.user?.id !== ownerId)
+  const { data, error } = await client.auth.getSession();
+  if (error || data.session?.user.id !== ownerId)
     throw new Error("Cần đăng nhập đúng tài khoản để lưu ảnh riêng tư.");
+}
+
+async function unwrap<T>(operation: () => PromiseLike<{ data: T; error: unknown }>) {
+  return retryPhotoOperation(async () => {
+    const result = await operation();
+    if (result.error) throw result.error;
+    return result.data;
+  });
 }
 
 export function createPhotoAttachmentRepository(client: SupabaseClient = supabase) {
   return {
+    async prepare(ownerId: string) {
+      await requireOwner(client, ownerId);
+      try {
+        await unwrap(() => client.from("money_diary_financial_attachments")
+          .select("id").eq("owner_id", ownerId).limit(1));
+      } catch (cause) { throw new Error(photoFinanceErrorMessage(cause), { cause }); }
+    },
+
     async list(ownerId: string): Promise<PhotoAttachment[]> {
       await requireOwner(client, ownerId);
-      const { data, error } = await client.from("money_diary_financial_attachments")
-        .select("id,owner_id,source_type,source_id,storage_path,thumbnail_path,is_cover,width,height,created_at")
-        .eq("owner_id", ownerId).is("deleted_at", null)
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return ((data ?? []) as AttachmentRow[]).map(fromRow);
+      try {
+        const data = await unwrap(() => client.from("money_diary_financial_attachments")
+          .select("id,owner_id,source_type,source_id,storage_path,thumbnail_path,is_cover,width,height,created_at")
+          .eq("owner_id", ownerId).is("deleted_at", null)
+          .order("created_at", { ascending: false }));
+        return ((data ?? []) as AttachmentRow[]).map(fromRow);
+      } catch (cause) {
+        throw new Error(photoFinanceErrorMessage(cause, "Không tải được danh sách ảnh."), { cause });
+      }
     },
 
     async signedImage(path: string) {
@@ -42,33 +62,44 @@ export function createPhotoAttachmentRepository(client: SupabaseClient = supabas
       return data.signedUrl;
     },
 
-    async upload(ownerId: string, transactionId: string, file: File, isCover: boolean): Promise<PhotoAttachment> {
+    async signedImages(paths: string[]) {
+      if (paths.length === 0) return new Map<string, string>();
+      const { data, error } = await client.storage.from(PHOTO_FINANCE_BUCKET)
+        .createSignedUrls(paths, 3600);
+      if (error) throw new Error(photoFinanceErrorMessage(error, "Không tải được ảnh riêng tư."));
+      const urls = new Map<string, string>();
+      for (const item of data ?? []) if (item.path && item.signedUrl) urls.set(item.path, item.signedUrl);
+      return urls;
+    },
+
+    async upload(ownerId: string, transactionId: string, file: File, isCover: boolean,
+      attachmentId?: string, preparedImage?: ProcessedPhoto): Promise<PhotoAttachment> {
       await requireOwner(client, ownerId);
       if (!transactionId.trim()) throw new Error("Giao dịch chưa được lưu.");
-      const image = await processPhoto(file);
-      const id = crypto.randomUUID();
+      const image = preparedImage ?? await processPhoto(file);
+      const id = attachmentId ?? crypto.randomUUID();
       const storagePath = `${ownerId}/${id}/display.jpg`;
       const thumbnailPath = `${ownerId}/${id}/thumbnail.jpg`;
       const storage = client.storage.from(PHOTO_FINANCE_BUCKET);
-      const display = await storage.upload(storagePath, image.display,
-        { contentType: "image/jpeg", upsert: false });
-      if (display.error) throw display.error;
       try {
-        const thumb = await storage.upload(thumbnailPath, image.thumbnail,
-          { contentType: "image/jpeg", upsert: false });
-        if (thumb.error) throw thumb.error;
-        const { data, error } = await client.from("money_diary_financial_attachments")
-          .insert({ id, owner_id: ownerId, source_type: PHOTO_FINANCE_SOURCE_TYPE,
+        await Promise.all([
+          unwrap(() => storage.upload(storagePath, image.display,
+            { contentType: "image/jpeg", upsert: true })),
+          unwrap(() => storage.upload(thumbnailPath, image.thumbnail,
+            { contentType: "image/jpeg", upsert: true })),
+        ]);
+        const data = await unwrap(() => client.from("money_diary_financial_attachments")
+          .upsert({ id, owner_id: ownerId, source_type: PHOTO_FINANCE_SOURCE_TYPE,
             source_id: transactionId, storage_path: storagePath,
             thumbnail_path: thumbnailPath, is_cover: isCover,
-            width: image.width, height: image.height })
+            width: image.width, height: image.height }, { onConflict: "id" })
           .select("id,owner_id,source_type,source_id,storage_path,thumbnail_path,is_cover,width,height,created_at")
-          .single();
-        if (error || !data) throw error ?? new Error("Không liên kết được ảnh.");
+          .single());
+        if (!data) throw new Error("Không liên kết được ảnh.");
         return fromRow(data as AttachmentRow);
       } catch (error) {
-        await storage.remove([storagePath, thumbnailPath]);
-        throw error;
+        try { await storage.remove([storagePath, thumbnailPath]); } catch { /* Retried on the next cleanup pass. */ }
+        throw new Error(photoFinanceErrorMessage(error), { cause: error });
       }
     },
 

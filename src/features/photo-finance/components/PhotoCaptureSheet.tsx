@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { createPortal } from "react-dom";
-import { X } from "lucide-react";
+import { Camera, X } from "lucide-react";
 import type { AccountTransaction, FinancialAccount } from "../../account-ledger/accountLedgerModel.ts";
 import type { createPhotoAttachmentRepository } from "../services/photoAttachmentRepository.ts";
 import { PhotoTransactionForm } from "./PhotoTransactionForm.tsx";
@@ -28,9 +28,11 @@ export function PhotoCaptureSheet({ accounts, existing, initialDate, isOpen, own
     style={isOpen ? undefined : { display: "none" }}
     onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
     <section aria-modal="true" className="photo-finance-sheet" role="dialog" aria-label="Ghi khoảnh khắc tài chính">
-      <header><div><span>Nhật ký tài chính bằng ảnh</span><h2>{existing ? "Sửa giao dịch / thêm ảnh" : "Ghi một khoảnh khắc"}</h2>
-        <p>Ảnh liên kết với giao dịch trong Sổ tài khoản. Số tiền chỉ hiển thị trên giao diện.</p></div>
-        <button aria-label="Đóng" onClick={onClose} type="button"><X size={20} /></button></header>
+      <header>
+        <button className="photo-finance-sheet-cancel" onClick={onClose} type="button"><X size={18} /> Hủy</button>
+        <span>{existing ? "Sửa khoảnh khắc" : "Khoảnh khắc mới"}</span>
+        <Camera aria-hidden="true" size={20} />
+      </header>
       <PhotoTransactionForm accounts={accounts} existing={existing} initialDate={initialDate}
         key={`${existing?.id ?? "new"}-${formKey}`} ownerId={ownerId} repository={repository}
         dayHasPhotos={dayHasPhotos}

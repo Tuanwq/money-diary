@@ -5,6 +5,8 @@ import {
   getCalendarPhotoStack, getDailyFinancialSummary, groupPhotoAttachmentsByDay,
   vietnamFinancialDate, vietnamOccurredAt,
 } from "../src/features/photo-finance/services/photoFinanceModel.ts";
+import { photoFinanceErrorMessage } from
+  "../src/features/photo-finance/services/photoFinanceErrors.ts";
 
 const date = "2026-09-16";
 const entry = { id: "hub-day", date, income: 500_000, receivedMoney: 0,
@@ -56,4 +58,10 @@ test("calendar shows at most three photos, correct badge, cover priority and fol
   const updated = buildDailyFinancialSummaries([entry], [expense], [edited]);
   assert.equal(getDailyFinancialSummary(updated, date).net, 400_000);
   assert.equal(getDailyFinancialSummary(updated, "2026-09-17").net, -120_000);
+});
+
+test("photo persistence errors are actionable and do not expose raw Supabase messages", () => {
+  assert.match(photoFinanceErrorMessage({ code: "PGRST205", message: "schema cache" }), /migration Photo Finance/);
+  assert.match(photoFinanceErrorMessage(new Error("The connection to the database timed out")), /Supabase quá chậm/);
+  assert.match(photoFinanceErrorMessage({ statusCode: 403, message: "Unauthorized" }), /đăng nhập lại/);
 });
