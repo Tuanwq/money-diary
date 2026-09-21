@@ -142,8 +142,13 @@
 .photo-finance-note { position: absolute; z-index: 2; left: 22px; right: 22px; bottom: 20px; display: flex; align-items: center; gap: 10px; min-height: 47px; border-radius: 17px; padding: 0 14px; color: #ded4d7; background: rgb(255 255 255 / 12%); backdrop-filter: blur(14px); }
 .photo-finance-note textarea { flex: 1; min-width: 0; max-height: 70px; resize: none; border: 0; outline: 0; color: white; background: transparent; font: inherit; }
 .photo-finance-note textarea::placeholder { color: #c7bbbe; }
-.photo-finance-kind { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; width: min(100%, 330px); margin: 0 auto; padding: 4px; border-radius: 999px; background: var(--pf-capture-panel); }
-.photo-finance-kind button { display: inline-flex; min-height: 42px; align-items: center; justify-content: center; gap: 7px; border-radius: 999px; color: var(--pf-capture-muted); font-size: 13px; font-weight: 700; }
+.photo-finance-kind { display: grid; grid-template-columns: 1fr 1fr 1.3fr; gap: 3px; width: min(100%, 420px); margin: 0 auto; padding: 4px; border-radius: 999px; background: var(--pf-capture-panel); }
+.photo-finance-kind button { display: inline-flex; min-width: 0; min-height: 44px; align-items: center; justify-content: center; gap: 4px; border-radius: 999px; color: var(--pf-capture-muted); font-size: clamp(10px, 2.8vw, 13px); font-weight: 700; }
+.photo-finance-kind button svg { flex-shrink: 0; width: 17px; }
+.photo-finance-transfer { display: grid; gap: 6px; color: var(--pf-capture-muted); }
+.photo-finance-transfer label { display: flex; align-items: center; gap: 12px; font-size: 12px; }
+.photo-finance-transfer select { min-width: 0; flex: 1; min-height: 44px; border-radius: 16px; padding: 8px 12px; background: var(--pf-capture-panel); color: var(--pf-capture-text); }
+.photo-finance-transfer small { font-size: 11px; line-height: 1.4; }
 .photo-finance-kind button.is-active { color: #132318; background: var(--pf-capture-accent); }
 .photo-finance-purpose { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; width: min(100%, 330px); margin: -3px auto 0; }
 .photo-finance-purpose button { min-height: 34px; border: 1px solid var(--pf-capture-panel-soft); border-radius: 999px; color: var(--pf-capture-muted); font-size: 11px; font-weight: 700; }

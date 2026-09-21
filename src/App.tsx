@@ -1,6 +1,7 @@
 import { useBrowserRoute } from "./app/router/useBrowserRoute";
 import { HubSelectionPage } from "./features/hub/pages/HubSelectionPage";
 import { useAccountLedger } from "./features/account-ledger/useAccountLedger";
+import { getLedgerSummary } from "./features/account-ledger/accountLedgerModel";
 import { deleteAccountTransactionWithPhotos } from "./features/photo-finance/services/photoTransactionService.ts";
 import { useAccountReconciliations } from "./features/account-reconciliation/useAccountReconciliations";
 import { useAutomationRules } from "./features/automation/useAutomationRules";
@@ -1527,7 +1528,9 @@ const balanceChartTitle =
     ? `Từ ngày bắt đầu hành trình: ${currentGoalStartDate}`
     : `${balanceChartDays} ngày gần nhất`;
 
-const actualMoney = goals.bigGoalSaved + totalIncome - totalExpense;
+const actualMoney = getLedgerSummary(
+  financialAccounts, accountTransactions, todayString.slice(0, 7)
+).totalBalance;
 
 const mainGoalProgress = useMemo(
   () => buildMainGoalProgress({
@@ -1539,7 +1542,7 @@ const mainGoalProgress = useMemo(
   }),
   [accountTransactions, entries, expenses, goals, todayString]
 );
-const totalSavedForBigGoal = mainGoalProgress.goalNetAmount;
+const totalSavedForBigGoal = mainGoalProgress.achievedAmount;
 const bigGoalProgress = mainGoalProgress.progress;
 const remainingBigGoal = mainGoalProgress.remainingAmount;
 const daysLeft = mainGoalProgress.remainingDays;
@@ -2350,7 +2353,7 @@ function completeCurrentGoal() {
 
   const goalTotalJourneyMoney = goalTotalIncome;
 
-  const goalActualMoney = completedProgress.goalNetAmount;
+  const goalActualMoney = completedProgress.achievedAmount;
 
   const balanceSnapshots = buildMainGoalProgressTimeline({
     asOfDate: endDate,

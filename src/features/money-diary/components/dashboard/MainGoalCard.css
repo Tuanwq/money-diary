@@ -53,6 +53,11 @@
   line-height: 1;
 }
 
+.manager-main-goal__amount-label {
+  flex-basis: 100%;
+  margin-bottom: 0.25rem;
+}
+
 .manager-main-goal__amount span,
 .manager-main-goal__footer small,
 .manager-main-goal.is-empty p {

@@ -18,6 +18,7 @@ import { formatReportDate } from "../../../../utils/date";
 import { getSubGoalSaved } from "../../../../utils/goals";
 import { formatMoney } from "../../../../utils/money";
 import type { MainGoalProgressSummary } from "../../domain/mainGoalProgress";
+import "./goalMetrics.css";
 
 type GoalsOverviewProps = {
   balanceHistory: BalanceSnapshot[];
@@ -142,11 +143,11 @@ export function GoalsOverview({
             </div>
 
             <dl className="goals-overview__hero-metrics">
-              <div>
+              <div className="goal-metric-remaining">
                 <dt>Còn thiếu</dt>
                 <dd>{formatMoney(remaining)}</dd>
               </div>
-              <div>
+              <div className="goal-metric-days">
                 <dt>Thời gian còn lại</dt>
                 <dd>{daysLeft} ngày</dd>
               </div>
@@ -157,6 +158,7 @@ export function GoalsOverview({
             </dl>
 
             <dl className="goals-overview__hero-metrics">
+              <div><dt>Số tiền ban đầu</dt><dd>{formatMoney(mainGoalProgress.initialAmount)}</dd></div>
               <div><dt>Tổng thu trong kỳ</dt><dd>{formatMoney(mainGoalProgress.goalIncome)}</dd></div>
               <div><dt>Chi thường ngày</dt><dd>{formatMoney(mainGoalProgress.goalExpenses)}</dd></div>
               <div><dt>Thu nhập ròng</dt><dd>{formatMoney(mainGoalProgress.goalNetAmount)}</dd></div>

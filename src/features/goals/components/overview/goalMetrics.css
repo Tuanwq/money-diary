@@ -1,0 +1,46 @@
+.manager-main-goal__metrics .is-remaining,
+.goals-overview__hero-metrics .goal-metric-remaining,
+.goal-current-summary .goal-metric-remaining {
+  background: #fff3d6;
+  color: #80500c;
+  border: 1px solid #ecd5a5;
+}
+
+.manager-main-goal__metrics .is-days,
+.goals-overview__hero-metrics .goal-metric-days,
+.goal-current-summary .goal-metric-days {
+  background: #eaf3fc;
+  color: #275b85;
+  border: 1px solid #c6daef;
+}
+
+.manager-main-goal__metrics .is-remaining span,
+.manager-main-goal__metrics .is-days span,
+.goals-overview__hero-metrics .goal-metric-remaining dt,
+.goals-overview__hero-metrics .goal-metric-remaining dd,
+.goals-overview__hero-metrics .goal-metric-days dt,
+.goals-overview__hero-metrics .goal-metric-days dd {
+  color: inherit;
+}
+
+.goal-current-summary .goal-metric-remaining,
+.goal-current-summary .goal-metric-days {
+  border-radius: 0.75rem;
+  padding: 0.75rem;
+}
+
+.dark .manager-main-goal__metrics .is-remaining,
+.dark .goals-overview__hero-metrics .goal-metric-remaining,
+.dark .goal-current-summary .goal-metric-remaining {
+  background: #352b18;
+  color: #f5d18d;
+  border-color: #65502a;
+}
+
+.dark .manager-main-goal__metrics .is-days,
+.dark .goals-overview__hero-metrics .goal-metric-days,
+.dark .goal-current-summary .goal-metric-days {
+  background: #1b2d3d;
+  color: #a9d2f6;
+  border-color: #36536e;
+}

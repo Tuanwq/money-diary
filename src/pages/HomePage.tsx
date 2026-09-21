@@ -100,7 +100,7 @@ export function HomePage({
           <button type="button" onClick={() => navigateTo("accounts")}>Xem tài khoản <ArrowRight size={16} /></button>
         </div>
         <strong id="manager-balance-title">{formatMoney(actualMoney)}</strong>
-        <p>Tính từ số dư đầu hành trình và các khoản thu, chi bạn đã ghi.</p>
+        <p>Tổng số dư hiện tại trong Sổ tài khoản. Tiến độ hành trình được theo dõi riêng ở mục tiêu bên dưới.</p>
 
         <div className="manager-day-strip" aria-label="Biến động ngày đang xem">
           <div><span>Thu trong ngày</span><strong className="is-positive">+{formatMoney(selectedGrossIncome)}</strong></div>

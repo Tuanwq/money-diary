@@ -63,9 +63,10 @@ export function DayStoryCarousel({ accounts, attachments, onAddPhoto,
         return <article className="photo-finance-slide" key={attachment.id}>
           <PrivatePhoto attachment={attachment} repository={repository} />
           {transaction && <div className="photo-finance-slide-overlay">
-            <span>{transaction.type === "expense" ? "Chi tiêu" : "Thu nhập"}</span>
-            <strong>{transaction.type === "income" ? "+" : "−"}{formatMoney(transaction.amount)}</strong>
-            <p>{transaction.category} · {accountNames.get(transaction.accountId) ?? "Tài khoản đã xóa"}</p>
+            <span>{transaction.type === "transfer" ? "Chuyển nội bộ" : transaction.type === "expense" ? "Chi tiêu" : "Thu nhập"}</span>
+            <strong>{transaction.type === "transfer" ? "↔ " : transaction.type === "income" ? "+" : "−"}{formatMoney(transaction.amount)}</strong>
+            <p>{transaction.category} · {accountNames.get(transaction.accountId) ?? "Tài khoản đã xóa"}
+              {transaction.type === "transfer" && ` → ${accountNames.get(transaction.toAccountId ?? "") ?? "Tài khoản đã xóa"}`}</p>
             <p>{transaction.occurredAt ? new Intl.DateTimeFormat("vi-VN", { timeZone: "Asia/Ho_Chi_Minh",
               hour: "2-digit", minute: "2-digit" }).format(new Date(transaction.occurredAt)) : transaction.date}
               {transaction.note ? ` · ${transaction.note}` : ""}</p>

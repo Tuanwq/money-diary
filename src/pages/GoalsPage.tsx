@@ -1871,7 +1871,7 @@ export function GoalsPage({
           </div>
 
           <div className="rounded-2xl bg-white p-4 shadow-sm">
-            <p className="text-sm text-slate-500">Tổng thu trong kỳ</p>
+            <p className="text-sm text-slate-500">Số tiền ban đầu + tổng thu trong kỳ</p>
             <p className="mt-1 font-bold">
               {formatMoney(
                 currentBalanceMovementData.at(-1)?.totalMoney ?? 0
@@ -1880,7 +1880,7 @@ export function GoalsPage({
           </div>
 
           <div className="rounded-2xl bg-white p-4 shadow-sm">
-            <p className="text-sm text-slate-500">Thu nhập ròng tính vào mục tiêu</p>
+            <p className="text-sm text-slate-500">Đã tích lũy trong hành trình</p>
             <p className="mt-1 font-bold">
               {formatMoney(
                 currentBalanceMovementData.at(-1)?.actualMoney ?? 0
@@ -2343,6 +2343,22 @@ export function GoalsPage({
               </div>
 
               <div>
+                <label htmlFor="main-goal-initial-amount" className="text-sm font-medium">Số tiền ban đầu</label>
+                <input
+                  id="main-goal-initial-amount"
+                  inputMode="numeric"
+                  value={mainGoalForm.bigGoalSaved}
+                  onChange={(e) => setMainGoalForm((prev) => ({
+                    ...prev, bigGoalSaved: formatMoneyInput(e.target.value),
+                  }))}
+                  className="mt-1 w-full rounded-xl border px-3 py-2"
+                />
+                <p className="mt-1 text-xs text-slate-500">
+                  Tiền đã tích lũy trước khi bắt đầu ghi hành trình này. Chỉ cộng vào mục tiêu, không thay đổi số dư Sổ tài khoản.
+                </p>
+              </div>
+
+              <div>
                 <label className="text-sm font-medium">Ngày bắt đầu mục tiêu</label>
                   <input
                     type="date"
@@ -2394,14 +2410,14 @@ export function GoalsPage({
                 Bắt đầu: <strong>{goals.bigGoalStartDate ?? getToday()}</strong>
               </p>
               <p className="mt-2 text-sm">
-                Đã có: <strong>{formatMoney(totalSavedForBigGoal)}</strong>
+                Đã tích lũy trong hành trình: <strong>{formatMoney(totalSavedForBigGoal)}</strong>
               </p>
 
-              <p className="mt-1 text-sm">
+              <p className="mt-1 text-sm goal-metric-remaining">
                 Còn thiếu: <strong>{formatMoney(remainingBigGoal)}</strong>
               </p>
 
-              <p className="mt-1 text-sm">
+              <p className="mt-1 text-sm goal-metric-days">
                 Còn lại: <strong>{daysLeft} ngày</strong>
               </p>
 

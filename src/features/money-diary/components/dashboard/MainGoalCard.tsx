@@ -2,6 +2,7 @@ import { ArrowRight, CalendarDays, CircleDollarSign, Target, TrendingUp } from "
 import type { MainGoalProgressSummary } from "../../../goals/domain/mainGoalProgress.ts";
 import { formatMoney } from "../../../../utils/money";
 import "./MainGoalCard.css";
+import "../../../goals/components/overview/goalMetrics.css";
 
 type MainGoalCardProps = {
   name: string;
@@ -34,7 +35,8 @@ export function MainGoalCard({ name, onOpenGoals, summary }: MainGoalCardProps) 
       </header>
 
       <div className="manager-main-goal__amount">
-        <strong>{formatMoney(summary.goalNetAmount)}</strong>
+        <span className="manager-main-goal__amount-label">Đã tích lũy trong hành trình</span>
+        <strong>{formatMoney(summary.achievedAmount)}</strong>
         <span>trên {formatMoney(summary.targetAmount)}</span>
       </div>
 
@@ -45,13 +47,14 @@ export function MainGoalCard({ name, onOpenGoals, summary }: MainGoalCardProps) 
       </div>
 
       <div className="manager-main-goal__metrics">
-        <div><span>Còn thiếu</span><strong>{formatMoney(summary.remainingAmount)}</strong></div>
-        <div><span><CalendarDays size={14} /> Còn lại</span><strong>{summary.remainingDays} ngày</strong></div>
+        <div className="is-remaining"><span>Còn thiếu</span><strong>{formatMoney(summary.remainingAmount)}</strong></div>
+        <div className="is-days"><span><CalendarDays size={14} /> Còn lại</span><strong>{summary.remainingDays} ngày</strong></div>
         <div className="is-emphasis"><span><TrendingUp size={14} /> Cần thêm mỗi ngày</span>
           <strong>{formatMoney(summary.requiredPerDay)}</strong></div>
       </div>
 
       <div className="manager-main-goal__breakdown" aria-label="Cách tính tiến độ mục tiêu">
+        <div><span>Số tiền ban đầu</span><strong>{formatMoney(summary.initialAmount)}</strong></div>
         <div><span>Tổng thu trong kỳ</span><strong>+{formatMoney(summary.goalIncome)}</strong></div>
         <div><span>Chi phí thường ngày</span><strong>−{formatMoney(summary.goalExpenses)}</strong></div>
         <div><span><CircleDollarSign size={14} /> Thu nhập ròng</span>

@@ -2,6 +2,8 @@ import type { AccountTransaction } from "../../account-ledger/accountLedgerModel
 import type { BalanceSnapshot, DailyEntry, ExpenseEntry, Goals } from "../../../types.ts";
 
 export type MainGoalProgressSummary = {
+  initialAmount: number;
+  achievedAmount: number;
   endDate: string;
   goalExpenses: number;
   goalIncome: number;
@@ -86,16 +88,22 @@ export function buildMainGoalProgress({
   const goalIncome = diaryIncome + transactionIncome;
   const goalExpenses = diaryExpenses + transactionExpenses;
   const goalNetAmount = goalIncome - goalExpenses;
+  // Money earned before this recorded journey is an opening goal amount,
+  // independent of the live balances in Account Ledger.
+  const initialAmount = Math.max(goals.bigGoalSaved ?? 0, 0);
+  const achievedAmount = initialAmount + goalNetAmount;
   const progress = targetAmount > 0
-    ? Math.min(Math.max(Math.round((goalNetAmount / targetAmount) * 100), 0), 100)
+    ? Math.min(Math.max(Math.round((achievedAmount / targetAmount) * 100), 0), 100)
     : 0;
-  const remainingAmount = Math.max(targetAmount - goalNetAmount, 0);
+  const remainingAmount = Math.max(targetAmount - achievedAmount, 0);
   const remainingDays = getRemainingDays(deadline, asOfDate);
   const requiredPerDay = remainingAmount > 0
     ? Math.ceil(remainingAmount / Math.max(remainingDays, 1))
     : 0;
 
   return {
+    initialAmount,
+    achievedAmount,
     endDate: deadline,
     goalExpenses,
     goalIncome,
@@ -130,11 +138,11 @@ export function buildMainGoalProgressTimeline(input: MainGoalProgressInput): Bal
     ].join("-");
     const summary = buildMainGoalProgress({ ...input, asOfDate: date });
     snapshots.push({
-      actualMoney: summary.goalNetAmount,
+      actualMoney: summary.achievedAmount,
       date,
       expense: summary.goalExpenses - previousExpense,
       income: summary.goalIncome - previousIncome,
-      totalMoney: summary.goalIncome,
+      totalMoney: summary.initialAmount + summary.goalIncome,
     });
     previousIncome = summary.goalIncome;
     previousExpense = summary.goalExpenses;

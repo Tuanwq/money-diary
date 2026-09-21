@@ -1,11 +1,12 @@
 import { useRef, useState } from "react";
-import { ArrowDownLeft, ArrowUpRight, CalendarDays, Camera, Check, ChevronDown,
+import { ArrowDownLeft, ArrowUpRight, ArrowLeftRight, CalendarDays, Camera, Check, ChevronDown,
   Image as ImageIcon, Pencil, RotateCcw, WalletCards, X } from "lucide-react";
-import type { AccountTransaction, FinancialAccount } from "../../account-ledger/accountLedgerModel.ts";
+import type { AccountTransaction, AccountTransactionType, FinancialAccount } from "../../account-ledger/accountLedgerModel.ts";
 import { getDefaultTransactionPurpose, TRANSACTION_CATEGORIES,
   type TransactionPurpose } from "../../account-ledger/accountLedgerModel.ts";
 import { formatMoneyInput, parseMoneyInput } from "../../../utils/money.ts";
-import { vietnamFinancialDate, vietnamFinancialTime, vietnamOccurredAt } from "../services/photoFinanceModel.ts";
+import { vietnamFinancialDate, vietnamFinancialTime } from "../services/photoFinanceModel.ts";
+import { buildPhotoTransaction } from "../services/photoTransactionDraft.ts";
 import type { createPhotoAttachmentRepository } from "../services/photoAttachmentRepository.ts";
 import { photoBlobDataUrl, processPhoto, type ProcessedPhoto } from "../services/photoImageProcessor.ts";
 
@@ -25,14 +26,14 @@ export function PhotoTransactionForm({ accounts, existing, initialDate, ownerId,
 }) {
   const now = new Date();
   const activeAccounts = accounts.filter((account) => !account.archivedAt);
-  const [kind, setKind] = useState<"income" | "expense">(
-    existing?.type === "expense" ? "expense" : "income");
+  const [kind, setKind] = useState<AccountTransactionType>(existing?.type ?? "income");
   const [amount, setAmount] = useState(existing ? formatMoneyInput(String(existing.amount)) : "");
   const [category, setCategory] = useState(existing?.category ?? "Thu nhập");
   const [purpose, setPurpose] = useState<TransactionPurpose>(
-    existing?.purpose ?? getDefaultTransactionPurpose(existing?.type === "expense" ? "expense" : "income")
+    existing?.purpose ?? getDefaultTransactionPurpose(existing?.type ?? "income")
   );
   const [accountId, setAccountId] = useState(existing?.accountId ?? activeAccounts[0]?.id ?? "");
+  const [toAccountId, setToAccountId] = useState(existing?.toAccountId ?? "");
   const [note, setNote] = useState(existing?.note ?? "");
   const [date, setDate] = useState(existing?.date ?? initialDate ?? vietnamFinancialDate(now));
   const [time, setTime] = useState(existing?.occurredAt
@@ -72,10 +73,10 @@ export function PhotoTransactionForm({ accounts, existing, initialDate, ownerId,
     }
   }
 
-  function changeKind(next: "income" | "expense") {
+  function changeKind(next: AccountTransactionType) {
     if (!canEdit) return;
     setKind(next);
-    setCategory(next === "income" ? "Thu nhập" : "Ăn uống");
+    setCategory(TRANSACTION_CATEGORIES[next][0]);
     setPurpose(getDefaultTransactionPurpose(next));
   }
 
@@ -92,27 +93,19 @@ export function PhotoTransactionForm({ accounts, existing, initialDate, ownerId,
       if (!file && savedId) throw new Error("Hãy chọn lại ảnh để tải lên.");
 
       const value = parseMoneyInput(amount);
-      if (!savedId) {
-        if (!Number.isSafeInteger(value) || value <= 0)
-          throw new Error("Số tiền phải là số nguyên dương.");
-        if (!activeAccounts.some((account) => account.id === accountId))
-          throw new Error("Hãy chọn tài khoản nhận hoặc trả tiền.");
-        if (!TRANSACTION_CATEGORIES[kind].includes(category))
-          throw new Error("Danh mục không hợp lệ.");
-      }
+      const transactionId = savedId ?? existing?.id ?? crypto.randomUUID();
+      const transaction = savedId ? null : buildPhotoTransaction({
+        id: transactionId, accounts, existing, type: kind, amount: value,
+        accountId, toAccountId, category, purpose, date, time, note,
+        now: new Date().toISOString(),
+      });
 
       // Verify photo persistence before creating a money transaction. After that,
       // savedId makes an upload retry reuse the same transaction.
       if (file && !savedId) await repository.prepare(ownerId);
 
-      const transactionId = savedId ?? existing?.id ?? crypto.randomUUID();
-      if (!savedId) {
-        const occurredAt = vietnamOccurredAt(date, time);
-        const timestamp = new Date().toISOString();
-        onSaveTransaction({ id: transactionId, accountId, amount: value, category,
-          createdAt: existing?.createdAt ?? timestamp, date,
-          note: note.trim(), purpose, type: kind, updatedAt: timestamp,
-          occurredAt, source: existing?.source ?? "photo_finance" });
+      if (transaction) {
+        onSaveTransaction(transaction);
         setSavedId(transactionId);
       }
       if (file) {
@@ -148,18 +141,6 @@ export function PhotoTransactionForm({ accounts, existing, initialDate, ownerId,
         <span>Ảnh gốc được giữ riêng tư và không bị ghi chữ lên.</span>
       </div>
 
-      {kind === "expense" && <div className="photo-finance-purpose" role="group" aria-label="Ảnh hưởng đến mục tiêu">
-        <button aria-pressed={purpose === "daily_expense"}
-          className={purpose === "daily_expense" ? "is-active" : ""}
-          disabled={!canEdit} onClick={() => setPurpose("daily_expense")} type="button">
-          Chi thường ngày
-        </button>
-        <button aria-pressed={purpose === "goal_allocation"}
-          className={purpose === "goal_allocation" ? "is-active" : ""}
-          disabled={!canEdit} onClick={() => setPurpose("goal_allocation")} type="button">
-          Phân bổ mục tiêu
-        </button>
-      </div>}
       <button aria-label="Mở camera" className="photo-finance-shutter" onClick={() => cameraInputRef.current?.click()}
         disabled={preparingPhoto} type="button"><span /></button>
       <button className="photo-finance-library-button" disabled={preparingPhoto}
@@ -203,15 +184,35 @@ export function PhotoTransactionForm({ accounts, existing, initialDate, ownerId,
           disabled={!canEdit} onClick={() => changeKind("income")} type="button">
           <ArrowDownLeft size={21} /> Thu nhập
         </button>
+        <button aria-pressed={kind === "transfer"} className={kind === "transfer" ? "is-active" : ""}
+          disabled={!canEdit} onClick={() => changeKind("transfer")} type="button">
+          <ArrowLeftRight size={19} /> Chuyển nội bộ
+        </button>
       </div>
 
+      {kind === "expense" && <div className="photo-finance-purpose" role="group" aria-label="Ảnh hưởng đến mục tiêu">
+        <button aria-pressed={purpose === "daily_expense"}
+          className={purpose === "daily_expense" ? "is-active" : ""}
+          disabled={!canEdit} onClick={() => setPurpose("daily_expense")} type="button">
+          Chi thường ngày
+        </button>
+        <button aria-pressed={purpose === "goal_allocation"}
+          className={purpose === "goal_allocation" ? "is-active" : ""}
+          disabled={!canEdit} onClick={() => setPurpose("goal_allocation")} type="button">
+          Phân bổ mục tiêu
+        </button>
+      </div>}
       <div className="photo-finance-chips">
         <label><span className="sr-only">Danh mục</span><Pencil size={16} aria-hidden="true" />
           <select aria-label="Danh mục" disabled={!canEdit} onChange={(event) => setCategory(event.target.value)} value={category}>
             {TRANSACTION_CATEGORIES[kind].map((item) => <option key={item}>{item}</option>)}
           </select><ChevronDown size={15} aria-hidden="true" /></label>
         <label><span className="sr-only">Tài khoản</span><WalletCards size={17} aria-hidden="true" />
-          <select aria-label="Tài khoản" disabled={!canEdit} onChange={(event) => setAccountId(event.target.value)} required value={accountId}>
+          <select aria-label={kind === "transfer" ? "Tài khoản chuyển" : "Tài khoản"} disabled={!canEdit}
+            onChange={(event) => {
+              setAccountId(event.target.value);
+              if (event.target.value === toAccountId) setToAccountId("");
+            }} required value={accountId}>
             <option value="">Tài khoản</option>
             {activeAccounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
           </select><ChevronDown size={15} aria-hidden="true" /></label>
@@ -222,6 +223,20 @@ export function PhotoTransactionForm({ accounts, existing, initialDate, ownerId,
           <input aria-label="Giờ" disabled={!canEdit} onChange={(event) => setTime(event.target.value)} required type="time" value={time} />
         </label>
       </div>
+      {kind === "transfer" && <div className="photo-finance-transfer">
+        <label>
+          <span>Đến tài khoản</span>
+          <select aria-label="Tài khoản nhận" required disabled={!canEdit}
+            value={toAccountId} onChange={(event) => setToAccountId(event.target.value)}>
+            <option value="">Chọn nơi nhận tiền</option>
+            {activeAccounts.filter((account) => account.id !== accountId).map((account) =>
+              <option key={account.id} value={account.id}>{account.name}</option>)}
+          </select>
+        </label>
+        <small>{activeAccounts.length < 2
+          ? "Cần ít nhất hai tài khoản đang hoạt động để chuyển tiền."
+          : "Chuyển giữa các tài khoản của bạn; không tính vào thu, chi hoặc tiến độ mục tiêu."}</small>
+      </div>}
     </>}
 
     {savedId && <p className="photo-finance-retry" role="status">Giao dịch đã lưu một lần. Nút bên dưới chỉ tải lại ảnh.

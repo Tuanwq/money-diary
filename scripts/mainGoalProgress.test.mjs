@@ -7,7 +7,7 @@ import {
 const goals = {
   bigGoalDeadline: "2026-09-05",
   bigGoalName: "Kiếm ròng 2 triệu",
-  bigGoalSaved: 900_000,
+  bigGoalSaved: 0,
   bigGoalStartDate: "2026-09-01",
   bigGoalTarget: 2_000_000,
   dailyHours: 0,
@@ -96,6 +96,8 @@ assert.deepEqual(buildMainGoalProgress({
   goals,
   transactions,
 }), {
+  initialAmount: 0,
+  achievedAmount: 2_000_000,
   endDate: "2026-09-05",
   goalExpenses: 500_000,
   goalIncome: 2_500_000,
@@ -140,5 +142,29 @@ const timeline = buildMainGoalProgressTimeline({
 assert.equal(timeline.length, 5);
 assert.equal(timeline.at(-1).actualMoney, 2_000_000);
 assert.equal(timeline.at(-1).expense, 500_000);
+
+const withOpening = buildMainGoalProgress({
+  asOfDate: "2026-09-03", entries: [], expenses: [], transactions: [],
+  goals: { ...goals, bigGoalSaved: 900_000 },
+});
+assert.equal(withOpening.goalNetAmount, 0);
+assert.equal(withOpening.achievedAmount, 900_000);
+assert.equal(withOpening.remainingAmount, 1_100_000);
+assert.equal(withOpening.progress, 45);
+assert.equal(withOpening.requiredPerDay, 550_000);
+
+const journeyInput = {
+  asOfDate: "2026-09-05", expenses: [], transactions,
+  entries: [{ ...entries[0], income: 798_000 }],
+  goals: { ...goals, bigGoalSaved: 10_000_000, bigGoalTarget: 13_500_000 },
+};
+const journey = buildMainGoalProgress(journeyInput);
+assert.equal(journey.achievedAmount, 10_798_000);
+assert.equal(journey.remainingAmount, 2_702_000);
+assert.equal(journey.progress, 80);
+const openingTimeline = buildMainGoalProgressTimeline(journeyInput);
+assert.equal(openingTimeline[0].actualMoney, 10_000_000);
+assert.equal(openingTimeline.at(-1).actualMoney, journey.achievedAmount);
+assert.equal(openingTimeline.at(-1).totalMoney, 10_798_000);
 
 console.log("Main goal progress tests passed.");
