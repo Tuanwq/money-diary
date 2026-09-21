@@ -1,5 +1,6 @@
 import { X } from "lucide-react";
-import { useEffect, useMemo } from "react";
+import { useMemo } from "react";
+import { usePhotoDialog } from "../hooks/usePhotoDialog.ts";
 import { createPortal } from "react-dom";
 import type { AccountTransaction, FinancialAccount } from "../../account-ledger/accountLedgerModel.ts";
 import type { DailyEntry, ExpenseEntry } from "../../../types.ts";
@@ -41,14 +42,7 @@ export function DayStory({ accounts, attachments, date, entries, expenses, isOpe
   ].filter((item) => item.amount > 0).sort((a, b) => b.time.localeCompare(a.time)),
   [date, entries, expenses, transactions]);
 
-  useEffect(() => {
-    if (!isOpen) return;
-    const previous = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") onClose(); };
-    document.addEventListener("keydown", onKey);
-    return () => { document.body.style.overflow = previous; document.removeEventListener("keydown", onKey); };
-  }, [isOpen, onClose]);
+  usePhotoDialog(isOpen, onClose);
   if (!isOpen) return null;
   return createPortal(<div className="photo-finance-story-backdrop">
     <main aria-label={`Câu chuyện trong ngày ${date}`} className="photo-finance-story" role="dialog" aria-modal="true">
@@ -64,7 +58,7 @@ export function DayStory({ accounts, attachments, date, entries, expenses, isOpe
               ? new Intl.DateTimeFormat("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", hour: "2-digit",
                 minute: "2-digit" }).format(new Date(item.transaction.occurredAt))
               : "Bản ghi trong ngày"}</small></div>
-            <strong>{item.type === "income" ? "+" : item.type === "expense" ? "−" : "↔"}{formatMoney(item.amount)}</strong>
+            <strong className={item.type === "expense" ? "photo-finance-outflow" : undefined}>{item.type === "income" ? "+" : item.type === "expense" ? "−" : "↔"}{formatMoney(item.amount)}</strong>
             {item.transaction?.source === "photo_finance" && <div className="photo-finance-timeline-actions">
               <button onClick={() => onEditTransaction(item.transaction!)} type="button">Sửa</button>
               <button onClick={() => onDeleteTransaction(item.transaction!)} type="button">Xóa giao dịch</button>

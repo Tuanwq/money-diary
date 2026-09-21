@@ -1,9 +1,10 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import type { AccountTransaction, FinancialAccount } from "../../account-ledger/accountLedgerModel.ts";
 import type { DailyEntry, ExpenseEntry } from "../../../types.ts";
 import { usePhotoFinance } from "../hooks/usePhotoFinance.ts";
+import { usePhotoThumbnails } from "../hooks/usePhotoThumbnails.ts";
 import { buildDailyFinancialSummaries, getDailyFinancialSummary,
-  groupPhotoAttachmentsByDay } from "../services/photoFinanceModel.ts";
+  groupPhotoAttachmentsByDay, getCalendarDates, getCalendarPhotoStack, vietnamFinancialDate } from "../services/photoFinanceModel.ts";
 import { deleteAccountTransactionWithPhotos } from "../services/photoTransactionService.ts";
 import type { PhotoAttachment } from "../types/photoFinance.ts";
 import { DayStory } from "./DayStory.tsx";
@@ -20,9 +21,11 @@ export function PhotoFinanceExperience({ accounts, entries, expenses, ownerId,
   transactions: AccountTransaction[];
 }) {
   const photos = usePhotoFinance(ownerId);
+  const [month, setMonth] = useState(() => vietnamFinancialDate(new Date()).slice(0, 7));
   const [storyDate, setStoryDate] = useState<string | null>(null);
   const [captureDate, setCaptureDate] = useState<string | undefined>();
   const [captureOpen, setCaptureOpen] = useState(false);
+  const captureVisible = useRef(false);
   const [editing, setEditing] = useState<AccountTransaction | undefined>();
   const [formKey, setFormKey] = useState(0);
   const [actionError, setActionError] = useState("");
@@ -30,22 +33,30 @@ export function PhotoFinanceExperience({ accounts, entries, expenses, ownerId,
     [entries, expenses, transactions]);
   const attachmentsByDay = useMemo(() => groupPhotoAttachmentsByDay(
     photos.attachments, transactions), [photos.attachments, transactions]);
+  const visiblePhotos = useMemo(() => getCalendarDates(month).flatMap(({ date }) =>
+    getCalendarPhotoStack(attachmentsByDay.get(date) ?? []).visible), [month, attachmentsByDay]);
+  const thumbnails = usePhotoThumbnails(visiblePhotos, photos.repository);
   const dayHasPhotos = useCallback((date: string) =>
     (attachmentsByDay.get(date)?.length ?? 0) > 0, [attachmentsByDay]);
 
   function openCapture(date: string, transaction?: AccountTransaction) {
+    captureVisible.current = true;
     setCaptureDate(date);
     setEditing(transaction);
     setCaptureOpen(true);
     setActionError("");
   }
-  const closeCapture = useCallback(() => setCaptureOpen(false), []);
-  async function photoSaved(transactionId: string) {
-    await photos.refresh();
+  const closeCapture = useCallback(() => {
+    captureVisible.current = false;
+    setCaptureOpen(false);
+  }, []);
+  function photoSaved(_transactionId: string, savedDate: string, attachment?: PhotoAttachment) {
+    if (attachment) photos.acceptAttachment(attachment);
+    const showStory = captureVisible.current;
+    captureVisible.current = false;
     setCaptureOpen(false);
     setFormKey((value) => value + 1);
-    const savedDate = transactions.find((transaction) => transaction.id === transactionId)?.date ?? captureDate;
-    if (savedDate) setStoryDate(savedDate);
+    if (savedDate && showStory) setStoryDate(savedDate);
   }
   async function deletePhoto(attachment: PhotoAttachment) {
     if (!ownerId || !window.confirm("Xóa ảnh này? Giao dịch và số tiền vẫn được giữ.")) return;
@@ -71,15 +82,19 @@ export function PhotoFinanceExperience({ accounts, entries, expenses, ownerId,
 
   return <div className="photo-finance-experience">
     <PhotoFinanceCalendar attachmentsByDay={attachmentsByDay} days={summaries}
+      month={month} onMonthChange={setMonth}
       onCapture={(date) => openCapture(date)} onSelectDay={setStoryDate}
-      thumbnailUrls={photos.thumbnailUrls} />
+      thumbnailUrls={thumbnails.urls} />
     {photos.status === "loading" && <p className="photo-finance-status" role="status">Đang tải ảnh riêng tư...</p>}
     {photos.status === "needs-login" && <p className="photo-finance-status" role="status">
       Để lưu ảnh riêng tư cùng tài khoản, hãy đăng nhập và bật đồng bộ Supabase cho môi trường local.</p>}
-    {(photos.error || actionError) && <p className="photo-finance-error" role="alert">
-      {actionError || photos.error} <button onClick={() => void photos.refresh()} type="button">Thử lại</button></p>}
+    {(photos.error || actionError || thumbnails.error) && <p className="photo-finance-error" role="alert">
+      {actionError || photos.error || thumbnails.error} <button onClick={() => {
+        thumbnails.retry();
+        void photos.refresh();
+      }} type="button">Thử lại</button></p>}
     <DayStory accounts={accounts} attachments={storyDate ? attachmentsByDay.get(storyDate) ?? [] : []}
-      date={storyDate ?? ""} entries={entries} expenses={expenses} isOpen={Boolean(storyDate)}
+      date={storyDate ?? ""} entries={entries} expenses={expenses} isOpen={Boolean(storyDate) && !captureOpen}
       onAddPhoto={(transaction) => openCapture(transaction.date, transaction)}
       onClose={() => setStoryDate(null)} onDeletePhoto={(attachment) => void deletePhoto(attachment)}
       onDeleteTransaction={(transaction) => void deleteTransaction(transaction)}
@@ -90,7 +105,7 @@ export function PhotoFinanceExperience({ accounts, entries, expenses, ownerId,
     <PhotoCaptureSheet accounts={accounts} existing={editing} formKey={formKey}
       initialDate={captureDate} isOpen={captureOpen} ownerId={ownerId}
       repository={photos.repository} dayHasPhotos={dayHasPhotos}
-      onClose={closeCapture} onSaved={(id) => void photoSaved(id)}
+      onClose={closeCapture} onSaved={photoSaved}
       onStartNew={() => { setEditing(undefined); setFormKey((value) => value + 1); }}
       onSaveTransaction={onSaveTransaction} />
   </div>;

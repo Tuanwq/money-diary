@@ -9,7 +9,7 @@ export function CalendarPhotoStack({ attachments, thumbnailUrls }: {
   return <span className="photo-finance-stack" aria-label={`${attachments.length} ảnh trong ngày`}>
     {visible.map((attachment, index) => thumbnailUrls[attachment.id]
       ? <img alt="" className={`photo-finance-stack-image is-${index}`} key={attachment.id}
-        loading="lazy" src={thumbnailUrls[attachment.id]} />
+        loading="lazy" decoding="async" src={thumbnailUrls[attachment.id]} />
       : <span className={`photo-finance-stack-image is-${index} is-unavailable`} key={attachment.id} />)}
     {extraCount > 0 && <span className="photo-finance-stack-extra">+{extraCount}</span>}
   </span>;

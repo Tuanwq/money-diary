@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ArrowDownLeft, ArrowUpRight, ArrowLeftRight, CalendarDays, Camera, Check, ChevronDown,
   Image as ImageIcon, Pencil, RotateCcw, WalletCards, X } from "lucide-react";
 import type { AccountTransaction, AccountTransactionType, FinancialAccount } from "../../account-ledger/accountLedgerModel.ts";
@@ -7,6 +7,7 @@ import { getDefaultTransactionPurpose, TRANSACTION_CATEGORIES,
 import { formatMoneyInput, parseMoneyInput } from "../../../utils/money.ts";
 import { vietnamFinancialDate, vietnamFinancialTime } from "../services/photoFinanceModel.ts";
 import { buildPhotoTransaction } from "../services/photoTransactionDraft.ts";
+import type { PhotoAttachment } from "../types/photoFinance.ts";
 import type { createPhotoAttachmentRepository } from "../services/photoAttachmentRepository.ts";
 import { photoBlobDataUrl, processPhoto, type ProcessedPhoto } from "../services/photoImageProcessor.ts";
 
@@ -20,7 +21,7 @@ export function PhotoTransactionForm({ accounts, existing, initialDate, ownerId,
   ownerId?: string;
   repository: Repository;
   dayHasPhotos: (date: string) => boolean;
-  onSaved: (transactionId: string) => void;
+  onSaved: (transactionId: string, date: string, attachment?: PhotoAttachment) => void;
   onSaveTransaction: (transaction: AccountTransaction) => void;
   onStartNew: () => void;
 }) {
@@ -47,6 +48,8 @@ export function PhotoTransactionForm({ accounts, existing, initialDate, ownerId,
   const [error, setError] = useState("");
   const lockRef = useRef(false);
   const photoSelectionRef = useRef(0);
+  const processingRef = useRef<AbortController | null>(null);
+  useEffect(() => () => { processingRef.current?.abort(); }, []);
   const attachmentIdRef = useRef<string | null>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const libraryInputRef = useRef<HTMLInputElement>(null);
@@ -56,20 +59,23 @@ export function PhotoTransactionForm({ accounts, existing, initialDate, ownerId,
 
   async function chooseFile(next: File | undefined) {
     if (!next) return;
+    processingRef.current?.abort();
+    const controller = new AbortController();
+    processingRef.current = controller;
     const selection = photoSelectionRef.current + 1;
     photoSelectionRef.current = selection;
     setError("");
     setPreparingPhoto(true);
     try {
-      const processed = await processPhoto(next);
+      const processed = await processPhoto(next, controller.signal);
       const previewUrl = await photoBlobDataUrl(processed.display);
-      if (photoSelectionRef.current === selection)
+      if (!controller.signal.aborted && photoSelectionRef.current === selection)
         setSelectedPhoto({ file: next, previewUrl, processed });
     } catch (cause) {
-      if (photoSelectionRef.current === selection)
+      if (!controller.signal.aborted && photoSelectionRef.current === selection)
         setError(cause instanceof Error ? cause.message : "Không đọc được ảnh đã chọn.");
     } finally {
-      if (photoSelectionRef.current === selection) setPreparingPhoto(false);
+      if (!controller.signal.aborted && photoSelectionRef.current === selection) setPreparingPhoto(false);
     }
   }
 
@@ -108,12 +114,13 @@ export function PhotoTransactionForm({ accounts, existing, initialDate, ownerId,
         onSaveTransaction(transaction);
         setSavedId(transactionId);
       }
+      let attachment: PhotoAttachment | undefined;
       if (file) {
         attachmentIdRef.current ??= crypto.randomUUID();
-        await repository.upload(ownerId, transactionId, file, !dayHasPhotos(date),
+        attachment = await repository.upload(ownerId, transactionId, file, !dayHasPhotos(date),
           attachmentIdRef.current, selectedPhoto?.processed);
       }
-      onSaved(transactionId);
+      onSaved(transactionId, date, attachment);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Không lưu được khoảnh khắc.");
     } finally { lockRef.current = false; setWorking(false); }
@@ -162,10 +169,10 @@ export function PhotoTransactionForm({ accounts, existing, initialDate, ownerId,
             <ImageIcon size={17} /> <span>Thư viện</span>
           </button>
         </div>
-        <label className="photo-finance-amount">
+        <label className={`photo-finance-amount${kind === "expense" ? " is-expense" : ""}${amount.length > 8 ? " is-long" : ""}`}>
           <span className="sr-only">Số tiền</span>
           <input aria-label="Số tiền" disabled={!canEdit} inputMode="numeric"
-            onChange={(event) => setAmount(event.target.value)} placeholder="0" required value={amount} />
+            onChange={(event) => setAmount(formatMoneyInput(event.target.value))} placeholder="0" required value={amount} />
           <b>đ</b>
         </label>
         <label className="photo-finance-note">

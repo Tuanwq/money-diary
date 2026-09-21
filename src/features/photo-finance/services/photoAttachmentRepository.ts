@@ -4,6 +4,7 @@ import { PHOTO_FINANCE_BUCKET, PHOTO_FINANCE_SOURCE_TYPE,
   type PhotoAttachment } from "../types/photoFinance.ts";
 import { processPhoto, type ProcessedPhoto } from "./photoImageProcessor.ts";
 import { photoFinanceErrorMessage, retryPhotoOperation } from "./photoFinanceErrors.ts";
+import { createSignedPhotoCache } from "./signedPhotoCache.ts";
 
 type AttachmentRow = {
   id: string; owner_id: string; source_type: string; source_id: string;
@@ -33,22 +34,40 @@ async function unwrap<T>(operation: () => PromiseLike<{ data: T; error: unknown 
 }
 
 export function createPhotoAttachmentRepository(client: SupabaseClient = supabase) {
+  let readyOwner = "";
+  let readyUntil = 0;
+  const images = createSignedPhotoCache(async (paths) => {
+    const { data, error } = await client.storage.from(PHOTO_FINANCE_BUCKET)
+      .createSignedUrls(paths, 3600);
+    if (error) throw new Error(photoFinanceErrorMessage(error, "Không tải được ảnh riêng tư."));
+    const urls = new Map<string, string>();
+    for (const item of data ?? []) if (item.path && item.signedUrl) urls.set(item.path, item.signedUrl);
+    return urls;
+  });
   return {
     async prepare(ownerId: string) {
       await requireOwner(client, ownerId);
+      if (readyOwner === ownerId && Date.now() < readyUntil) return;
       try {
         await unwrap(() => client.from("money_diary_financial_attachments")
           .select("id").eq("owner_id", ownerId).limit(1));
+        readyOwner = ownerId;
+        readyUntil = Date.now() + 5 * 60 * 1000;
       } catch (cause) { throw new Error(photoFinanceErrorMessage(cause), { cause }); }
     },
 
-    async list(ownerId: string): Promise<PhotoAttachment[]> {
+    async list(ownerId: string, signal?: AbortSignal): Promise<PhotoAttachment[]> {
       await requireOwner(client, ownerId);
       try {
-        const data = await unwrap(() => client.from("money_diary_financial_attachments")
+        const data = await unwrap(() => {
+          const query = client.from("money_diary_financial_attachments")
           .select("id,owner_id,source_type,source_id,storage_path,thumbnail_path,is_cover,width,height,created_at")
           .eq("owner_id", ownerId).is("deleted_at", null)
-          .order("created_at", { ascending: false }));
+          .order("created_at", { ascending: false });
+          return signal ? query.abortSignal(signal) : query;
+        });
+        readyOwner = ownerId;
+        readyUntil = Date.now() + 5 * 60 * 1000;
         return ((data ?? []) as AttachmentRow[]).map(fromRow);
       } catch (cause) {
         throw new Error(photoFinanceErrorMessage(cause, "Không tải được danh sách ảnh."), { cause });
@@ -56,21 +75,13 @@ export function createPhotoAttachmentRepository(client: SupabaseClient = supabas
     },
 
     async signedImage(path: string) {
-      const { data, error } = await client.storage.from(PHOTO_FINANCE_BUCKET)
-        .createSignedUrl(path, 3600);
-      if (error || !data?.signedUrl) throw error ?? new Error("Không tải được ảnh riêng tư.");
-      return data.signedUrl;
+      const url = (await images.get([path])).get(path);
+      if (!url) throw new Error("Không tải được ảnh riêng tư.");
+      return url;
     },
 
-    async signedImages(paths: string[]) {
-      if (paths.length === 0) return new Map<string, string>();
-      const { data, error } = await client.storage.from(PHOTO_FINANCE_BUCKET)
-        .createSignedUrls(paths, 3600);
-      if (error) throw new Error(photoFinanceErrorMessage(error, "Không tải được ảnh riêng tư."));
-      const urls = new Map<string, string>();
-      for (const item of data ?? []) if (item.path && item.signedUrl) urls.set(item.path, item.signedUrl);
-      return urls;
-    },
+    signedImages: images.get,
+    invalidateImage: images.invalidate,
 
     async upload(ownerId: string, transactionId: string, file: File, isCover: boolean,
       attachmentId?: string, preparedImage?: ProcessedPhoto): Promise<PhotoAttachment> {
@@ -96,9 +107,12 @@ export function createPhotoAttachmentRepository(client: SupabaseClient = supabas
           .select("id,owner_id,source_type,source_id,storage_path,thumbnail_path,is_cover,width,height,created_at")
           .single());
         if (!data) throw new Error("Không liên kết được ảnh.");
+        images.invalidate(storagePath);
+        images.invalidate(thumbnailPath);
         return fromRow(data as AttachmentRow);
       } catch (error) {
-        try { await storage.remove([storagePath, thumbnailPath]); } catch { /* Retried on the next cleanup pass. */ }
+        // A timeout can follow a successful metadata commit. Preserve these files;
+        // retrying with the same attachment ID safely reuses the same paths.
         throw new Error(photoFinanceErrorMessage(error), { cause: error });
       }
     },

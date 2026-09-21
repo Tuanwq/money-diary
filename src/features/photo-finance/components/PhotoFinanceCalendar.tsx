@@ -9,16 +9,17 @@ import { CalendarViewToggle } from "./CalendarViewToggle.tsx";
 const VIEW_KEY = "money-diary-photo-finance-calendar-view";
 const WEEKDAYS = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
 
-export function PhotoFinanceCalendar({ attachmentsByDay, days, onCapture,
+export function PhotoFinanceCalendar({ attachmentsByDay, days, onCapture, month, onMonthChange,
   onSelectDay, thumbnailUrls }: {
   attachmentsByDay: Map<string, PhotoAttachment[]>;
+  month: string;
+  onMonthChange: (month: string) => void;
   days: Map<string, DailyFinancialSummary>;
   onCapture: (date: string) => void;
   onSelectDay: (date: string) => void;
   thumbnailUrls: Record<string, string>;
 }) {
   const today = vietnamFinancialDate(new Date());
-  const [month, setMonth] = useState(today.slice(0, 7));
   const [view, setView] = useState<CalendarView>(() => {
     try { return localStorage.getItem(VIEW_KEY) === "net" ? "net" : "moments"; }
     catch { return "moments"; }
@@ -29,7 +30,7 @@ export function PhotoFinanceCalendar({ attachmentsByDay, days, onCapture,
 
   function shiftMonth(delta: number) {
     const [year, monthNumber] = month.split("-").map(Number);
-    setMonth(new Date(Date.UTC(year, monthNumber - 1 + delta, 1)).toISOString().slice(0, 7));
+    onMonthChange(new Date(Date.UTC(year, monthNumber - 1 + delta, 1)).toISOString().slice(0, 7));
   }
   function chooseView(next: CalendarView) {
     setView(next);

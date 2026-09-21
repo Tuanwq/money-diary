@@ -1,9 +1,10 @@
-import { useEffect } from "react";
+import { usePhotoDialog } from "../hooks/usePhotoDialog.ts";
 import { createPortal } from "react-dom";
 import { Camera, X } from "lucide-react";
 import type { AccountTransaction, FinancialAccount } from "../../account-ledger/accountLedgerModel.ts";
 import type { createPhotoAttachmentRepository } from "../services/photoAttachmentRepository.ts";
 import { PhotoTransactionForm } from "./PhotoTransactionForm.tsx";
+import type { PhotoAttachment } from "../types/photoFinance.ts";
 
 export function PhotoCaptureSheet({ accounts, existing, initialDate, isOpen, ownerId,
   repository, dayHasPhotos, onClose, onSaved, onSaveTransaction, onStartNew, formKey }: {
@@ -11,19 +12,12 @@ export function PhotoCaptureSheet({ accounts, existing, initialDate, isOpen, own
   initialDate?: string; isOpen: boolean; ownerId?: string;
   repository: ReturnType<typeof createPhotoAttachmentRepository>;
   dayHasPhotos: (date: string) => boolean;
-  onClose: () => void; onSaved: (transactionId: string) => void;
+  onClose: () => void; onSaved: (transactionId: string, date: string, attachment?: PhotoAttachment) => void;
   onSaveTransaction: (transaction: AccountTransaction) => void;
   onStartNew: () => void;
   formKey: number;
 }) {
-  useEffect(() => {
-    if (!isOpen) return;
-    const previous = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") onClose(); };
-    document.addEventListener("keydown", onKey);
-    return () => { document.body.style.overflow = previous; document.removeEventListener("keydown", onKey); };
-  }, [isOpen, onClose]);
+  usePhotoDialog(isOpen, onClose);
   return createPortal(<div className="photo-finance-backdrop" role="presentation"
     style={isOpen ? undefined : { display: "none" }}
     onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>

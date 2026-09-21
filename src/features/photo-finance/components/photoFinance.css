@@ -137,6 +137,7 @@
 .photo-finance-compose-tools button { display: inline-flex; align-items: center; gap: 6px; min-height: 38px; border-radius: 999px; padding: 0 12px; color: white; background: rgb(16 13 14 / 68%); backdrop-filter: blur(10px); font-size: 12px; }
 .photo-finance-amount { position: absolute; z-index: 2; left: 22px; right: 22px; bottom: 82px; display: flex; align-items: baseline; justify-content: center; gap: 7px; }
 .photo-finance-amount input { width: min(74%, 330px); border: 0; outline: 0; color: white; background: transparent; font-size: clamp(35px, 10vw, 58px); font-weight: 650; text-align: center; }
+.photo-finance-amount.is-long input { width: min(calc(100% - 32px), 420px); min-width: 0; font-size: clamp(24px, 7vw, 42px); }
 .photo-finance-amount input::placeholder { color: rgb(255 255 255 / 52%); }
 .photo-finance-amount b { color: #ded6d8; font-size: 22px; }
 .photo-finance-note { position: absolute; z-index: 2; left: 22px; right: 22px; bottom: 20px; display: flex; align-items: center; gap: 10px; min-height: 47px; border-radius: 17px; padding: 0 14px; color: #ded4d7; background: rgb(255 255 255 / 12%); backdrop-filter: blur(14px); }
@@ -150,6 +151,12 @@
 .photo-finance-transfer select { min-width: 0; flex: 1; min-height: 44px; border-radius: 16px; padding: 8px 12px; background: var(--pf-capture-panel); color: var(--pf-capture-text); }
 .photo-finance-transfer small { font-size: 11px; line-height: 1.4; }
 .photo-finance-kind button.is-active { color: #132318; background: var(--pf-capture-accent); }
+.photo-finance-kind button:first-child.is-active { color: #351015; background: #f2949b; }
+.photo-finance-amount.is-expense input,
+.photo-finance-amount.is-expense b { color: #ff9ba3; }
+.photo-finance-story .photo-finance-outflow { color: #b32d3b; }
+.photo-finance-slide-overlay .photo-finance-outflow { color: #ffb0b7; }
+.dark .photo-finance-story .photo-finance-outflow { color: #ff9ba3; }
 .photo-finance-purpose { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; width: min(100%, 330px); margin: -3px auto 0; }
 .photo-finance-purpose button { min-height: 34px; border: 1px solid var(--pf-capture-panel-soft); border-radius: 999px; color: var(--pf-capture-muted); font-size: 11px; font-weight: 700; }
 .photo-finance-purpose button.is-active { border-color: color-mix(in srgb, var(--pf-capture-accent) 55%, transparent); color: var(--pf-capture-accent); background: #17231b; }

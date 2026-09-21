@@ -1,5 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { buildPhotoTransaction } from "../src/features/photo-finance/services/photoTransactionDraft.ts";
+import { calculateAccountBalance, getLedgerSummary } from "../src/features/account-ledger/accountLedgerModel.ts";
+import { createPhotoDialogLock } from "../src/features/photo-finance/services/photoDialogLock.ts";
+import { createSignedPhotoCache } from "../src/features/photo-finance/services/signedPhotoCache.ts";
+import { formatMoneyInput, parseMoneyInput } from "../src/utils/money.ts";
+import { processPhoto } from "../src/features/photo-finance/services/photoImageProcessor.ts";
 import {
   buildDailyFinancialSummaries, formatCalendarNet, getCalendarDates,
   getCalendarPhotoStack, getDailyFinancialSummary, groupPhotoAttachmentsByDay,
@@ -64,4 +70,129 @@ test("photo persistence errors are actionable and do not expose raw Supabase mes
   assert.match(photoFinanceErrorMessage({ code: "PGRST205", message: "schema cache" }), /migration Photo Finance/);
   assert.match(photoFinanceErrorMessage(new Error("The connection to the database timed out")), /Supabase quá chậm/);
   assert.match(photoFinanceErrorMessage({ statusCode: 403, message: "Unauthorized" }), /đăng nhập lại/);
+});
+
+const accounts = [
+  { id: "driver", name: "Driver", type: "e_wallet", openingBalance: 500_000 },
+  { id: "bank", name: "BIDV", type: "bank", openingBalance: 200_000 },
+];
+const draft = { id: "photo-transfer", accounts, type: "transfer", amount: 300_000,
+  accountId: "driver", toAccountId: "bank", category: "Chuyển nội bộ", purpose: "internal_transfer",
+  date, time: "18:21", note: "Settlement", now: "2026-09-16T11:21:00Z" };
+
+test("photo transfer moves both balances once without changing assets or daily income/expense", () => {
+  const transaction = buildPhotoTransaction(draft);
+  assert.equal(transaction.source, "photo_finance");
+  assert.equal(calculateAccountBalance(accounts[0], [transaction]), 200_000);
+  assert.equal(calculateAccountBalance(accounts[1], [transaction]), 500_000);
+  assert.deepEqual(getLedgerSummary(accounts, [transaction], "2026-09"), {
+    totalBalance: 700_000, income: 0, expense: 0, transfer: 300_000,
+  });
+  assert.equal(getDailyFinancialSummary(buildDailyFinancialSummaries([], [], [transaction]), date).net, 0);
+  const edited = buildPhotoTransaction({ ...draft, existing: transaction, amount: 100_000 });
+  assert.equal(edited.id, transaction.id);
+  assert.equal(edited.type, "transfer");
+  assert.equal(getLedgerSummary(accounts, [edited], "2026-09").totalBalance, 700_000);
+  const income = buildPhotoTransaction({ ...draft, existing: transaction, type: "income", category: "Thu nhập" });
+  assert.equal(income.toAccountId, undefined);
+  assert.equal(income.purpose, "income");
+});
+
+test("photo transfer rejects missing, identical or archived destination and invalid amounts", () => {
+  for (const toAccountId of [undefined, "", "driver", "missing"]) {
+    assert.throws(() => buildPhotoTransaction({ ...draft, toAccountId }));
+  }
+  assert.throws(() => buildPhotoTransaction({ ...draft,
+    accounts: [accounts[0], { ...accounts[1], archivedAt: "2026-09-16" }] }));
+  for (const amount of [0, -1, NaN, Infinity, 0.5]) {
+    assert.throws(() => buildPhotoTransaction({ ...draft, amount }));
+  }
+});
+
+test("nested photo dialogs release scrolling in either close order and tolerate repeated cleanup", () => {
+  for (const reverse of [false, true]) {
+    const lock = createPhotoDialogLock();
+    const style = { overflow: "auto" };
+    const story = lock(style);
+    const camera = lock(style);
+    assert.equal(story.isTop(), false);
+    assert.equal(camera.isTop(), true);
+    const first = reverse ? camera : story;
+    const last = reverse ? story : camera;
+    first.release();
+    assert.equal(style.overflow, "hidden");
+    assert.equal(last.isTop(), true);
+    last.release();
+    last.release();
+    assert.equal(style.overflow, "auto");
+  }
+});
+
+test("signed photo URLs share in-flight requests, cache until expiry and retry failures", async () => {
+  let now = 0;
+  const calls = [];
+  const cache = createSignedPhotoCache(async (paths) => {
+    calls.push(paths);
+    return new Map(paths.map((path) => [path, `signed:${path}:${calls.length}`]));
+  }, () => now);
+  const [first, second] = await Promise.all([cache.get(["owner/a", "owner/a"]), cache.get(["owner/a"])]);
+  assert.equal(first.get("owner/a"), second.get("owner/a"));
+  assert.equal(calls.length, 1);
+  await cache.get(["owner/a", "owner/b"]);
+  assert.deepEqual(calls[1], ["owner/b"]);
+  cache.invalidate("owner/a");
+  await cache.get(["owner/a"]);
+  assert.equal(calls.length, 3);
+  now = 51 * 60 * 1000;
+  await cache.get(["owner/a"]);
+  assert.equal(calls.length, 4);
+  await cache.get(["another-owner/a"]);
+  assert.equal(calls.length, 5);
+  let fail = true;
+  const retry = createSignedPhotoCache(async () => {
+    if (fail) throw new Error("offline");
+    return new Map([["a", "ok"]]);
+  });
+  await assert.rejects(retry.get(["a", "b"]));
+  fail = false;
+  assert.equal((await retry.get(["a"])).get("a"), "ok");
+});
+
+test("money input groups thousands and round-trips paste/backspace values", () => {
+  assert.equal(formatMoneyInput("7000000"), "7.000.000");
+  assert.equal(formatMoneyInput("7.000.000 đ"), "7.000.000");
+  assert.equal(parseMoneyInput(formatMoneyInput("7000000")), 7_000_000);
+  assert.equal(formatMoneyInput("7.000.00"), "700.000");
+  assert.equal(formatMoneyInput(""), "");
+});
+
+test("photo processing terminates its worker on success and on abandoned selections", async () => {
+  const originalWorker = globalThis.Worker;
+  const originalCanvas = globalThis.OffscreenCanvas;
+  const workers = [];
+  class ImageWorker {
+    constructor() { workers.push(this); }
+    postMessage() {}
+    terminate() { this.terminated = true; }
+  }
+  globalThis.Worker = ImageWorker;
+  globalThis.OffscreenCanvas = class {};
+  try {
+    const file = new File(["test"], "test.jpg", { type: "image/jpeg" });
+    const controller = new AbortController();
+    const cancelled = processPhoto(file, controller.signal);
+    controller.abort();
+    await assert.rejects(cancelled, { name: "AbortError" });
+    assert.equal(workers[0].terminated, true);
+    const completed = processPhoto(file);
+    const result = { display: new Blob(), thumbnail: new Blob(), width: 1600, height: 900 };
+    workers[1].onmessage({ data: { result } });
+    assert.equal(await completed, result);
+    assert.equal(workers[1].terminated, true);
+  } finally {
+    if (originalWorker === undefined) delete globalThis.Worker;
+    else globalThis.Worker = originalWorker;
+    if (originalCanvas === undefined) delete globalThis.OffscreenCanvas;
+    else globalThis.OffscreenCanvas = originalCanvas;
+  }
 });

@@ -23,7 +23,10 @@ function PrivatePhoto({ attachment, repository }: { attachment: PhotoAttachment;
   }, [attachment.storagePath, repository, attempt]);
   if (error) return <div className="photo-finance-image-error"><p>{error}</p>
     <button onClick={() => setAttempt((value) => value + 1)} type="button">Thử lại</button></div>;
-  return url ? <img alt="Khoảnh khắc tài chính" onError={() => setError("Ảnh đã hết hạn. Hãy thử lại.")}
+  return url ? <img alt="Khoảnh khắc tài chính" decoding="async" onError={() => {
+    repository.invalidateImage(attachment.storagePath);
+    setError("Ảnh chưa tải được. Hãy thử lại.");
+  }}
     src={url} /> : <div className="photo-finance-image-loading">Đang tải ảnh...</div>;
 }
 
@@ -58,13 +61,15 @@ export function DayStoryCarousel({ accounts, attachments, onAddPhoto,
       const target = event.currentTarget;
       setIndex(Math.round(target.scrollLeft / Math.max(target.clientWidth, 1)));
     }} ref={trackRef}>
-      {attachments.map((attachment) => {
+      {attachments.map((attachment, photoIndex) => {
         const transaction = byId.get(attachment.sourceId);
         return <article className="photo-finance-slide" key={attachment.id}>
-          <PrivatePhoto attachment={attachment} repository={repository} />
+          {Math.abs(photoIndex - safeIndex) <= 1
+            ? <PrivatePhoto attachment={attachment} repository={repository} />
+            : <div className="photo-finance-image-loading" aria-hidden="true" />}
           {transaction && <div className="photo-finance-slide-overlay">
             <span>{transaction.type === "transfer" ? "Chuyển nội bộ" : transaction.type === "expense" ? "Chi tiêu" : "Thu nhập"}</span>
-            <strong>{transaction.type === "transfer" ? "↔ " : transaction.type === "income" ? "+" : "−"}{formatMoney(transaction.amount)}</strong>
+            <strong className={transaction.type === "expense" ? "photo-finance-outflow" : undefined}>{transaction.type === "transfer" ? "↔ " : transaction.type === "income" ? "+" : "−"}{formatMoney(transaction.amount)}</strong>
             <p>{transaction.category} · {accountNames.get(transaction.accountId) ?? "Tài khoản đã xóa"}
               {transaction.type === "transfer" && ` → ${accountNames.get(transaction.toAccountId ?? "") ?? "Tài khoản đã xóa"}`}</p>
             <p>{transaction.occurredAt ? new Intl.DateTimeFormat("vi-VN", { timeZone: "Asia/Ho_Chi_Minh",
