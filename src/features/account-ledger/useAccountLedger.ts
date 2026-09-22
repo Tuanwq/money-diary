@@ -4,6 +4,7 @@ import { safeSetStorageJson } from "../../utils/safeStorage";
 import type { ExpenseBudget } from "../../types.ts";
 import { applyJarCommand, type JarCommand } from "../spending-jars/services/jarService.ts";
 import { getAccountAllocation, migrateExpenseBudgets } from "../spending-jars/domain/jarModel.ts";
+import { reconcileJarLedger } from "./reconcileJarLedger.ts";
 import {
   ACCOUNT_LEDGER_STORAGE_KEY,
   createDefaultLedger,
@@ -94,16 +95,20 @@ export function useAccountLedger(userId?: string, legacyBudgets: ExpenseBudget[]
           }
         : null;
       const localLedger = latestLedgerRef.current;
+      const recoveredLedger = schemaAvailable && cloudLedger
+        ? reconcileJarLedger(localLedger, cloudLedger) : cloudLedger;
+      const hasRecoveredJars = recoveredLedger !== cloudLedger;
       const shouldUseCloud =
         cloudLedger &&
+        !hasRecoveredJars &&
         (schemaAvailable || (localLedger.jars.length === 0 && localLedger.jarActivities.length === 0)) &&
         new Date(cloudLedger.updatedAt).getTime() >
           new Date(localLedger.updatedAt).getTime();
-      const nextLedger = shouldUseCloud ? cloudLedger : localLedger;
+      const nextLedger = hasRecoveredJars ? recoveredLedger! : shouldUseCloud ? cloudLedger : localLedger;
 
-      if (shouldUseCloud) {
-        latestLedgerRef.current = cloudLedger;
-        setLedger(cloudLedger);
+      if (nextLedger !== localLedger) {
+        latestLedgerRef.current = nextLedger;
+        setLedger(nextLedger);
       }
 
       if (!schemaAvailable) {
