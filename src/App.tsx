@@ -696,11 +696,12 @@ export default function App() {
     jarActivities,
     replaceLedger,
     retrySync: retryAccountLedgerSync,
+    useCloudVersion: useCloudAccountLedger,
     saveAccount,
     saveTransaction: saveAccountTransaction,
     transactions: accountTransactions,
   } = useAccountLedger(cloudDataUserId, goals.expenseBudgets);
-  const accountAwareSyncStatus = /migration|chưa thể|lỗi/i.test(accountLedgerCloudStatus)
+  const accountAwareSyncStatus = /migration|chưa thể|lỗi|xung đột/i.test(accountLedgerCloudStatus)
     ? `Chưa thể đồng bộ Sổ tài khoản: ${accountLedgerCloudStatus}`
     : /đang tải|đang lưu/i.test(accountLedgerCloudStatus)
       ? accountLedgerCloudStatus
@@ -3516,6 +3517,7 @@ if (route.kind === "daymark") {
               onBack={() => navigateTo("home")}
               onCommand={dispatchJar}
               onRetrySync={retryAccountLedgerSync}
+              onUseCloudVersion={useCloudAccountLedger}
               onDeleteSpend={async (activity) => {
                 const firstId = activity.transactionIds?.[0];
                 if (firstId) await deleteAccountTransactionWithPhotos(firstId,

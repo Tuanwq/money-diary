@@ -4,7 +4,8 @@ import {
   createDefaultLedger,
   getLedgerSummary,
 } from "../src/features/account-ledger/accountLedgerModel.ts";
-import { isPristineLedger, reconcileJarLedger } from "../src/features/account-ledger/reconcileJarLedger.ts";
+import { decideLedgerLoad, hasLocalOnlyRecords, isPristineLedger, nextLedgerTimestamp } from
+  "../src/features/account-ledger/ledgerSync.ts";
 
 const accountA = {
   createdAt: "2026-07-01T00:00:00.000Z",
@@ -73,18 +74,19 @@ const newerCloudLedger = {
   transactions: [{ ...baseTransaction, id: "cloud-income", amount: 200 }],
   jars: [], jarActivities: [], updatedAt: "2026-09-22T00:00:00Z",
 };
-const recovered = reconcileJarLedger(localJarLedger, newerCloudLedger, "2026-09-23T00:00:00Z");
-assert.equal(recovered.accounts.find((item) => item.id === accountA.id).name, "Tiền mặt mới");
-assert.equal(recovered.accounts.length, 2);
-assert.deepEqual(recovered.transactions.map((item) => item.id), ["cloud-income", "jar-spend:one:0"]);
-assert.deepEqual(recovered.jars, localJarLedger.jars);
-assert.deepEqual(recovered.jarActivities, localJarLedger.jarActivities);
-assert.equal(recovered.updatedAt, "2026-09-23T00:00:00Z");
-assert.equal(reconcileJarLedger({ ...localJarLedger, jars: [], jarActivities: [] }, newerCloudLedger), newerCloudLedger);
 const pristineLedger = createDefaultLedger();
 assert.equal(isPristineLedger(pristineLedger), true);
 assert.equal(isPristineLedger({ ...pristineLedger, accounts: [
   { ...pristineLedger.accounts[0], openingBalance: 100 }, ...pristineLedger.accounts.slice(1),
 ] }), false);
 assert.equal(isPristineLedger({ ...pristineLedger, transactions: [baseTransaction] }), false);
+const staleIosLedger = { ...localJarLedger, updatedAt: "2026-09-23T10:00:00Z" };
+const deletedOnCloud = { ...newerCloudLedger, updatedAt: "2026-09-23T09:00:00Z" };
+assert.equal(decideLedgerLoad(staleIosLedger, deletedOnCloud, undefined), "cloud");
+assert.equal(hasLocalOnlyRecords(staleIosLedger, deletedOnCloud), true);
+assert.equal(decideLedgerLoad(staleIosLedger, deletedOnCloud, "2026-09-22T00:00:00Z"), "conflict");
+assert.equal(decideLedgerLoad(staleIosLedger, deletedOnCloud, deletedOnCloud.updatedAt), "pending");
+assert.equal(decideLedgerLoad(pristineLedger, null, undefined), "empty");
+assert.equal(nextLedgerTimestamp("2026-09-23T09:00:00.000Z", Date.parse("2026-09-23T08:00:00.000Z")),
+  "2026-09-23T09:00:00.001Z");
 console.log("Account ledger tests passed.");

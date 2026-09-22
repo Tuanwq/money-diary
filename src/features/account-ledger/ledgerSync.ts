@@ -1,0 +1,31 @@
+import { createDefaultAccounts, type AccountLedgerData } from "./accountLedgerModel.ts";
+
+export type LedgerLoadDecision = "cloud" | "pending" | "conflict" | "empty" | "upload";
+
+export function isPristineLedger(ledger: AccountLedgerData) {
+  if (ledger.transactions.length || ledger.jars.length || ledger.jarActivities.length) return false;
+  const defaults = createDefaultAccounts(ledger.updatedAt);
+  return ledger.accounts.length === defaults.length && ledger.accounts.every((account, index) =>
+    account.id === defaults[index].id && account.name === defaults[index].name &&
+    account.type === defaults[index].type && account.openingBalance === 0 && !account.archivedAt);
+}
+
+export function nextLedgerTimestamp(previous: string, now = Date.now()) {
+  const previousTime = Date.parse(previous);
+  return new Date(Math.max(now, Number.isFinite(previousTime) ? previousTime + 1 : now)).toISOString();
+}
+
+export function decideLedgerLoad(local: AccountLedgerData, cloud: AccountLedgerData | null,
+  pendingBase: string | null | undefined): LedgerLoadDecision {
+  if (pendingBase !== undefined)
+    return pendingBase === (cloud?.updatedAt ?? null) ? "pending" : "conflict";
+  if (cloud) return "cloud";
+  return isPristineLedger(local) ? "empty" : "upload";
+}
+
+export function hasLocalOnlyRecords(local: AccountLedgerData, remote: AccountLedgerData) {
+  const remoteJarIds = new Set(remote.jars.map((item) => item.id));
+  const remoteTransactionIds = new Set(remote.transactions.map((item) => item.id));
+  return local.jars.some((item) => !remoteJarIds.has(item.id)) ||
+    local.transactions.some((item) => !remoteTransactionIds.has(item.id));
+}

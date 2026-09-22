@@ -19,9 +19,10 @@ function fieldsFrom(jar?: SpendingJar): JarForm {
     endDate: jar?.endDate ?? "", labels: jar?.linkedLabels.join(", ") ?? "" };
 }
 
-export function SpendingJarsPage({ ledger, cloudStatus, onBack, onCommand, onDeleteSpend, onRetrySync }: {
+export function SpendingJarsPage({ ledger, cloudStatus, onBack, onCommand, onDeleteSpend, onRetrySync, onUseCloudVersion }: {
   ledger: JarLedger; cloudStatus: string; onBack: () => void; onCommand: (command: JarCommand) => void;
   onDeleteSpend: (activity: JarActivity) => Promise<void>; onRetrySync: () => void;
+  onUseCloudVersion: () => void;
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editor, setEditor] = useState<"create" | "edit" | null>(null);
@@ -36,8 +37,8 @@ export function SpendingJarsPage({ ledger, cloudStatus, onBack, onCommand, onDel
   const [purpose, setPurpose] = useState<"daily_expense" | "goal_allocation">("daily_expense");
   const [editingActivity, setEditingActivity] = useState<JarActivity | null>(null);
   const [error, setError] = useState("");
-  const selected = ledger.jars.find((jar) => jar.id === selectedId) ?? null;
-  const views = ledger.jars.map((jar) => getJarView(ledger, jar));
+  const selected = ledger.jars.find((jar) => jar.id === selectedId && jar.status !== "deleted") ?? null;
+  const views = ledger.jars.filter((jar) => jar.status !== "deleted").map((jar) => getJarView(ledger, jar));
   const active = views.filter((view) => view.jar.status === "active");
   const allocated = active.reduce((sum, view) => sum + view.remainingAmount + view.spentAmount, 0);
   const spent = active.reduce((sum, view) => sum + view.spentAmount, 0);
@@ -103,9 +104,14 @@ export function SpendingJarsPage({ ledger, cloudStatus, onBack, onCommand, onDel
       <div><span>Money Diary</span><h1>{selected ? `${selected.icon} ${selected.name}` : "Hũ chi tiêu"}</h1></div>
       {!selected && <button className="jars-primary" onClick={() => { setJarForm(fieldsFrom()); setEditor("create"); setError(""); }} type="button"><Plus size={17} /> Tạo hũ</button>}
     </header>
-    {/migration|chưa thể|lỗi/i.test(cloudStatus) && <p className="jars-warning" role="status">
-      {cloudStatus}. Dữ liệu trên thiết bị chưa được đồng bộ. <button type="button" onClick={onRetrySync}>Thử đồng bộ lại</button>
-    </p>}
+    {/migration|chưa thể|lỗi|xung đột/i.test(cloudStatus) && <div className="jars-warning" role="status">
+      <p>{cloudStatus}. Dữ liệu trên thiết bị chưa được đồng bộ.</p>
+      <button type="button" onClick={onRetrySync}>Thử đồng bộ lại</button>
+      {/xung đột/i.test(cloudStatus) && <button type="button" onClick={() => {
+        try { onUseCloudVersion(); setError(""); }
+        catch (cause) { setError(cause instanceof Error ? cause.message : "Chưa thể tải bản cloud."); }
+      }}>Dùng bản cloud (giữ bản sao trên máy)</button>}
+    </div>}
     {error && <p className="jars-error" role="alert">{error}</p>}
     {!selected ? <>
       <section className="jars-summary" aria-label="Tổng quan các hũ">
@@ -134,31 +140,37 @@ export function SpendingJarsPage({ ledger, cloudStatus, onBack, onCommand, onDel
     </> : (() => {
       const view = getJarView(ledger, selected);
       return <>
-        <section className="jar-detail-summary"><div><span>Còn khả dụng</span><strong>{formatMoney(view.remainingAmount)}</strong></div>
-          <div><span>Hạn mức</span><strong>{formatMoney(selected.limitAmount)}</strong></div>
-          <div><span>Đã tiêu</span><strong>{formatMoney(view.spentAmount)}</strong></div>
+        <section className="jar-detail-hero" aria-label="Tổng quan hũ">
+          <div className="jar-detail-hero-top"><span>{selected.status === "closed" ? "Hũ đã đóng" : "Còn trong hũ"}</span>
+            <strong>{formatMoney(view.remainingAmount)}</strong></div>
+          <div className="jar-detail-progress-label"><span>Đã tiêu {formatMoney(view.spentAmount)}</span><span>Hạn mức {formatMoney(selected.limitAmount)}</span></div>
+          <i className="jar-progress"><b style={{ width: `${Math.min(100, Math.max(0, (view.spentAmount / selected.limitAmount) * 100))}%` }} /></i>
+          <p>Nhãn liên kết: {selected.linkedLabels.join(", ") || "Chưa liên kết"}</p>
         </section>
-        <i className="jar-progress"><b style={{ width: `${Math.min(100, Math.max(0, (view.spentAmount / selected.limitAmount) * 100))}%` }} /></i>
         {view.deficitAmount > 0 && <p className="jars-warning">Tài khoản nguồn hiện thấp hơn phần đã dành {formatMoney(view.deficitAmount)}. Hãy nạp thêm hoặc giải phóng tiền.</p>}
-        <p className="jar-labels">Nhãn liên kết: {selected.linkedLabels.join(", ") || "Chưa liên kết"}</p>
         <section className="jar-sources"><h2>Nguồn tiền hiện tại</h2>{view.sources.filter((item) => item.amount > 0).map((item) => <div key={item.accountId}>
           <span><WalletCards size={16} /> {accountNames.get(item.accountId) ?? "Tài khoản đã xóa"}</span><strong>{formatMoney(item.amount)}</strong>
         </div>)}{view.remainingAmount === 0 && <p>Hũ chưa có tiền khả dụng.</p>}</section>
-        {selected.status === "active" && <div className="jar-actions">
-          <button className="jars-primary" onClick={() => openAction("spend")} type="button">Chi tiền</button>
-          <button onClick={() => openAction("allocate")} type="button">Nạp thêm</button>
-          <button onClick={() => {
+        {selected.status === "active" && <section className="jar-action-section" aria-label="Thao tác với hũ">
+          <h2>Quản lý tiền trong hũ</h2>
+          <div className="jar-actions">
+            <button className="jars-primary jar-action-main" onClick={() => openAction("spend")} type="button">Chi tiền từ hũ</button>
+            <button onClick={() => openAction("allocate")} type="button">Nạp tiền</button>
+            <button onClick={() => openAction("release")} type="button">Giải phóng</button>
+            <button onClick={() => openAction("transfer")} type="button">Chuyển sang hũ</button>
+            <button onClick={() => openAction("refund")} type="button">Hoàn tiền</button>
+            <button onClick={() => {
             const proposal = smartAllocate(ledger, selected.id);
             if (!proposal.length) { setError("Chưa có tiền khả dụng hoặc hũ đã đủ hạn mức."); return; }
             run({ kind: "smart_allocate", jarId: selected.id, id: crypto.randomUUID(), now: new Date().toISOString() });
-          }} type="button">Chia thông minh</button>
-          <button onClick={() => openAction("release")} type="button">Giải phóng</button>
-          <button onClick={() => openAction("transfer")} type="button">Chuyển sang hũ</button>
-          <button onClick={() => openAction("refund")} type="button">Hoàn tiền</button>
-          <button onClick={() => { setJarForm(fieldsFrom(selected)); setEditor("edit"); }} type="button">Điều chỉnh hũ</button>
-          <button onClick={() => { if (window.confirm("Đóng hũ và giải phóng toàn bộ tiền chưa tiêu?")) run({ kind: "close", jarId: selected.id, id: crypto.randomUUID(), now: new Date().toISOString() }); }} type="button">Đóng hũ</button>
-          <button onClick={() => { if (window.confirm("Xóa hũ chưa có lịch sử?")) { if (run({ kind: "delete", jarId: selected.id, id: crypto.randomUUID(), now: new Date().toISOString() })) setSelectedId(null); } }} type="button">Xóa hũ</button>
-        </div>}
+            }} type="button">Chia thông minh</button>
+          </div>
+          <details className="jar-management"><summary>Điều chỉnh hoặc đóng hũ</summary><div>
+            <button onClick={() => { setJarForm(fieldsFrom(selected)); setEditor("edit"); }} type="button">Điều chỉnh hũ</button>
+            <button onClick={() => { if (window.confirm("Đóng hũ và giải phóng toàn bộ tiền chưa tiêu?")) run({ kind: "close", jarId: selected.id, id: crypto.randomUUID(), now: new Date().toISOString() }); }} type="button">Đóng hũ</button>
+            <button onClick={() => { if (window.confirm("Xóa hũ chưa có lịch sử?")) { if (run({ kind: "delete", jarId: selected.id, id: crypto.randomUUID(), now: new Date().toISOString() })) setSelectedId(null); } }} type="button">Xóa hũ</button>
+          </div></details>
+        </section>}
         <JarActivityList ledger={ledger} jarId={selected.id} onEditSpend={(item) => openAction("spend", item)}
           onDeleteSpend={(item) => {
             if (!window.confirm("Xóa toàn bộ khoản chi này từ các tài khoản nguồn?")) return;

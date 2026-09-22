@@ -11,7 +11,7 @@ export type SpendingJar = {
   startDate: string;
   endDate?: string;
   linkedLabels: string[];
-  status: "active" | "closed";
+  status: "active" | "closed" | "deleted";
   legacyBudgetId?: string;
   createdAt: string;
   updatedAt: string;

@@ -218,7 +218,10 @@ export function applyJarCommand(ledger: JarLedger, command: JarCommand): JarLedg
   if (command.kind === "delete") {
     if (ledger.jarActivities.some((activity) => activity.jarId === jar.id))
       throw new Error("Hũ đã có lịch sử. Hãy đóng hũ để giữ lại dữ liệu.");
-    return { ...ledger, jars: ledger.jars.filter((item) => item.id !== jar.id) };
+    // Keep a tombstone so a legacy budget import or a stale device cannot
+    // interpret the missing ID as a jar that needs to be recreated.
+    return { ...ledger, jars: ledger.jars.map((item) => item.id === jar.id
+      ? { ...item, status: "deleted", updatedAt: command.now } : item) };
   }
   if (command.kind === "close") {
     const sources = getJarView(ledger, jar).sources;

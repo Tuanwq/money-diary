@@ -68,4 +68,16 @@ assert.equal(migrated.jars.length, 2);
 assert.equal(migrateExpenseBudgets(migrated, [budget], now), migrated);
 assert.deepEqual(migrated.jars[1].linkedLabels, ["Ăn uống"]);
 
+const removable = applyJarCommand(migrated, { kind: "create", id: "unused", now,
+  fields: { name: "Hũ tạm", icon: "🫙", limitAmount: 100, startDate: "2026-09-22", linkedLabels: [] } });
+const deleted = applyJarCommand(removable, { kind: "delete", id: "delete-unused", jarId: "unused", now });
+assert.equal(deleted.jars.find((jar) => jar.id === "unused").status, "deleted");
+assert.equal(migrateExpenseBudgets(deleted, [budget], now), deleted);
+const deletedLegacy = applyJarCommand(deleted, { kind: "delete", id: "delete-legacy",
+  jarId: "legacy-budget:old-food", now });
+assert.equal(deletedLegacy.jars.find((jar) => jar.id === "legacy-budget:old-food").status, "deleted");
+assert.equal(migrateExpenseBudgets(deletedLegacy, [budget], now), deletedLegacy);
+assert.throws(() => applyJarCommand(deleted, { kind: "allocate", id: "reuse", jarId: "unused",
+  accountId: "a", amount: 1, now }), /đã đóng hoặc không tồn tại/);
+
 console.log("Spending jars tests passed.");
