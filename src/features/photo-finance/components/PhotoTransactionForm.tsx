@@ -10,12 +10,18 @@ import { buildPhotoTransaction } from "../services/photoTransactionDraft.ts";
 import type { PhotoAttachment } from "../types/photoFinance.ts";
 import type { createPhotoAttachmentRepository } from "../services/photoAttachmentRepository.ts";
 import { photoBlobDataUrl, processPhoto, type ProcessedPhoto } from "../services/photoImageProcessor.ts";
+import type { JarActivity, SpendingJar } from "../../spending-jars/domain/jarModel.ts";
+import { getJarView, suggestJar } from "../../spending-jars/domain/jarModel.ts";
+import { planJarSpend, type JarCommand } from "../../spending-jars/services/jarService.ts";
 
 type Repository = ReturnType<typeof createPhotoAttachmentRepository>;
 
-export function PhotoTransactionForm({ accounts, existing, initialDate, ownerId,
+export function PhotoTransactionForm({ accounts, jars, jarActivities, transactions, onJarCommand,
+  existing, initialDate, ownerId,
   repository, dayHasPhotos, onSaved, onSaveTransaction, onStartNew }: {
   accounts: FinancialAccount[];
+  jars: SpendingJar[]; jarActivities: JarActivity[]; transactions: AccountTransaction[];
+  onJarCommand: (command: JarCommand) => void;
   existing?: AccountTransaction;
   initialDate?: string;
   ownerId?: string;
@@ -34,6 +40,9 @@ export function PhotoTransactionForm({ accounts, existing, initialDate, ownerId,
     existing?.purpose ?? getDefaultTransactionPurpose(existing?.type ?? "income")
   );
   const [accountId, setAccountId] = useState(existing?.accountId ?? activeAccounts[0]?.id ?? "");
+  const [jarId, setJarId] = useState("");
+  const [jarChoiceTouched, setJarChoiceTouched] = useState(false);
+  const [jarSourceId, setJarSourceId] = useState("");
   const [toAccountId, setToAccountId] = useState(existing?.toAccountId ?? "");
   const [note, setNote] = useState(existing?.note ?? "");
   const [date, setDate] = useState(existing?.date ?? initialDate ?? vietnamFinancialDate(now));
@@ -56,6 +65,11 @@ export function PhotoTransactionForm({ accounts, existing, initialDate, ownerId,
   const file = selectedPhoto?.file ?? null;
   const previewUrl = selectedPhoto?.previewUrl ?? "";
   const canEdit = !savedId;
+  const jarLedger = { accounts, transactions, jars, jarActivities };
+  const suggestedJar = kind === "expense" && !existing ? suggestJar(jarLedger, category) : undefined;
+  const selectedJarId = kind === "expense" && !existing
+    ? (jarChoiceTouched ? jarId : suggestedJar?.id ?? "") : "";
+  const selectedJar = jars.find((jar) => jar.id === selectedJarId && jar.status === "active");
 
   async function chooseFile(next: File | undefined) {
     if (!next) return;
@@ -99,8 +113,13 @@ export function PhotoTransactionForm({ accounts, existing, initialDate, ownerId,
       if (!file && savedId) throw new Error("Hãy chọn lại ảnh để tải lên.");
 
       const value = parseMoneyInput(amount);
-      const transactionId = savedId ?? existing?.id ?? crypto.randomUUID();
-      const transaction = savedId ? null : buildPhotoTransaction({
+      if (existing?.jarActivityId) throw new Error("Khoản chi từ hũ cần sửa trong chi tiết hũ để giữ đúng từng nguồn tiền.");
+      const activityId = crypto.randomUUID();
+      const jarLines = selectedJar && !savedId
+        ? planJarSpend(jarLedger, selectedJar.id, value, jarSourceId || undefined) : [];
+      const transactionId = savedId ?? (selectedJar
+        ? `jar-spend:${activityId}:0` : existing?.id ?? crypto.randomUUID());
+      const transaction = savedId || selectedJar ? null : buildPhotoTransaction({
         id: transactionId, accounts, existing, type: kind, amount: value,
         accountId, toAccountId, category, purpose, date, time, note,
         now: new Date().toISOString(),
@@ -110,7 +129,13 @@ export function PhotoTransactionForm({ accounts, existing, initialDate, ownerId,
       // savedId makes an upload retry reuse the same transaction.
       if (file && !savedId) await repository.prepare(ownerId);
 
-      if (transaction) {
+      if (selectedJar && !savedId) {
+        onJarCommand({ kind: "spend", id: activityId, now: new Date().toISOString(),
+          jarId: selectedJar.id, amount: value, accountId: jarSourceId || undefined,
+          date, category, note, purpose: purpose === "goal_allocation" ? "goal_allocation" : "daily_expense",
+          occurredAt: new Date(`${date}T${time}:00+07:00`).toISOString() });
+        setSavedId(transactionId);
+      } else if (transaction) {
         onSaveTransaction(transaction);
         setSavedId(transactionId);
       }
@@ -209,12 +234,31 @@ export function PhotoTransactionForm({ accounts, existing, initialDate, ownerId,
           Phân bổ mục tiêu
         </button>
       </div>}
+      {kind === "expense" && !existing && jars.some((jar) => jar.status === "active") &&
+        <div className="photo-finance-jar-link">
+          <label>Hũ chi tiêu<select aria-label="Hũ chi tiêu" disabled={!canEdit} value={selectedJarId}
+            onChange={(event) => { setJarChoiceTouched(true); setJarId(event.target.value); setJarSourceId(""); }}>
+            <option value="">Không dùng hũ</option>
+            {jars.filter((jar) => jar.status === "active").map((jar) =>
+              <option key={jar.id} value={jar.id}>{jar.icon} {jar.name} · còn {formatMoneyInput(String(getJarView(jarLedger, jar).remainingAmount))}đ</option>)}
+          </select></label>
+          {selectedJar && <label>Nguồn tiền trong hũ<select aria-label="Nguồn tiền trong hũ" disabled={!canEdit}
+            value={jarSourceId} onChange={(event) => setJarSourceId(event.target.value)}>
+            <option value="">Tự động chia theo nguồn</option>
+            {getJarView(jarLedger, selectedJar).sources.filter((source) => source.amount > 0).map((source) =>
+              <option key={source.accountId} value={source.accountId}>
+                {accounts.find((account) => account.id === source.accountId)?.name ?? "Tài khoản"} · {formatMoneyInput(String(source.amount))}đ
+              </option>)}
+          </select></label>}
+          {selectedJar && <small>Chi từ hũ sẽ ghi giao dịch thật vào từng tài khoản nguồn. Phân bổ không trừ tiền hai lần.</small>}
+        </div>}
       <div className="photo-finance-chips">
         <label><span className="sr-only">Danh mục</span><Pencil size={16} aria-hidden="true" />
           <select aria-label="Danh mục" disabled={!canEdit} onChange={(event) => setCategory(event.target.value)} value={category}>
-            {TRANSACTION_CATEGORIES[kind].map((item) => <option key={item}>{item}</option>)}
+            {[...new Set([...TRANSACTION_CATEGORIES[kind], ...(kind === "expense"
+              ? jars.flatMap((jar) => jar.linkedLabels) : [])])].map((item) => <option key={item}>{item}</option>)}
           </select><ChevronDown size={15} aria-hidden="true" /></label>
-        <label><span className="sr-only">Tài khoản</span><WalletCards size={17} aria-hidden="true" />
+        {!selectedJar && <label><span className="sr-only">Tài khoản</span><WalletCards size={17} aria-hidden="true" />
           <select aria-label={kind === "transfer" ? "Tài khoản chuyển" : "Tài khoản"} disabled={!canEdit}
             onChange={(event) => {
               setAccountId(event.target.value);
@@ -222,7 +266,7 @@ export function PhotoTransactionForm({ accounts, existing, initialDate, ownerId,
             }} required value={accountId}>
             <option value="">Tài khoản</option>
             {activeAccounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
-          </select><ChevronDown size={15} aria-hidden="true" /></label>
+          </select><ChevronDown size={15} aria-hidden="true" /></label>}
         <label><span className="sr-only">Ngày</span><CalendarDays size={17} aria-hidden="true" />
           <input aria-label="Ngày" disabled={!canEdit} onChange={(event) => setDate(event.target.value)} required type="date" value={date} />
         </label>

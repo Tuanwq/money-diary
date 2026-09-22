@@ -5,10 +5,15 @@ import type { AccountTransaction, FinancialAccount } from "../../account-ledger/
 import type { createPhotoAttachmentRepository } from "../services/photoAttachmentRepository.ts";
 import { PhotoTransactionForm } from "./PhotoTransactionForm.tsx";
 import type { PhotoAttachment } from "../types/photoFinance.ts";
+import type { JarActivity, SpendingJar } from "../../spending-jars/domain/jarModel.ts";
+import type { JarCommand } from "../../spending-jars/services/jarService.ts";
 
-export function PhotoCaptureSheet({ accounts, existing, initialDate, isOpen, ownerId,
+export function PhotoCaptureSheet({ accounts, jars, jarActivities, transactions, onJarCommand,
+  existing, initialDate, isOpen, ownerId,
   repository, dayHasPhotos, onClose, onSaved, onSaveTransaction, onStartNew, formKey }: {
   accounts: FinancialAccount[]; existing?: AccountTransaction;
+  jars: SpendingJar[]; jarActivities: JarActivity[]; transactions: AccountTransaction[];
+  onJarCommand: (command: JarCommand) => void;
   initialDate?: string; isOpen: boolean; ownerId?: string;
   repository: ReturnType<typeof createPhotoAttachmentRepository>;
   dayHasPhotos: (date: string) => boolean;
@@ -27,7 +32,8 @@ export function PhotoCaptureSheet({ accounts, existing, initialDate, isOpen, own
         <span>{existing ? "Sửa khoảnh khắc" : "Khoảnh khắc mới"}</span>
         <Camera aria-hidden="true" size={20} />
       </header>
-      <PhotoTransactionForm accounts={accounts} existing={existing} initialDate={initialDate}
+      <PhotoTransactionForm accounts={accounts} jars={jars} jarActivities={jarActivities}
+        transactions={transactions} onJarCommand={onJarCommand} existing={existing} initialDate={initialDate}
         key={`${existing?.id ?? "new"}-${formKey}`} ownerId={ownerId} repository={repository}
         dayHasPhotos={dayHasPhotos}
         onSaved={onSaved} onSaveTransaction={onSaveTransaction} onStartNew={onStartNew} />

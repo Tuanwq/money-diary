@@ -38,13 +38,18 @@ export type AccountTransaction = {
   type: AccountTransactionType;
   updatedAt: string;
   /** Photo Finance owns this transaction; legacy diary amounts are never written for it. */
-  source?: "photo_finance";
+  source?: "photo_finance" | "spending_jar";
+  /** A jar expense/refund belongs to one activity; several rows may share its activity ID. */
+  jarId?: string;
+  jarActivityId?: string;
   occurredAt?: string;
 };
 
 export type AccountLedgerData = {
   accounts: FinancialAccount[];
   transactions: AccountTransaction[];
+  jars: import("../spending-jars/domain/jarModel.ts").SpendingJar[];
+  jarActivities: import("../spending-jars/domain/jarModel.ts").JarActivity[];
   updatedAt: string;
 };
 
@@ -135,6 +140,8 @@ export function createDefaultLedger(): AccountLedgerData {
   return {
     accounts: createDefaultAccounts(now),
     transactions: [],
+    jars: [],
+    jarActivities: [],
     updatedAt: now,
   };
 }

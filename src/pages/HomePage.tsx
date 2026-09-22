@@ -1,5 +1,5 @@
 import { ArrowLeft, ArrowRight, CalendarRange, Camera, TrendingDown,
-  TrendingUp, WalletCards } from "lucide-react";
+  TrendingUp, WalletCards, CookingPot } from "lucide-react";
 import { DataCompletionCard } from "../features/money-diary/components/dashboard/DataCompletionCard";
 import { GreetingHeader } from "../features/money-diary/components/dashboard/GreetingHeader";
 import { MainGoalCard } from "../features/money-diary/components/dashboard/MainGoalCard";
@@ -118,6 +118,10 @@ export function HomePage({
       </section>
 
       <MainGoalCard name={mainGoalName} onOpenGoals={openGoal} summary={mainGoal} />
+
+      <button className="money-card manager-jars-shortcut" onClick={() => navigateTo("spendingJars")} type="button">
+        <CookingPot size={20} aria-hidden="true" /> <span><strong>Hũ chi tiêu</strong><small>Dành tiền cho các khoản sắp chi · vuốt sang phải</small></span><ArrowRight size={18} />
+      </button>
 
       <section className="money-card manager-month-card" aria-labelledby="manager-month-title">
           <div className="manager-card-title"><span><CalendarRange size={17} /> Tháng đang xem</span>

@@ -196,6 +196,11 @@ const LazyPhotoJournalPage = lazy(() =>
     default: module.PhotoJournalPage,
   }))
 );
+const LazySpendingJarsPage = lazy(() =>
+  import("./features/spending-jars/pages/SpendingJarsPage").then((module) => ({
+    default: module.SpendingJarsPage,
+  }))
+);
 
 function LazyRouteFallback() {
   return (
@@ -686,11 +691,14 @@ export default function App() {
     archiveAccount,
     cloudStatus: accountLedgerCloudStatus,
     deleteTransaction: deleteAccountTransaction,
+    dispatchJar,
+    jars,
+    jarActivities,
     replaceLedger,
     saveAccount,
     saveTransaction: saveAccountTransaction,
     transactions: accountTransactions,
-  } = useAccountLedger(cloudDataUserId);
+  } = useAccountLedger(cloudDataUserId, goals.expenseBudgets);
   const {
     checks: accountReconciliations,
     cloudStatus: accountReconciliationCloudStatus,
@@ -724,6 +732,8 @@ export default function App() {
         entries,
         expenses,
         financialAccounts,
+        jars,
+        jarActivities,
         goals,
       }),
     [
@@ -739,6 +749,8 @@ export default function App() {
       entries,
       expenses,
       financialAccounts,
+      jars,
+      jarActivities,
       goals,
     ]
   );
@@ -1097,7 +1109,9 @@ async function restoreBackup(
   if (restoreAccounts) {
     replaceLedger(
       snapshot.data.accounts.accounts,
-      snapshot.data.accounts.transactions
+      snapshot.data.accounts.transactions,
+      snapshot.data.accounts.jars ?? [],
+      snapshot.data.accounts.jarActivities ?? []
     );
     replaceReconciliationState(
       snapshot.data.accounts.reconciliations ?? []
@@ -3397,6 +3411,9 @@ if (route.kind === "daymark") {
           {page === "accounts" && (
             <LazyAccountLedgerPage
               accounts={financialAccounts}
+              jars={jars}
+              jarActivities={jarActivities}
+              onJarCommand={dispatchJar}
               archiveAccount={archiveAccount}
               cloudStatus={accountLedgerCloudStatus}
               deleteTransaction={(transactionId) => {
@@ -3474,13 +3491,29 @@ if (route.kind === "daymark") {
           {page === "photoJournal" && (
             <LazyPhotoJournalPage
               accounts={financialAccounts}
+              jars={jars}
+              jarActivities={jarActivities}
               entries={entries}
               expenses={expenses}
               ownerId={cloudDataUserId}
               onBack={() => navigateTo("home")}
               onDeleteTransaction={deleteAccountTransaction}
               onSaveTransaction={saveAccountTransaction}
+              onJarCommand={dispatchJar}
               transactions={accountTransactions}
+            />
+          )}
+          {page === "spendingJars" && (
+            <LazySpendingJarsPage
+              ledger={{ accounts: financialAccounts, transactions: accountTransactions, jars, jarActivities }}
+              cloudStatus={accountLedgerCloudStatus}
+              onBack={() => navigateTo("home")}
+              onCommand={dispatchJar}
+              onDeleteSpend={async (activity) => {
+                const firstId = activity.transactionIds?.[0];
+                if (firstId) await deleteAccountTransactionWithPhotos(firstId,
+                  cloudDataUserId, deleteAccountTransaction);
+              }}
             />
           )}
           {page === "goals" && (

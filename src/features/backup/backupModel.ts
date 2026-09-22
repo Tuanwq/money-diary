@@ -66,6 +66,8 @@ export type BackupSourceData = {
     accounts: FinancialAccount[];
     reconciliations: AccountReconciliation[];
     transactions: AccountTransaction[];
+    jars?: import("../spending-jars/domain/jarModel.ts").SpendingJar[];
+    jarActivities?: import("../spending-jars/domain/jarModel.ts").JarActivity[];
   };
   automation: {
     logs: AutomationRunLog[];
@@ -293,6 +295,9 @@ function normalizeSnapshot(snapshot: BackupSnapshot): BackupSnapshot {
         transactions: Array.isArray(source.accounts?.transactions)
           ? source.accounts.transactions
           : [],
+        jars: Array.isArray(source.accounts?.jars) ? source.accounts.jars : [],
+        jarActivities: Array.isArray(source.accounts?.jarActivities)
+          ? source.accounts.jarActivities : [],
       },
       automation: {
         logs: Array.isArray(source.automation?.logs)

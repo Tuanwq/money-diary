@@ -18,6 +18,9 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { getToday } from "../../utils/date";
+import { getJarView, suggestJar, type JarActivity, type JarLedger, type SpendingJar } from
+  "../spending-jars/domain/jarModel.ts";
+import type { JarCommand } from "../spending-jars/services/jarService.ts";
 import {
   formatMoney,
   formatMoneyInput,
@@ -193,11 +196,15 @@ function AccountForm({
 
 function TransactionForm({
   accounts,
+  jarLedger,
+  onJarCommand,
   onClose,
   onSave,
   transaction,
 }: {
   accounts: FinancialAccount[];
+  jarLedger: JarLedger;
+  onJarCommand: (command: JarCommand) => void;
   onClose: () => void;
   onSave: (transaction: AccountTransaction) => void;
   transaction: AccountTransaction | null;
@@ -225,6 +232,13 @@ function TransactionForm({
   const [purpose, setPurpose] = useState<TransactionPurpose | "">(
     transaction?.purpose ?? (transaction ? "" : getDefaultTransactionPurpose(type))
   );
+  const [jarId, setJarId] = useState("");
+  const [jarChoiceTouched, setJarChoiceTouched] = useState(false);
+  const [jarSourceId, setJarSourceId] = useState("");
+  const suggestedJar = type === "expense" && !transaction ? suggestJar(jarLedger, category) : undefined;
+  const selectedJarId = type === "expense" && !transaction
+    ? (jarChoiceTouched ? jarId : suggestedJar?.id ?? "") : "";
+  const selectedJar = jarLedger.jars.find((jar) => jar.id === selectedJarId && jar.status === "active");
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -245,7 +259,7 @@ function TransactionForm({
     event.preventDefault();
     const parsedAmount = parseMoneyInput(amount);
 
-    if (!accountId || parsedAmount <= 0) {
+    if ((!selectedJar && !accountId) || parsedAmount <= 0) {
       alert("Hãy chọn tài khoản và nhập số tiền lớn hơn 0.");
       return;
     }
@@ -262,21 +276,32 @@ function TransactionForm({
 
     const now = new Date().toISOString();
 
-    onSave({
-      ...transaction,
-      accountId,
-      amount: parsedAmount,
-      category,
-      createdAt: transaction?.createdAt ?? now,
-      date,
-      id: transaction?.id ?? crypto.randomUUID(),
-      note: note.trim(),
-      purpose,
-      ...(type === "transfer" ? { toAccountId } : {}),
-      type,
-      updatedAt: now,
-    });
-    onClose();
+    try {
+      if (selectedJar) {
+        onJarCommand({ kind: "spend", id: crypto.randomUUID(), now, jarId: selectedJar.id,
+          accountId: jarSourceId || undefined, amount: parsedAmount, date, category,
+          note: note.trim(), purpose: purpose === "goal_allocation" ? "goal_allocation" : "daily_expense" });
+        onClose();
+        return;
+      }
+      onSave({
+        ...transaction,
+        accountId,
+        amount: parsedAmount,
+        category,
+        createdAt: transaction?.createdAt ?? now,
+        date,
+        id: transaction?.id ?? crypto.randomUUID(),
+        note: note.trim(),
+        purpose,
+        ...(type === "transfer" ? { toAccountId } : {}),
+        type,
+        updatedAt: now,
+      });
+      onClose();
+    } catch (cause) {
+      alert(cause instanceof Error ? cause.message : "Không thể lưu giao dịch.");
+    }
   }
 
   return (
@@ -318,7 +343,7 @@ function TransactionForm({
         </div>
 
         <div className="ledger-form-grid">
-          <label className="ledger-field">
+          {!selectedJar && <label className="ledger-field">
             <span>
               {type === "transfer" ? "Từ tài khoản" : "Tài khoản"}
             </span>
@@ -332,7 +357,7 @@ function TransactionForm({
                 </option>
               ))}
             </select>
-          </label>
+          </label>}
 
           {type === "transfer" && (
             <label className="ledger-field">
@@ -383,13 +408,38 @@ function TransactionForm({
               onChange={(event) => setCategory(event.target.value)}
               value={category}
             >
-              {TRANSACTION_CATEGORIES[type].map((item) => (
+              {[...new Set([...TRANSACTION_CATEGORIES[type], ...(type === "expense"
+                ? jarLedger.jars.flatMap((jar) => jar.linkedLabels) : [])])].map((item) => (
                 <option key={item} value={item}>
                   {item}
                 </option>
               ))}
             </select>
           </label>
+
+          {type === "expense" && !transaction && jarLedger.jars.some((jar) => jar.status === "active") && <>
+            <label className="ledger-field">
+              <span>Hũ chi tiêu</span>
+              <select value={selectedJarId} onChange={(event) => {
+                setJarChoiceTouched(true); setJarId(event.target.value); setJarSourceId("");
+              }}>
+                <option value="">Không dùng hũ</option>
+                {jarLedger.jars.filter((jar) => jar.status === "active").map((jar) =>
+                  <option key={jar.id} value={jar.id}>{jar.icon} {jar.name} · còn {formatMoney(getJarView(jarLedger, jar).remainingAmount)}</option>)}
+              </select>
+            </label>
+            {selectedJar && <label className="ledger-field">
+              <span>Nguồn tiền trong hũ</span>
+              <select value={jarSourceId} onChange={(event) => setJarSourceId(event.target.value)}>
+                <option value="">Tự động chia theo nguồn</option>
+                {getJarView(jarLedger, selectedJar).sources.filter((source) => source.amount > 0).map((source) =>
+                  <option key={source.accountId} value={source.accountId}>
+                    {accounts.find((account) => account.id === source.accountId)?.name ?? "Tài khoản"} · {formatMoney(source.amount)}
+                  </option>)}
+              </select>
+              <small>Khoản chi sẽ trừ tiền thật ở từng tài khoản nguồn.</small>
+            </label>}
+          </>}
 
           <label className="ledger-field">
             <span>Ảnh hưởng mục tiêu</span>
@@ -440,6 +490,9 @@ function TransactionForm({
 
 export function AccountLedgerPage({
   accounts,
+  jars,
+  jarActivities,
+  onJarCommand,
   archiveAccount,
   cloudStatus,
   deleteTransaction,
@@ -448,6 +501,9 @@ export function AccountLedgerPage({
   transactions,
 }: {
   accounts: FinancialAccount[];
+  jars: SpendingJar[];
+  jarActivities: JarActivity[];
+  onJarCommand: (command: JarCommand) => void;
   archiveAccount: (accountId: string) => void;
   cloudStatus: string;
   deleteTransaction: (transactionId: string) => void;
@@ -553,7 +609,10 @@ export function AccountLedgerPage({
       ? `Tài khoản "${account.name}" đã có giao dịch. Tài khoản sẽ được ẩn nhưng lịch sử vẫn được giữ.`
       : `Ẩn tài khoản "${account.name}"?`;
 
-    if (confirm(message)) archiveAccount(account.id);
+    if (confirm(message)) {
+      try { archiveAccount(account.id); }
+      catch (cause) { alert(cause instanceof Error ? cause.message : "Không thể ẩn tài khoản."); }
+    }
   }
 
   function confirmDeleteTransaction(transaction: AccountTransaction) {
@@ -865,6 +924,8 @@ export function AccountLedgerPage({
       {showTransactionForm && (
         <TransactionForm
           accounts={activeAccounts}
+          jarLedger={{ accounts, transactions, jars, jarActivities }}
+          onJarCommand={onJarCommand}
           onClose={() => setShowTransactionForm(false)}
           onSave={saveTransaction}
           transaction={editingTransaction}

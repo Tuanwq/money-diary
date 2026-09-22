@@ -97,6 +97,7 @@ export type Page =
   | "cashFlow"
   | "home"
   | "photoJournal"
+  | "spendingJars"
   | "goals"
   | "entry"
   | "closeDay"

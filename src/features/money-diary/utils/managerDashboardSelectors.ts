@@ -62,7 +62,7 @@ export function buildManagerOverview(
     addCategory("Ăn tối", item.dinner);
     otherExpenses(item).forEach((other) => addCategory(other.label, other.amount));
   });
-  transactions.filter((item) => item.source === "photo_finance" &&
+  transactions.filter((item) => (item.source === "photo_finance" || item.source === "spending_jar") &&
     item.type === "expense" && item.date.startsWith(month))
     .forEach((item) => addCategory(item.category.trim() || unlabeledExpense, item.amount));
 
@@ -104,7 +104,7 @@ export function buildManagerRecentTransactions(
       description: expense.note.trim() || "Chi tiêu trong ngày",
       id: `expense-${expense.id}`, kind: "expense" as const, source: "Chi tiêu",
     })),
-    ...transactions.filter((item) => item.source === "photo_finance" && item.type !== "transfer")
+    ...transactions.filter((item) => (item.source === "photo_finance" || item.source === "spending_jar") && item.type !== "transfer")
       .map((item) => ({
         amount: item.amount, date: item.date, description: item.note.trim() || item.category,
         id: `ledger-${item.id}`, kind: item.type as "income" | "expense", source: "Nhật ký tài chính",

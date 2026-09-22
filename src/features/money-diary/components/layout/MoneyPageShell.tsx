@@ -1,4 +1,5 @@
-import { useRef, useState, type ReactNode, type TouchEvent } from "react";
+import { useRef, useState, type ReactNode } from "react";
+import { useSwipeNavigation } from "../../hooks/useSwipeNavigation.ts";
 import type { ThemeMode } from "../../../../hooks/useThemeMode";
 import type { GoalScreen, Page } from "../../../../types";
 import { AddDataSheet } from "./AddDataSheet";
@@ -64,7 +65,7 @@ export function MoneyPageShell({
   const desktopSettingsButtonRef = useRef<HTMLButtonElement | null>(null);
   const moreButtonRef = useRef<HTMLButtonElement | null>(null);
   const mobileAccountButtonRef = useRef<HTMLButtonElement | null>(null);
-  const swipeStartRef = useRef<{ x: number; y: number } | null>(null);
+  const swipe = useSwipeNavigation(currentPage, (page) => navigateTo(page));
   const moreReturnFocusRef =
     moreReturnTarget === "desktopAccount"
       ? desktopAccountButtonRef
@@ -73,30 +74,6 @@ export function MoneyPageShell({
         : moreButtonRef;
   const addReturnFocusRef =
     addReturnTarget === "desktop" ? desktopAddButtonRef : addButtonRef;
-
-  function handleSwipeStart(event: TouchEvent<HTMLElement>) {
-    if (currentPage !== "home" && currentPage !== "photoJournal") return;
-    const target = event.target as HTMLElement;
-    if (target.closest("button, a, input, textarea, select, [data-horizontal-gesture]")) {
-      swipeStartRef.current = null;
-      return;
-    }
-    const touch = event.touches[0];
-    swipeStartRef.current = touch ? { x: touch.clientX, y: touch.clientY } : null;
-  }
-
-  function handleSwipeEnd(event: TouchEvent<HTMLElement>) {
-    const start = swipeStartRef.current;
-    swipeStartRef.current = null;
-    if (!start) return;
-    const touch = event.changedTouches[0];
-    if (!touch) return;
-    const deltaX = touch.clientX - start.x;
-    const deltaY = touch.clientY - start.y;
-    if (Math.abs(deltaX) < 64 || Math.abs(deltaX) < Math.abs(deltaY) * 1.35) return;
-    if (currentPage === "home" && deltaX < 0) navigateTo("photoJournal");
-    if (currentPage === "photoJournal" && deltaX > 0) navigateTo("home");
-  }
 
   return (
     <div className="money-shell">
@@ -140,15 +117,13 @@ export function MoneyPageShell({
 
           <main
             className={`money-main-content ${
-              currentPage === "home" || currentPage === "photoJournal"
+              currentPage === "home" || currentPage === "photoJournal" || currentPage === "spendingJars"
                 ? "money-main-content-swipeable"
                 : ""
             }`}
-            onTouchCancel={() => {
-              swipeStartRef.current = null;
-            }}
-            onTouchEnd={handleSwipeEnd}
-            onTouchStart={handleSwipeStart}
+            onTouchCancel={swipe.onTouchCancel}
+            onTouchEnd={swipe.onTouchEnd}
+            onTouchStart={swipe.onTouchStart}
           >
             {children}
           </main>

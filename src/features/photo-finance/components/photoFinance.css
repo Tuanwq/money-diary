@@ -233,3 +233,7 @@
   .photo-finance-chips { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .photo-finance-amount { bottom: 72px; }
 }
+.photo-finance-jar-link{display:grid;gap:8px;padding:12px;border:1px solid var(--pf-line);border-radius:14px;background:var(--pf-card)}
+.photo-finance-jar-link label{display:grid;gap:5px;font-size:12px;font-weight:700;color:var(--pf-text)}
+.photo-finance-jar-link select{min-width:0;width:100%;min-height:42px;padding:8px;border:1px solid var(--pf-line);border-radius:9px;background:var(--pf-card);color:var(--pf-text)}
+.photo-finance-jar-link small{color:var(--pf-muted);line-height:1.4}

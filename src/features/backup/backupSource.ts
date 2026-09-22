@@ -47,6 +47,8 @@ export type MoneyBackupState = {
   entries: DailyEntry[];
   expenses: ExpenseEntry[];
   financialAccounts: FinancialAccount[];
+  jars: import("../spending-jars/domain/jarModel.ts").SpendingJar[];
+  jarActivities: import("../spending-jars/domain/jarModel.ts").JarActivity[];
   goals: Goals;
 };
 
@@ -70,6 +72,8 @@ export function buildBackupSourceData(
   return {
     accounts: {
       accounts: moneyState.financialAccounts,
+      jars: moneyState.jars,
+      jarActivities: moneyState.jarActivities,
       reconciliations: moneyState.accountReconciliations,
       transactions: moneyState.accountTransactions,
     },

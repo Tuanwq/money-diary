@@ -63,22 +63,26 @@ export function DayStoryCarousel({ accounts, attachments, onAddPhoto,
     }} ref={trackRef}>
       {attachments.map((attachment, photoIndex) => {
         const transaction = byId.get(attachment.sourceId);
+        const moneyLines = transaction?.jarActivityId
+          ? transactions.filter((item) => item.jarActivityId === transaction.jarActivityId)
+          : transaction ? [transaction] : [];
         return <article className="photo-finance-slide" key={attachment.id}>
           {Math.abs(photoIndex - safeIndex) <= 1
             ? <PrivatePhoto attachment={attachment} repository={repository} />
             : <div className="photo-finance-image-loading" aria-hidden="true" />}
           {transaction && <div className="photo-finance-slide-overlay">
             <span>{transaction.type === "transfer" ? "Chuyển nội bộ" : transaction.type === "expense" ? "Chi tiêu" : "Thu nhập"}</span>
-            <strong className={transaction.type === "expense" ? "photo-finance-outflow" : undefined}>{transaction.type === "transfer" ? "↔ " : transaction.type === "income" ? "+" : "−"}{formatMoney(transaction.amount)}</strong>
-            <p>{transaction.category} · {accountNames.get(transaction.accountId) ?? "Tài khoản đã xóa"}
+            <strong className={transaction.type === "expense" ? "photo-finance-outflow" : undefined}>{transaction.type === "transfer" ? "↔ " : transaction.type === "income" ? "+" : "−"}{formatMoney(moneyLines.reduce((sum, item) => sum + item.amount, 0))}</strong>
+            <p>{transaction.category} · {moneyLines.map((item) => `${accountNames.get(item.accountId) ?? "Tài khoản đã xóa"} ${formatMoney(item.amount)}`).join(" · ")}
               {transaction.type === "transfer" && ` → ${accountNames.get(transaction.toAccountId ?? "") ?? "Tài khoản đã xóa"}`}</p>
             <p>{transaction.occurredAt ? new Intl.DateTimeFormat("vi-VN", { timeZone: "Asia/Ho_Chi_Minh",
               hour: "2-digit", minute: "2-digit" }).format(new Date(transaction.occurredAt)) : transaction.date}
               {transaction.note ? ` · ${transaction.note}` : ""}</p>
           </div>}
           <div className="photo-finance-slide-actions">
-            {transaction && <><button onClick={() => onEditTransaction(transaction)} type="button">Sửa giao dịch</button>
+            {transaction && !transaction.jarActivityId && <><button onClick={() => onEditTransaction(transaction)} type="button">Sửa giao dịch</button>
               <button onClick={() => onAddPhoto(transaction)} type="button">Thêm ảnh</button></>}
+            {transaction?.jarActivityId && <span>Chi tiết và sửa khoản chi trong Hũ chi tiêu</span>}
             {!attachment.isCover && <button onClick={() => onMakeCover(attachment)} type="button">Chọn ảnh chính</button>}
             <button onClick={() => onDeletePhoto(attachment)} type="button">Xóa ảnh</button>
           </div>

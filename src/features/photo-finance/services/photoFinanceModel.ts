@@ -19,7 +19,7 @@ export function buildDailyFinancialSummaries(
   for (const entry of entries) add(entry.date, getTotalEntryMoney(entry), 0);
   for (const expense of expenses) add(expense.date, 0, getExpenseTotal(expense));
   for (const transaction of transactions) {
-    if (transaction.source !== "photo_finance") continue;
+    if (transaction.source !== "photo_finance" && transaction.source !== "spending_jar") continue;
     if (transaction.type === "income") add(transaction.date, transaction.amount, 0);
     if (transaction.type === "expense") add(transaction.date, 0, transaction.amount);
     // All transfers are excluded, regardless of account or provenance.

@@ -24,11 +24,23 @@ export function DayStory({ accounts, attachments, date, entries, expenses, isOpe
   repository: ReturnType<typeof createPhotoAttachmentRepository>;
   summary: Summary; transactions: AccountTransaction[];
 }) {
-  const timeline = useMemo(() => [
-    ...transactions.filter((transaction) => transaction.date === date &&
-      (transaction.source === "photo_finance" || transaction.type === "transfer"))
+  const timeline = useMemo(() => {
+    const seenJarActivities = new Set<string>();
+    return [
+    ...transactions.filter((transaction) => {
+      if (transaction.date !== date ||
+        !(transaction.source === "photo_finance" || transaction.source === "spending_jar" || transaction.type === "transfer")) return false;
+      if (transaction.jarActivityId) {
+        if (seenJarActivities.has(transaction.jarActivityId)) return false;
+        seenJarActivities.add(transaction.jarActivityId);
+      }
+      return true;
+    })
       .map((transaction) => ({ id: transaction.id, type: transaction.type,
-        amount: transaction.amount, label: transaction.note || transaction.category,
+        amount: transaction.jarActivityId
+          ? transactions.filter((item) => item.jarActivityId === transaction.jarActivityId)
+            .reduce((sum, item) => sum + item.amount, 0) : transaction.amount,
+        label: transaction.note || transaction.category,
         time: transaction.occurredAt ?? transaction.createdAt,
         transaction })),
     ...entries.filter((entry) => entry.date === date).map((entry) => ({
@@ -39,7 +51,8 @@ export function DayStory({ accounts, attachments, date, entries, expenses, isOpe
       id: `legacy-expense-${expense.id}`, type: "expense", amount: getExpenseTotal(expense),
       label: expense.note || "Chi tiêu Nhật ký", time: expense.createdAt,
       transaction: null })),
-  ].filter((item) => item.amount > 0).sort((a, b) => b.time.localeCompare(a.time)),
+  ].filter((item) => item.amount > 0).sort((a, b) => b.time.localeCompare(a.time));
+  },
   [date, entries, expenses, transactions]);
 
   usePhotoDialog(isOpen, onClose);

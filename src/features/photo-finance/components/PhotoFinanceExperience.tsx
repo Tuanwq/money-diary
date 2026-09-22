@@ -1,6 +1,8 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import type { AccountTransaction, FinancialAccount } from "../../account-ledger/accountLedgerModel.ts";
 import type { DailyEntry, ExpenseEntry } from "../../../types.ts";
+import type { JarActivity, SpendingJar } from "../../spending-jars/domain/jarModel.ts";
+import type { JarCommand } from "../../spending-jars/services/jarService.ts";
 import { usePhotoFinance } from "../hooks/usePhotoFinance.ts";
 import { usePhotoThumbnails } from "../hooks/usePhotoThumbnails.ts";
 import { buildDailyFinancialSummaries, getDailyFinancialSummary,
@@ -12,12 +14,14 @@ import { PhotoCaptureSheet } from "./PhotoCaptureSheet.tsx";
 import { PhotoFinanceCalendar } from "./PhotoFinanceCalendar.tsx";
 import "./photoFinance.css";
 
-export function PhotoFinanceExperience({ accounts, entries, expenses, ownerId,
-  onDeleteTransaction, onSaveTransaction, transactions }: {
+export function PhotoFinanceExperience({ accounts, jars, jarActivities, entries, expenses, ownerId,
+  onDeleteTransaction, onSaveTransaction, onJarCommand, transactions }: {
   accounts: FinancialAccount[];
+  jars: SpendingJar[]; jarActivities: JarActivity[];
   entries: DailyEntry[]; expenses: ExpenseEntry[]; ownerId?: string;
   onDeleteTransaction: (transactionId: string) => void;
   onSaveTransaction: (transaction: AccountTransaction) => void;
+  onJarCommand: (command: JarCommand) => void;
   transactions: AccountTransaction[];
 }) {
   const photos = usePhotoFinance(ownerId);
@@ -102,7 +106,8 @@ export function PhotoFinanceExperience({ accounts, entries, expenses, ownerId,
       onMakeCover={(attachment) => void makeCover(attachment)}
       repository={photos.repository} summary={getDailyFinancialSummary(summaries, storyDate ?? "")}
       transactions={transactions} />
-    <PhotoCaptureSheet accounts={accounts} existing={editing} formKey={formKey}
+    <PhotoCaptureSheet accounts={accounts} jars={jars} jarActivities={jarActivities}
+      transactions={transactions} onJarCommand={onJarCommand} existing={editing} formKey={formKey}
       initialDate={captureDate} isOpen={captureOpen} ownerId={ownerId}
       repository={photos.repository} dayHasPhotos={dayHasPhotos}
       onClose={closeCapture} onSaved={photoSaved}

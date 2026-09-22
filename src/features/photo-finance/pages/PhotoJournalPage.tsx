@@ -4,28 +4,36 @@ import type {
   FinancialAccount,
 } from "../../account-ledger/accountLedgerModel.ts";
 import type { DailyEntry, ExpenseEntry } from "../../../types.ts";
+import type { JarActivity, SpendingJar } from "../../spending-jars/domain/jarModel.ts";
+import type { JarCommand } from "../../spending-jars/services/jarService.ts";
 import { PhotoFinanceExperience } from "../components/PhotoFinanceExperience.tsx";
 import "./PhotoJournalPage.css";
 
 type PhotoJournalPageProps = {
   accounts: FinancialAccount[];
+  jars: SpendingJar[];
+  jarActivities: JarActivity[];
   entries: DailyEntry[];
   expenses: ExpenseEntry[];
   ownerId?: string;
   onBack: () => void;
   onDeleteTransaction: (transactionId: string) => void;
   onSaveTransaction: (transaction: AccountTransaction) => void;
+  onJarCommand: (command: JarCommand) => void;
   transactions: AccountTransaction[];
 };
 
 export function PhotoJournalPage({
   accounts,
+  jars,
+  jarActivities,
   entries,
   expenses,
   ownerId,
   onBack,
   onDeleteTransaction,
   onSaveTransaction,
+  onJarCommand,
   transactions,
 }: PhotoJournalPageProps) {
   return (
@@ -52,11 +60,14 @@ export function PhotoJournalPage({
 
       <PhotoFinanceExperience
         accounts={accounts}
+        jars={jars}
+        jarActivities={jarActivities}
         entries={entries}
         expenses={expenses}
         ownerId={ownerId}
         onDeleteTransaction={onDeleteTransaction}
         onSaveTransaction={onSaveTransaction}
+        onJarCommand={onJarCommand}
         transactions={transactions}
       />
     </div>

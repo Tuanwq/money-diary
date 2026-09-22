@@ -212,3 +212,5 @@
     display: none;
   }
 }
+.manager-jars-shortcut{display:flex;align-items:center;gap:11px;text-align:left;width:100%;color:var(--money-text)}
+.manager-jars-shortcut span{display:grid;gap:3px;flex:1}.manager-jars-shortcut small{color:var(--money-text-secondary)}

@@ -8,9 +8,8 @@ import { HistoryLayout } from "../features/history/components/HistoryLayout";
 import { HistoryPagination } from "../features/history/components/HistoryPagination";
 import { HistorySummaryStrip } from "../features/history/components/HistorySummaryStrip";
 import { ExpenseAnalysis } from "../features/history/components/expenses/ExpenseAnalysis";
-import { ExpenseBudgetSection } from "../features/history/components/expenses/ExpenseBudgetSection";
 import { ExpenseDetails, ExpenseTransactionRow } from "../features/history/components/expenses/ExpenseTransactionRow";
-import { buildExpenseBudgetRows, buildExpenseCategoryBreakdown, getDistinctExpenseDateCount, getTopExpense } from "../features/history/historySelectors";
+import { buildExpenseCategoryBreakdown, getDistinctExpenseDateCount, getTopExpense } from "../features/history/historySelectors";
 import type { ExpenseBudget, ExpenseEntry, GoalScreen, Page } from "../types";
 import { formatReportDate } from "../utils/date";
 import { buildOtherExpenseBreakdown, getExpenseTotal } from "../utils/entries";
@@ -63,14 +62,9 @@ const quickFilters = [
 
 export function ExpensesPage(props: ExpensesPageProps) {
   const {
-    cancelEditExpenseBudget,
     cloudLoadError,
     deleteExpense,
-    deleteExpenseBudget,
     editExpense,
-    editingExpenseBudgetId,
-    expenseBudgetForm,
-    expenseBudgets,
     expenseCurrentPage,
     expenseFromDate,
     expenseLabelFilter,
@@ -85,15 +79,12 @@ export function ExpensesPage(props: ExpensesPageProps) {
     navigateTo,
     onRetry,
     paginatedExpenses,
-    saveExpenseBudget,
-    setExpenseBudgetForm,
     setExpenseCurrentPage,
     setExpenseFromDate,
     setExpenseLabelFilter,
     setExpenseQuickFilter,
     setExpenseSearch,
     setExpenseToDate,
-    startEditExpenseBudget,
   } = props;
   const [selectedExpense, setSelectedExpense] = useState<ExpenseEntry | null>(null);
   const [pendingDelete, setPendingDelete] = useState<ExpenseEntry | null>(null);
@@ -103,7 +94,6 @@ export function ExpensesPage(props: ExpensesPageProps) {
   const otherBreakdown = buildOtherExpenseBreakdown(filteredExpenses);
   const otherTotal = otherBreakdown.reduce((sum, item) => sum + item.total, 0);
   const categoryBreakdown = buildExpenseCategoryBreakdown(filteredExpenses, filteredExpensesTotal);
-  const budgetRows = buildExpenseBudgetRows(expenseBudgets, expenses);
   const activeFilters: ActiveHistoryFilter[] = [];
   const isInitialLoading = Boolean(isCloudLoading && expenses.length === 0);
   const hasInitialError = Boolean(cloudLoadError && expenses.length === 0);
@@ -167,17 +157,11 @@ export function ExpensesPage(props: ExpensesPageProps) {
         <HistoryPagination currentPage={expenseCurrentPage} totalPages={expenseTotalPages} onPageChange={setExpenseCurrentPage} />
       </section>
 
-      {!isInitialLoading && !hasInitialError && <ExpenseBudgetSection
-        budgetRows={budgetRows}
-        cancelEdit={cancelEditExpenseBudget}
-        deleteBudget={deleteExpenseBudget}
-        editingId={editingExpenseBudgetId}
-        form={expenseBudgetForm}
-        labelOptions={["Ăn uống", ...expenseLabelOptions.filter((label) => label !== "Ăn uống")]}
-        save={saveExpenseBudget}
-        setForm={setExpenseBudgetForm}
-        startEdit={startEditExpenseBudget}
-      />}
+      {!isInitialLoading && !hasInitialError && <section className="history-panel">
+        <h2>Hũ chi tiêu</h2>
+        <p>Ngân sách theo nhãn đã được chuyển thành hũ. Dữ liệu cũ vẫn được giữ để khôi phục.</p>
+        <button type="button" onClick={() => navigateTo("spendingJars")}>Xem và quản lý hũ chi tiêu</button>
+      </section>}
 
       <HistoryDetailDrawer isOpen={Boolean(selectedExpense)} title="Chi tiết khoản chi" subtitle={selectedExpense ? formatReportDate(selectedExpense.date) : undefined} onClose={() => setSelectedExpense(null)} onEdit={selectedExpense ? () => editExpense(selectedExpense) : undefined}>
         {selectedExpense && <ExpenseDetails expense={selectedExpense} />}

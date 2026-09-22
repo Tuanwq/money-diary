@@ -9,6 +9,7 @@
     "lint": "eslint .",
     "test:cloud-sync": "node --experimental-strip-types scripts/cloudSyncState.test.mjs",
     "test:account-ledger": "node --experimental-strip-types scripts/accountLedger.test.mjs",
+    "test:spending-jars": "node --experimental-strip-types scripts/spendingJars.test.mjs",
     "test:photo-finance": "node --experimental-strip-types scripts/photoFinance.test.mjs",
     "test:reconciliation": "node --experimental-strip-types scripts/accountReconciliation.test.mjs",
     "test:automation": "node --experimental-strip-types scripts/automationRules.test.mjs",

@@ -1,6 +1,7 @@
 import {
   BookOpenText,
   Camera,
+  CookingPot,
   ChartColumnBig,
   ChartNoAxesCombined,
   ChevronRight,
@@ -78,6 +79,12 @@ export function MoneyDesktopSidebar({
       icon: Camera,
       label: "Nhật ký tài chính",
       onClick: () => navigateTo("photoJournal"),
+    },
+    {
+      active: currentPage === "spendingJars",
+      icon: CookingPot,
+      label: "Hũ chi tiêu",
+      onClick: () => navigateTo("spendingJars"),
     },
     {
       active: currentPage === "goals",
