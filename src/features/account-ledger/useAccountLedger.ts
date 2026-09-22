@@ -4,7 +4,7 @@ import { safeSetStorageJson } from "../../utils/safeStorage";
 import type { ExpenseBudget } from "../../types.ts";
 import { applyJarCommand, type JarCommand } from "../spending-jars/services/jarService.ts";
 import { getAccountAllocation, migrateExpenseBudgets } from "../spending-jars/domain/jarModel.ts";
-import { reconcileJarLedger } from "./reconcileJarLedger.ts";
+import { isPristineLedger, reconcileJarLedger } from "./reconcileJarLedger.ts";
 import {
   ACCOUNT_LEDGER_STORAGE_KEY,
   createDefaultLedger,
@@ -33,6 +33,7 @@ export function useAccountLedger(userId?: string, legacyBudgets: ExpenseBudget[]
   const [cloudStatus, setCloudStatus] = useState("Đang lưu trên thiết bị");
   const [cloudReady, setCloudReady] = useState(false);
   const [jarSchemaReady, setJarSchemaReady] = useState(true);
+  const [retryIndex, setRetryIndex] = useState(0);
   const dirtyRef = useRef(false);
   const latestLedgerRef = useRef(ledger);
   const saveChainRef = useRef<Promise<void>>(Promise.resolve());
@@ -102,8 +103,9 @@ export function useAccountLedger(userId?: string, legacyBudgets: ExpenseBudget[]
         cloudLedger &&
         !hasRecoveredJars &&
         (schemaAvailable || (localLedger.jars.length === 0 && localLedger.jarActivities.length === 0)) &&
-        new Date(cloudLedger.updatedAt).getTime() >
-          new Date(localLedger.updatedAt).getTime();
+        (isPristineLedger(localLedger) ||
+          new Date(cloudLedger.updatedAt).getTime() >
+            new Date(localLedger.updatedAt).getTime());
       const nextLedger = hasRecoveredJars ? recoveredLedger! : shouldUseCloud ? cloudLedger : localLedger;
 
       if (nextLedger !== localLedger) {
@@ -145,7 +147,12 @@ export function useAccountLedger(userId?: string, legacyBudgets: ExpenseBudget[]
       active = false;
       window.clearTimeout(timeout);
     };
-  }, [userId]);
+  }, [userId, retryIndex]);
+
+  const retrySync = useCallback(() => {
+    setCloudReady(false);
+    setRetryIndex((value) => value + 1);
+  }, []);
 
   useEffect(() => {
     if (!userId || !cloudReady || !jarSchemaReady || !dirtyRef.current) return;
@@ -294,6 +301,7 @@ export function useAccountLedger(userId?: string, legacyBudgets: ExpenseBudget[]
     jars: ledger.jars,
     jarActivities: ledger.jarActivities,
     replaceLedger,
+    retrySync,
     saveAccount,
     saveTransaction,
     transactions: ledger.transactions,

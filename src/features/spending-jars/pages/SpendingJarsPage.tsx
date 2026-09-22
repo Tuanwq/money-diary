@@ -19,9 +19,9 @@ function fieldsFrom(jar?: SpendingJar): JarForm {
     endDate: jar?.endDate ?? "", labels: jar?.linkedLabels.join(", ") ?? "" };
 }
 
-export function SpendingJarsPage({ ledger, cloudStatus, onBack, onCommand, onDeleteSpend }: {
+export function SpendingJarsPage({ ledger, cloudStatus, onBack, onCommand, onDeleteSpend, onRetrySync }: {
   ledger: JarLedger; cloudStatus: string; onBack: () => void; onCommand: (command: JarCommand) => void;
-  onDeleteSpend: (activity: JarActivity) => Promise<void>;
+  onDeleteSpend: (activity: JarActivity) => Promise<void>; onRetrySync: () => void;
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editor, setEditor] = useState<"create" | "edit" | null>(null);
@@ -103,7 +103,9 @@ export function SpendingJarsPage({ ledger, cloudStatus, onBack, onCommand, onDel
       <div><span>Money Diary</span><h1>{selected ? `${selected.icon} ${selected.name}` : "Hũ chi tiêu"}</h1></div>
       {!selected && <button className="jars-primary" onClick={() => { setJarForm(fieldsFrom()); setEditor("create"); setError(""); }} type="button"><Plus size={17} /> Tạo hũ</button>}
     </header>
-    {cloudStatus.includes("migration") && <p className="jars-warning" role="status">{cloudStatus}. Dữ liệu mới chưa được đồng bộ.</p>}
+    {/migration|chưa thể|lỗi/i.test(cloudStatus) && <p className="jars-warning" role="status">
+      {cloudStatus}. Dữ liệu trên thiết bị chưa được đồng bộ. <button type="button" onClick={onRetrySync}>Thử đồng bộ lại</button>
+    </p>}
     {error && <p className="jars-error" role="alert">{error}</p>}
     {!selected ? <>
       <section className="jars-summary" aria-label="Tổng quan các hũ">

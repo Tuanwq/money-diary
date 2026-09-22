@@ -695,10 +695,16 @@ export default function App() {
     jars,
     jarActivities,
     replaceLedger,
+    retrySync: retryAccountLedgerSync,
     saveAccount,
     saveTransaction: saveAccountTransaction,
     transactions: accountTransactions,
   } = useAccountLedger(cloudDataUserId, goals.expenseBudgets);
+  const accountAwareSyncStatus = /migration|chưa thể|lỗi/i.test(accountLedgerCloudStatus)
+    ? `Chưa thể đồng bộ Sổ tài khoản: ${accountLedgerCloudStatus}`
+    : /đang tải|đang lưu/i.test(accountLedgerCloudStatus)
+      ? accountLedgerCloudStatus
+      : syncStatus;
   const {
     checks: accountReconciliations,
     cloudStatus: accountReconciliationCloudStatus,
@@ -3400,9 +3406,9 @@ if (route.kind === "daymark") {
       onOpenCloseDay={() => openCloseDay()}
       onOpenExpense={goToTodayEntryForm}
       onOpenIncome={() => navigateTo("hub")}
-      onRetrySync={() => void retryCloudLoad()}
+      onRetrySync={() => { void retryCloudLoad(); retryAccountLedgerSync(); }}
       onSwitchApp={openAppHub}
-      syncStatus={syncStatus}
+      syncStatus={accountAwareSyncStatus}
       themeMode={themeMode}
       toggleThemeMode={toggleThemeMode}
     >
@@ -3509,6 +3515,7 @@ if (route.kind === "daymark") {
               cloudStatus={accountLedgerCloudStatus}
               onBack={() => navigateTo("home")}
               onCommand={dispatchJar}
+              onRetrySync={retryAccountLedgerSync}
               onDeleteSpend={async (activity) => {
                 const firstId = activity.transactionIds?.[0];
                 if (firstId) await deleteAccountTransactionWithPhotos(firstId,

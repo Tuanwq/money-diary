@@ -1,4 +1,12 @@
-import type { AccountLedgerData } from "./accountLedgerModel.ts";
+import { createDefaultAccounts, type AccountLedgerData } from "./accountLedgerModel.ts";
+
+export function isPristineLedger(ledger: AccountLedgerData) {
+  if (ledger.transactions.length || ledger.jars.length || ledger.jarActivities.length) return false;
+  const defaults = createDefaultAccounts(ledger.updatedAt);
+  return ledger.accounts.length === defaults.length && ledger.accounts.every((account, index) =>
+    account.id === defaults[index].id && account.name === defaults[index].name &&
+    account.type === defaults[index].type && account.openingBalance === 0 && !account.archivedAt);
+}
 
 function mergeById<T extends { id: string; updatedAt?: string }>(remote: T[], local: T[]) {
   const merged = new Map(remote.map((item) => [item.id, item]));
