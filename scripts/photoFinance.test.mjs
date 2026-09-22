@@ -6,6 +6,7 @@ import { createPhotoDialogLock } from "../src/features/photo-finance/services/ph
 import { createSignedPhotoCache } from "../src/features/photo-finance/services/signedPhotoCache.ts";
 import { formatMoneyInput, parseMoneyInput } from "../src/utils/money.ts";
 import { processPhoto } from "../src/features/photo-finance/services/photoImageProcessor.ts";
+import { uploadProcessedPhotoImages } from "../src/features/photo-finance/services/photoUploadService.ts";
 import {
   buildDailyFinancialSummaries, formatCalendarNet, getCalendarDates,
   getCalendarPhotoStack, getDailyFinancialSummary, groupPhotoAttachmentsByDay,
@@ -70,6 +71,22 @@ test("photo persistence errors are actionable and do not expose raw Supabase mes
   assert.match(photoFinanceErrorMessage({ code: "PGRST205", message: "schema cache" }), /migration Photo Finance/);
   assert.match(photoFinanceErrorMessage(new Error("The connection to the database timed out")), /Supabase quá chậm/);
   assert.match(photoFinanceErrorMessage({ statusCode: 403, message: "Unauthorized" }), /đăng nhập lại/);
+  assert.match(photoFinanceErrorMessage(new Error("Load failed")), /tải ảnh lại/);
+});
+
+test("mobile photo upload retries a failed request and sends display then thumbnail as bytes", async () => {
+  const image = { display: new Blob(["display"]), thumbnail: new Blob(["thumb"]), width: 100, height: 80 };
+  const calls = [];
+  await uploadProcessedPhotoImages(image, "owner/photo/display.jpg", "owner/photo/thumbnail.jpg",
+    async (path, bytes) => {
+      calls.push([path, bytes.byteLength]);
+      return { error: calls.length === 1 ? new Error("Load failed") : null };
+    });
+  assert.deepEqual(calls, [
+    ["owner/photo/display.jpg", 7],
+    ["owner/photo/display.jpg", 7],
+    ["owner/photo/thumbnail.jpg", 5],
+  ]);
 });
 
 const accounts = [

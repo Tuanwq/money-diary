@@ -115,8 +115,8 @@ export function PhotoTransactionForm({ accounts, jars, jarActivities, transactio
       const value = parseMoneyInput(amount);
       if (existing?.jarActivityId) throw new Error("Khoản chi từ hũ cần sửa trong chi tiết hũ để giữ đúng từng nguồn tiền.");
       const activityId = crypto.randomUUID();
-      const jarLines = selectedJar && !savedId
-        ? planJarSpend(jarLedger, selectedJar.id, value, jarSourceId || undefined) : [];
+      if (selectedJar && !savedId)
+        planJarSpend(jarLedger, selectedJar.id, value, jarSourceId || undefined);
       const transactionId = savedId ?? (selectedJar
         ? `jar-spend:${activityId}:0` : existing?.id ?? crypto.randomUUID());
       const transaction = savedId || selectedJar ? null : buildPhotoTransaction({

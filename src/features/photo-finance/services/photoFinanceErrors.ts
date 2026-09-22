@@ -16,7 +16,7 @@ export function isRetryablePhotoError(cause: unknown) {
   const text = `${error.code ?? ""} ${error.message ?? ""}`.toLowerCase();
   const status = Number(error.status ?? error.statusCode ?? 0);
   return status === 408 || status === 429 || status >= 500 ||
-    /timeout|timed out|network|fetch|connection|econn|temporar/.test(text);
+    /timeout|timed out|network|fetch|connection|econn|temporar|load failed|failed to load|offline/.test(text);
 }
 
 export function photoFinanceErrorMessage(cause: unknown, fallback = "Không thể lưu ảnh.") {

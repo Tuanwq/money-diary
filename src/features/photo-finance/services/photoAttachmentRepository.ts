@@ -5,6 +5,7 @@ import { PHOTO_FINANCE_BUCKET, PHOTO_FINANCE_SOURCE_TYPE,
 import { processPhoto, type ProcessedPhoto } from "./photoImageProcessor.ts";
 import { photoFinanceErrorMessage, retryPhotoOperation } from "./photoFinanceErrors.ts";
 import { createSignedPhotoCache } from "./signedPhotoCache.ts";
+import { uploadProcessedPhotoImages } from "./photoUploadService.ts";
 
 type AttachmentRow = {
   id: string; owner_id: string; source_type: string; source_id: string;
@@ -25,12 +26,12 @@ async function requireOwner(client: SupabaseClient, ownerId: string) {
     throw new Error("Cần đăng nhập đúng tài khoản để lưu ảnh riêng tư.");
 }
 
-async function unwrap<T>(operation: () => PromiseLike<{ data: T; error: unknown }>) {
+async function unwrap<T>(operation: () => PromiseLike<{ data: T; error: unknown }>, retries = 1) {
   return retryPhotoOperation(async () => {
     const result = await operation();
     if (result.error) throw result.error;
     return result.data;
-  });
+  }, retries);
 }
 
 export function createPhotoAttachmentRepository(client: SupabaseClient = supabase) {
@@ -93,19 +94,20 @@ export function createPhotoAttachmentRepository(client: SupabaseClient = supabas
       const thumbnailPath = `${ownerId}/${id}/thumbnail.jpg`;
       const storage = client.storage.from(PHOTO_FINANCE_BUCKET);
       try {
-        await Promise.all([
-          unwrap(() => storage.upload(storagePath, image.display,
-            { contentType: "image/jpeg", upsert: true })),
-          unwrap(() => storage.upload(thumbnailPath, image.thumbnail,
-            { contentType: "image/jpeg", upsert: true })),
-        ]);
+        // Safari on unstable mobile networks may reject a Blob upload with
+        // "Load failed" after the request starts. Small ArrayBuffers avoid the
+        // multipart Blob path; sequential requests also reduce memory/network
+        // pressure. Stable paths make every retry safe to repeat.
+        await uploadProcessedPhotoImages(image, storagePath, thumbnailPath,
+          (path, bytes) => storage.upload(path, bytes,
+            { contentType: "image/jpeg", upsert: true }));
         const data = await unwrap(() => client.from("money_diary_financial_attachments")
           .upsert({ id, owner_id: ownerId, source_type: PHOTO_FINANCE_SOURCE_TYPE,
             source_id: transactionId, storage_path: storagePath,
             thumbnail_path: thumbnailPath, is_cover: isCover,
             width: image.width, height: image.height }, { onConflict: "id" })
           .select("id,owner_id,source_type,source_id,storage_path,thumbnail_path,is_cover,width,height,created_at")
-          .single());
+          .single(), 2);
         if (!data) throw new Error("Không liên kết được ảnh.");
         images.invalidate(storagePath);
         images.invalidate(thumbnailPath);
