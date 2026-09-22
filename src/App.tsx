@@ -1155,14 +1155,6 @@ async function restoreBackup(
     (item) => item.date === selectedDate
   );
 
-const selectedExpenseTotal = selectedExpense
-  ? selectedExpense.breakfast +
-    selectedExpense.lunch +
-    selectedExpense.dinner +
-    selectedExpense.other
-  : 0;
-const selectedGrossIncome = selectedEntry ? getTotalEntryMoney(selectedEntry) : 0;
-
   const monthEntries = entries.filter((entry) =>
     isSameMonth(entry.date, selectedDateObject)
   );
@@ -3475,9 +3467,8 @@ if (route.kind === "daymark") {
               selectedDate={selectedDate}
               selectedEntry={selectedEntry}
               selectedExpense={selectedExpense}
-              selectedExpenseTotal={selectedExpenseTotal}
-              selectedGrossIncome={selectedGrossIncome}
               todayString={todayString}
+              transactions={accountTransactions}
             />
           )}
           {page === "photoJournal" && (

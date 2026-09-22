@@ -4,7 +4,9 @@ import { DataCompletionCard } from "../features/money-diary/components/dashboard
 import { GreetingHeader } from "../features/money-diary/components/dashboard/GreetingHeader";
 import { MainGoalCard } from "../features/money-diary/components/dashboard/MainGoalCard";
 import { RecentTransactions } from "../features/money-diary/components/dashboard/RecentTransactions";
-import { buildManagerMonthlyOverview } from "../features/money-diary/utils/managerDashboardSelectors";
+import { buildManagerOverview } from "../features/money-diary/utils/managerDashboardSelectors";
+import { useMemo } from "react";
+import type { AccountTransaction } from "../features/account-ledger/accountLedgerModel";
 import type { MainGoalProgressSummary } from "../features/goals/domain/mainGoalProgress";
 import type {
   BalanceCheckEntry,
@@ -42,8 +44,7 @@ type HomePageProps = {
   selectedDate: string;
   selectedEntry?: DailyEntry;
   selectedExpense?: ExpenseEntry;
-  selectedExpenseTotal: number;
-  selectedGrossIncome: number;
+  transactions: AccountTransaction[];
   todayString: string;
 };
 
@@ -72,12 +73,11 @@ export function HomePage({
   selectedDate,
   selectedEntry,
   selectedExpense,
-  selectedExpenseTotal,
-  selectedGrossIncome,
+  transactions,
   todayString,
 }: HomePageProps) {
-  const month = buildManagerMonthlyOverview(entries, expenses, selectedDate);
-  const dayNet = selectedGrossIncome - selectedExpenseTotal;
+  const { day, month } = useMemo(() => buildManagerOverview(entries, expenses, selectedDate, transactions),
+    [entries, expenses, selectedDate, transactions]);
   const openHistory = () => navigateTo("history");
   const openGoal = () => navigateTo("goals", "current");
   const requestNotificationPermission = () => navigateTo("settings");
@@ -103,10 +103,10 @@ export function HomePage({
         <p>Tổng số dư hiện tại trong Sổ tài khoản. Tiến độ hành trình được theo dõi riêng ở mục tiêu bên dưới.</p>
 
         <div className="manager-day-strip" aria-label="Biến động ngày đang xem">
-          <div><span>Thu trong ngày</span><strong className="is-positive">+{formatMoney(selectedGrossIncome)}</strong></div>
-          <div><span>Chi trong ngày</span><strong className="is-negative">−{formatMoney(selectedExpenseTotal)}</strong></div>
-          <div><span>Thay đổi ròng</span><strong className={dayNet < 0 ? "is-negative" : "is-positive"}>
-            {dayNet >= 0 ? "+" : "−"}{formatMoney(Math.abs(dayNet))}
+          <div><span>Thu trong ngày</span><strong className="is-positive">+{formatMoney(day.income)}</strong></div>
+          <div><span>Chi trong ngày</span><strong className="is-negative">−{formatMoney(day.expense)}</strong></div>
+          <div><span>Thay đổi ròng</span><strong className={day.net < 0 ? "is-negative" : "is-positive"}>
+            {day.net >= 0 ? "+" : "−"}{formatMoney(Math.abs(day.net))}
           </strong></div>
         </div>
 
@@ -151,7 +151,7 @@ export function HomePage({
         warnings={dataWarnings}
       />
 
-      <RecentTransactions entries={entries} expenses={expenses} onViewAll={openHistory} />
+      <RecentTransactions entries={entries} expenses={expenses} accountTransactions={transactions} onViewAll={openHistory} />
 
       {balanceChecks.length === 0 && <p className="manager-overview-footnote">
         Kiểm kê số dư định kỳ giúp con số “Tổng tiền hiện có” đáng tin cậy hơn.

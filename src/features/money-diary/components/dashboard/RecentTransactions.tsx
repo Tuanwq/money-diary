@@ -1,50 +1,24 @@
 import { ArrowDownLeft, ArrowRight, ArrowUpRight, Inbox } from "lucide-react";
 import type { DailyEntry, ExpenseEntry } from "../../../../types";
 import { formatReportDate } from "../../../../utils/date";
-import { getExpenseTotal, getTotalEntryMoney } from "../../../../utils/entries";
+import { buildManagerRecentTransactions, type ManagerRecentTransaction } from "../../utils/managerDashboardSelectors";
+import type { AccountTransaction } from "../../../account-ledger/accountLedgerModel";
 import { formatMoney } from "../../../../utils/money";
 
 type RecentTransactionsProps = {
   entries: DailyEntry[];
   expenses: ExpenseEntry[];
+  accountTransactions?: AccountTransaction[];
   onViewAll: () => void;
-};
-
-type TransactionItem = {
-  amount: number;
-  date: string;
-  description: string;
-  id: string;
-  kind: "expense" | "income";
-  source: string;
 };
 
 export function RecentTransactions({
   entries,
   expenses,
+  accountTransactions,
   onViewAll,
 }: RecentTransactionsProps) {
-  const transactions: TransactionItem[] = [
-    ...entries.map((entry) => ({
-      amount: getTotalEntryMoney(entry),
-      date: entry.date,
-      description: entry.diary.trim() || entry.note.trim() || "Thu nhập trong ngày",
-      id: `income-${entry.id}`,
-      kind: "income" as const,
-      source: "Nhật ký / Hub",
-    })),
-    ...expenses.map((expense) => ({
-      amount: getExpenseTotal(expense),
-      date: expense.date,
-      description: expense.note.trim() || "Chi tiêu trong ngày",
-      id: `expense-${expense.id}`,
-      kind: "expense" as const,
-      source: "Chi tiêu",
-    })),
-  ]
-    .filter((item) => item.amount > 0)
-    .sort((a, b) => b.date.localeCompare(a.date) || a.kind.localeCompare(b.kind))
-    .slice(0, 6);
+  const transactions = buildManagerRecentTransactions(entries, expenses, accountTransactions);
 
   return (
     <section className="money-card money-recent-transactions" aria-labelledby="recent-transactions-title">
@@ -78,7 +52,7 @@ export function RecentTransactions({
   );
 }
 
-function TransactionRow({ transaction }: { transaction: TransactionItem }) {
+function TransactionRow({ transaction }: { transaction: ManagerRecentTransaction }) {
   const income = transaction.kind === "income";
   const Icon = income ? ArrowDownLeft : ArrowUpRight;
 

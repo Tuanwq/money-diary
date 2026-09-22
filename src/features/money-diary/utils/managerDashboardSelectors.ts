@@ -1,4 +1,7 @@
 import type { DailyEntry, ExpenseEntry } from "../../../types.ts";
+import type { AccountTransaction } from "../../account-ledger/accountLedgerModel.ts";
+import { buildDailyFinancialSummaries, getDailyFinancialSummary } from "../../photo-finance/services/photoFinanceModel.ts";
+import { getExpenseTotal, getTotalEntryMoney } from "../../../utils/entries.ts";
 
 export type ManagerMonthlyOverview = {
   expense: number;
@@ -9,14 +12,6 @@ export type ManagerMonthlyOverview = {
 };
 
 const unlabeledExpense = "Khác chưa gắn nhãn";
-
-function entryIncome(entry: DailyEntry) {
-  return (entry.income ?? 0) + (entry.bonusMoney ?? 0) + (entry.receivedMoney ?? 0);
-}
-
-function expenseTotal(expense: ExpenseEntry) {
-  return expense.breakfast + expense.lunch + expense.dinner + expense.other;
-}
 
 function otherExpenses(expense: ExpenseEntry) {
   const savedItems = (expense.otherItems ?? [])
@@ -34,13 +29,26 @@ function otherExpenses(expense: ExpenseEntry) {
 export function buildManagerMonthlyOverview(
   entries: DailyEntry[],
   expenses: ExpenseEntry[],
-  selectedDate: string
+  selectedDate: string,
+  transactions: AccountTransaction[] = [],
 ): ManagerMonthlyOverview {
+  return buildManagerOverview(entries, expenses, selectedDate, transactions).month;
+}
+
+/** Cash flow includes every recorded expense, irrespective of its goal purpose.
+ * Share the journal's legacy/photo source rules to avoid omissions or duplicates. */
+export function buildManagerOverview(
+  entries: DailyEntry[],
+  expenses: ExpenseEntry[],
+  selectedDate: string,
+  transactions: AccountTransaction[] = [],
+) {
+  const days = buildDailyFinancialSummaries(entries, expenses, transactions);
   const month = selectedDate.slice(0, 7);
-  const monthEntries = entries.filter((entry) => entry.date.startsWith(month));
   const monthExpenses = expenses.filter((expense) => expense.date.startsWith(month));
-  const income = monthEntries.reduce((total, entry) => total + entryIncome(entry), 0);
-  const expense = monthExpenses.reduce((total, item) => total + expenseTotal(item), 0);
+  const monthDays = [...days.values()].filter((day) => day.date.startsWith(month));
+  const income = monthDays.reduce((total, day) => total + day.income, 0);
+  const expense = monthDays.reduce((total, day) => total + day.expense, 0);
   const categories = new Map<string, number>();
 
   function addCategory(label: string, amount: number) {
@@ -54,11 +62,14 @@ export function buildManagerMonthlyOverview(
     addCategory("Ăn tối", item.dinner);
     otherExpenses(item).forEach((other) => addCategory(other.label, other.amount));
   });
+  transactions.filter((item) => item.source === "photo_finance" &&
+    item.type === "expense" && item.date.startsWith(month))
+    .forEach((item) => addCategory(item.category.trim() || unlabeledExpense, item.amount));
 
   const topExpenseEntry = [...categories.entries()].sort((left, right) => right[1] - left[1])[0];
   const net = income - expense;
 
-  return {
+  const monthly: ManagerMonthlyOverview = {
     expense,
     income,
     net,
@@ -67,4 +78,38 @@ export function buildManagerMonthlyOverview(
       ? { label: topExpenseEntry[0], amount: topExpenseEntry[1] }
       : null,
   };
+  return { day: getDailyFinancialSummary(days, selectedDate), month: monthly };
+}
+
+export type ManagerRecentTransaction = {
+  amount: number;
+  date: string;
+  description: string;
+  id: string;
+  kind: "expense" | "income";
+  source: string;
+};
+
+export function buildManagerRecentTransactions(
+  entries: DailyEntry[], expenses: ExpenseEntry[], transactions: AccountTransaction[] = [],
+): ManagerRecentTransaction[] {
+  return [
+    ...entries.map((entry) => ({
+      amount: getTotalEntryMoney(entry), date: entry.date,
+      description: entry.diary.trim() || entry.note.trim() || "Thu nhập trong ngày",
+      id: `income-${entry.id}`, kind: "income" as const, source: "Nhật ký / Hub",
+    })),
+    ...expenses.map((expense) => ({
+      amount: getExpenseTotal(expense), date: expense.date,
+      description: expense.note.trim() || "Chi tiêu trong ngày",
+      id: `expense-${expense.id}`, kind: "expense" as const, source: "Chi tiêu",
+    })),
+    ...transactions.filter((item) => item.source === "photo_finance" && item.type !== "transfer")
+      .map((item) => ({
+        amount: item.amount, date: item.date, description: item.note.trim() || item.category,
+        id: `ledger-${item.id}`, kind: item.type as "income" | "expense", source: "Nhật ký tài chính",
+      })),
+  ].filter((item) => item.amount > 0)
+    .sort((a, b) => b.date.localeCompare(a.date) || a.kind.localeCompare(b.kind))
+    .slice(0, 6);
 }

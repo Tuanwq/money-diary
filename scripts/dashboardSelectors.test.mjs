@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
-import { buildManagerMonthlyOverview } from "../src/features/money-diary/utils/managerDashboardSelectors.ts";
+import { buildManagerMonthlyOverview, buildManagerOverview, buildManagerRecentTransactions } from "../src/features/money-diary/utils/managerDashboardSelectors.ts";
+import { buildDailyFinancialSummaries, getDailyFinancialSummary } from "../src/features/photo-finance/services/photoFinanceModel.ts";
+import { buildMainGoalProgress } from "../src/features/goals/domain/mainGoalProgress.ts";
+import { getLedgerSummary } from "../src/features/account-ledger/accountLedgerModel.ts";
 
 const entries = [
   {
@@ -59,5 +62,45 @@ assert.deepEqual(buildManagerMonthlyOverview([], [], "2026-09-20"), {
   savingsRate: null,
   topExpense: null,
 });
+
+const day = "2026-09-21";
+const dayEntries = [{ ...entries[0], date: day, income: 170_000, bonusMoney: 0, receivedMoney: 0 }];
+const photoExpenses = [69_000, 7_000, 1_067_000].map((amount, index) => ({
+  id: `photo-${index}`, accountId: "momo", amount, date: day, category: "Ăn uống", note: "",
+  type: "expense", purpose: "goal_allocation", source: "photo_finance",
+  createdAt: `${day}T11:00:00Z`, updatedAt: `${day}T11:00:00Z`,
+}));
+const overview = buildManagerOverview(dayEntries, [], day, photoExpenses);
+assert.deepEqual(overview.day, {
+  date: day, income: 170_000, expense: 1_143_000, net: -973_000, hasData: true,
+});
+assert.deepEqual(overview.day,
+  getDailyFinancialSummary(buildDailyFinancialSummaries(dayEntries, [], photoExpenses), day));
+assert.equal(overview.month.expense, 1_143_000);
+assert.equal(overview.month.net, -973_000);
+assert.deepEqual(overview.month.topExpense, { label: "Ăn uống", amount: 1_143_000 });
+assert.equal(buildManagerRecentTransactions(dayEntries, [], photoExpenses)
+  .filter((item) => item.kind === "expense").length, 3);
+
+const goals = { bigGoalStartDate: "2026-09-01", bigGoalDeadline: "2026-09-30",
+  bigGoalTarget: 13_500_000, bigGoalSaved: 10_000_000 };
+const progressInput = { asOfDate: day, goals, entries: dayEntries, expenses: [], transactions: [] };
+const before = buildMainGoalProgress(progressInput);
+const after = buildMainGoalProgress({ ...progressInput, transactions: photoExpenses });
+assert.equal(after.achievedAmount, before.achievedAmount, "goal allocations still count as cash outflow without reducing progress");
+const accounts = [{ id: "momo", openingBalance: 2_000_000 }];
+assert.equal(getLedgerSummary(accounts, photoExpenses, "2026-09").totalBalance, 857_000);
+
+const transfer = { ...photoExpenses[0], id: "transfer", type: "transfer", purpose: "internal_transfer", toAccountId: "bank" };
+const ambiguousLegacy = { ...photoExpenses[0], id: "legacy", source: undefined, purpose: undefined };
+assert.deepEqual(buildManagerOverview(dayEntries, [], day, [...photoExpenses, transfer, ambiguousLegacy]), overview);
+const edited = photoExpenses.map((item, index) => index === 0 ? { ...item, amount: 50_000 } : item);
+assert.equal(buildManagerOverview(dayEntries, [], day, edited).day.expense, 1_124_000);
+assert.equal(buildManagerOverview(dayEntries, [], day, photoExpenses.slice(1)).day.expense, 1_074_000);
+const moved = photoExpenses.map((item) => ({ ...item, date: "2026-10-01" }));
+assert.equal(buildManagerOverview(dayEntries, [], day, moved).month.expense, 0);
+assert.equal(buildManagerOverview(dayEntries, [], "2026-10-01", moved).day.expense, 1_143_000);
+const photoIncome = { ...photoExpenses[0], id: "photo-income", type: "income", purpose: "income", amount: 80_000 };
+assert.equal(buildManagerOverview(dayEntries, [], day, [...photoExpenses, photoIncome]).day.income, 250_000);
 
 console.log("Dashboard selector tests passed.");
