@@ -97,9 +97,10 @@ export function PhotoFinanceExperience({ accounts, jars, jarActivities, entries,
         thumbnails.retry();
         void photos.refresh();
       }} type="button">Thử lại</button></p>}
-    <DayStory accounts={accounts} attachments={storyDate ? attachmentsByDay.get(storyDate) ?? [] : []}
+    <DayStory key={storyDate ?? "closed"} accounts={accounts} attachments={storyDate ? attachmentsByDay.get(storyDate) ?? [] : []}
       date={storyDate ?? ""} entries={entries} expenses={expenses} isOpen={Boolean(storyDate) && !captureOpen}
       onAddPhoto={(transaction) => openCapture(transaction.date, transaction)}
+      onCapture={() => storyDate && openCapture(storyDate)}
       onClose={() => setStoryDate(null)} onDeletePhoto={(attachment) => void deletePhoto(attachment)}
       onDeleteTransaction={(transaction) => void deleteTransaction(transaction)}
       onEditTransaction={(transaction) => openCapture(transaction.date, transaction)}

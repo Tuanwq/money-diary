@@ -40,6 +40,10 @@ import {
   type FinancialAccount,
   type FinancialAccountType,
 } from "./accountLedgerModel";
+import { AccountExternalForm, AccountExternalSection, type ExternalDialog } from "./AccountExternalMoney.tsx";
+import { calculateAccountActualAvailable, calculateAccountExternalAmount,
+  calculateActualAvailableBalance, calculateTotalExternalAmount,
+  type AccountExternalCommand, type AccountExternalEntry } from "./accountExternalModel.ts";
 
 const TRANSACTIONS_PER_PAGE = 8;
 
@@ -92,7 +96,7 @@ function AccountForm({
 
     const now = new Date().toISOString();
 
-    onSave({
+    try { onSave({
       ...account,
       createdAt: account?.createdAt ?? now,
       id: account?.id ?? crypto.randomUUID(),
@@ -100,8 +104,8 @@ function AccountForm({
       openingBalance: parseMoneyInput(openingBalance),
       type,
       updatedAt: now,
-    });
-    onClose();
+    }); onClose(); }
+    catch (cause) { alert(cause instanceof Error ? cause.message : "Không thể lưu tài khoản."); }
   }
 
   return (
@@ -493,8 +497,11 @@ export function AccountLedgerPage({
   jars,
   jarActivities,
   onJarCommand,
+  onExternalCommand,
   archiveAccount,
   cloudStatus,
+  onRetrySync,
+  onUseCloudVersion,
   deleteTransaction,
   saveAccount,
   saveTransaction,
@@ -504,8 +511,11 @@ export function AccountLedgerPage({
   jars: SpendingJar[];
   jarActivities: JarActivity[];
   onJarCommand: (command: JarCommand) => void;
+  onExternalCommand: (command: AccountExternalCommand) => void;
   archiveAccount: (accountId: string) => void;
   cloudStatus: string;
+  onRetrySync: () => void;
+  onUseCloudVersion: () => void;
   deleteTransaction: (transactionId: string) => void;
   saveAccount: (account: FinancialAccount) => void;
   saveTransaction: (transaction: AccountTransaction) => void;
@@ -524,6 +534,7 @@ export function AccountLedgerPage({
     useState<AccountTransaction | null>(null);
   const [showAccountForm, setShowAccountForm] = useState(false);
   const [showTransactionForm, setShowTransactionForm] = useState(false);
+  const [externalDialog, setExternalDialog] = useState<ExternalDialog | null>(null);
   const activeAccounts = accounts.filter((account) => !account.archivedAt);
   const accountMap = useMemo(
     () => new Map(accounts.map((account) => [account.id, account])),
@@ -533,6 +544,10 @@ export function AccountLedgerPage({
     () => getLedgerSummary(accounts, transactions, monthFilter),
     [accounts, monthFilter, transactions]
   );
+  const availability = useMemo(() => {
+    const ledger = { accounts, transactions, jars, jarActivities, updatedAt: "" };
+    return { actual: calculateActualAvailableBalance(ledger), external: calculateTotalExternalAmount(ledger) };
+  }, [accounts, transactions, jars, jarActivities]);
   const filteredTransactions = useMemo(() => {
     const normalizedSearch = search.trim().toLocaleLowerCase("vi-VN");
 
@@ -659,10 +674,25 @@ export function AccountLedgerPage({
         </div>
       </header>
 
-      <section className="account-ledger-summary" aria-label="Tóm tắt sổ tài khoản">
+      {/xung đột|chưa thể|lỗi/i.test(cloudStatus) && <div className="account-external-sync-notice" role="status">
+        <span>{cloudStatus}. Thay đổi trên thiết bị này có thể chưa được đồng bộ.</span>
+        <button type="button" onClick={onRetrySync}>Thử đồng bộ lại</button>
+        {/xung đột/i.test(cloudStatus) && <button type="button" onClick={() => {
+          if (!confirm("Dùng dữ liệu cloud mới nhất? Bản trên thiết bị sẽ được sao lưu để có thể khôi phục.")) return;
+          try { onUseCloudVersion(); }
+          catch (cause) { alert(cause instanceof Error ? cause.message : "Chưa thể tải dữ liệu cloud."); }
+        }}>Dùng bản cloud (giữ bản sao)</button>}
+      </div>}
+
+      <section className="account-ledger-summary has-availability" aria-label="Tóm tắt sổ tài khoản">
         <div className="is-balance">
           <span>Tổng số dư</span>
           <strong>{formatMoney(summary.totalBalance)}</strong>
+        </div>
+        <div className="is-actual">
+          <span>Tiền thực tế có</span>
+          <strong>{formatMoney(availability.actual)}</strong>
+          <small>{availability.external > 0 ? `Sau khi trừ ${formatMoney(availability.external)} đang ở ngoài` : "Có thể dùng ngay"}</small>
         </div>
         <div>
           <span>Thu trong tháng</span>
@@ -702,6 +732,7 @@ export function AccountLedgerPage({
           {activeAccounts.map((account) => {
             const Icon = ACCOUNT_ICONS[account.type];
             const balance = calculateAccountBalance(account, transactions);
+            const external = calculateAccountExternalAmount(account);
 
             return (
               <article
@@ -727,6 +758,11 @@ export function AccountLedgerPage({
                   </span>
                   <b>{formatMoney(balance)}</b>
                 </button>
+                <div className="account-external-breakdown">
+                  <span>Thực có <strong>{formatMoney(calculateAccountActualAvailable(account, transactions))}</strong></span>
+                  {external > 0 && <span className="is-outside">Đang ở ngoài <strong>{formatMoney(external)}</strong></span>}
+                  {external > balance && <small>Khoản ở ngoài đang vượt số dư. Hãy kiểm tra lại sổ.</small>}
+                </div>
                 <div className="account-balance-actions">
                   <span>
                     Đầu kỳ {formatMoney(account.openingBalance)}
@@ -753,11 +789,25 @@ export function AccountLedgerPage({
                     </button>
                   </div>
                 </div>
+                <button className="account-external-quick" type="button" onClick={() => {
+                  setSelectedAccountId(account.id);
+                  setExternalDialog({ kind: "create", accountId: account.id });
+                }}>Đánh dấu tiền đang ở ngoài</button>
               </article>
             );
           })}
         </div>
       </section>
+
+      <AccountExternalSection accounts={accounts} selectedAccountId={selectedAccountId}
+        onCreate={(accountId) => setExternalDialog({ kind: "create", accountId })}
+        onEdit={(entry) => setExternalDialog({ kind: "edit", accountId: entry.accountId, entry })}
+        onRecover={(entry) => setExternalDialog({ kind: "recover", accountId: entry.accountId, entry })}
+        onDelete={(entry: AccountExternalEntry) => {
+          if (!confirm("Xóa khoản tiền đang ở ngoài này? Tổng số dư sẽ không thay đổi.")) return;
+          try { onExternalCommand({ kind: "delete", accountId: entry.accountId, id: entry.id, now: new Date().toISOString() }); }
+          catch (cause) { alert(cause instanceof Error ? cause.message : "Không thể xóa khoản tiền."); }
+        }} />
 
       <section className="account-ledger-transactions">
         <div className="account-ledger-section-heading">
@@ -921,6 +971,9 @@ export function AccountLedgerPage({
           onSave={saveAccount}
         />
       )}
+      {externalDialog && <AccountExternalForm key={`${externalDialog.kind}-${externalDialog.kind === "create" ? externalDialog.accountId : externalDialog.entry.id}`}
+        accounts={activeAccounts} transactions={transactions} dialog={externalDialog}
+        onClose={() => setExternalDialog(null)} onCommand={onExternalCommand} />}
       {showTransactionForm && (
         <TransactionForm
           accounts={activeAccounts}

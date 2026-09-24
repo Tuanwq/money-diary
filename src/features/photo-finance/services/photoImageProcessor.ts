@@ -5,19 +5,19 @@ export type ProcessedPhoto = {
   height: number;
 };
 
-export function photoBlobDataUrl(blob: Blob) {
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => typeof reader.result === "string"
-      ? resolve(reader.result)
-      : reject(new Error("Không thể tạo ảnh xem trước."));
-    reader.onerror = () => reject(new Error("Không thể tạo ảnh xem trước."));
-    reader.readAsDataURL(blob);
-  });
+const ACCEPTED_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"]);
+const MAX_INPUT_BYTES = 25 * 1024 * 1024;
+
+export function isIosPhotoEnvironment(userAgent = typeof navigator === "undefined" ? "" : navigator.userAgent,
+  touchPoints = typeof navigator === "undefined" ? 0 : navigator.maxTouchPoints) {
+  return /iPhone|iPad|iPod/i.test(userAgent) || (/Macintosh/i.test(userAgent) && touchPoints > 1);
 }
 
-const ACCEPTED_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
-const MAX_INPUT_BYTES = 25 * 1024 * 1024;
+export function photoProcessingProfile(ios: boolean) {
+  return ios
+    ? { displayEdge: 1440, thumbnailEdge: 256, displayQuality: 0.72, thumbnailQuality: 0.6 }
+    : { displayEdge: 1600, thumbnailEdge: 320, displayQuality: 0.78, thumbnailQuality: 0.65 };
+}
 
 function canvasBlob(canvas: HTMLCanvasElement, quality: number) {
   return new Promise<Blob>((resolve, reject) => {
@@ -35,7 +35,7 @@ function renderImage(image: ImageBitmap | HTMLImageElement | HTMLCanvasElement, 
   const canvas = document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;
-  const context = canvas.getContext("2d");
+  const context = canvas.getContext("2d", { alpha: false });
   if (!context) throw new Error("Thiết bị không hỗ trợ xử lý ảnh.");
   context.fillStyle = "white";
   context.fillRect(0, 0, width, height);
@@ -43,8 +43,8 @@ function renderImage(image: ImageBitmap | HTMLImageElement | HTMLCanvasElement, 
   return { canvas, width, height };
 }
 
-async function decodePhoto(file: File): Promise<{ image: ImageBitmap | HTMLImageElement; dispose: () => void }> {
-  if (typeof createImageBitmap === "function") {
+async function decodePhoto(file: File, preferBitmap: boolean): Promise<{ image: ImageBitmap | HTMLImageElement; dispose: () => void }> {
+  if (preferBitmap && typeof createImageBitmap === "function") {
     try {
       const bitmap = await createImageBitmap(file);
       return { image: bitmap, dispose: () => bitmap.close() };
@@ -65,30 +65,40 @@ async function decodePhoto(file: File): Promise<{ image: ImageBitmap | HTMLImage
 /** Re-encodes into two small files; no money/category/note is painted on pixels. */
 export async function processPhoto(file: File, signal?: AbortSignal): Promise<ProcessedPhoto> {
   if (!ACCEPTED_TYPES.has(file.type))
-    throw new Error("Chỉ nhận ảnh JPG, PNG hoặc WebP.");
+    throw new Error("Chỉ nhận ảnh JPG, PNG, WebP hoặc HEIC/HEIF.");
   if (file.size === 0 || file.size > MAX_INPUT_BYTES)
     throw new Error("Ảnh trống hoặc lớn hơn 25 MB. Hãy chọn ảnh khác.");
   signal?.throwIfAborted();
-  if (typeof Worker !== "undefined" && typeof OffscreenCanvas !== "undefined") {
+  const ios = isIosPhotoEnvironment();
+  const profile = photoProcessingProfile(ios);
+  // Safari can expose OffscreenCanvas without a reliable worker decoder.
+  // Avoid a timeout followed by decoding the same large camera image again.
+  if (!ios && typeof Worker !== "undefined" && typeof OffscreenCanvas !== "undefined") {
     try { return await processInWorker(file, signal); }
     catch { signal?.throwIfAborted(); /* Use canvas for unsupported browsers/codecs. */ }
   }
-  const decoded = await decodePhoto(file);
+  const decoded = await decodePhoto(file, !ios);
   const canvases: HTMLCanvasElement[] = [];
+  let disposed = false;
   try {
     signal?.throwIfAborted();
-    const display = renderImage(decoded.image, 1600);
+    const display = renderImage(decoded.image, profile.displayEdge);
     canvases.push(display.canvas);
-    const thumbnail = renderImage(display.canvas, 320);
+    const thumbnail = renderImage(display.canvas, profile.thumbnailEdge);
     canvases.push(thumbnail.canvas);
-    const [displayBlob, thumbnailBlob] = await Promise.all([
-      canvasBlob(display.canvas, 0.78), canvasBlob(thumbnail.canvas, 0.65),
-    ]);
+    decoded.dispose();
+    disposed = true;
+    // Sequential encoding reduces peak memory on iOS camera photos.
+    const thumbnailBlob = await canvasBlob(thumbnail.canvas, profile.thumbnailQuality);
+    thumbnail.canvas.width = 0;
+    thumbnail.canvas.height = 0;
+    signal?.throwIfAborted();
+    const displayBlob = await canvasBlob(display.canvas, profile.displayQuality);
     signal?.throwIfAborted();
     return { display: displayBlob, thumbnail: thumbnailBlob,
       width: display.width, height: display.height };
   } finally {
-    decoded.dispose();
+    if (!disposed) decoded.dispose();
     for (const canvas of canvases) { canvas.width = 0; canvas.height = 0; }
   }
 }

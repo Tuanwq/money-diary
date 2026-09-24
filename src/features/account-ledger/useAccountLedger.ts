@@ -5,6 +5,8 @@ import type { ExpenseBudget } from "../../types.ts";
 import { applyJarCommand, type JarCommand } from "../spending-jars/services/jarService.ts";
 import { getAccountAllocation, migrateExpenseBudgets } from "../spending-jars/domain/jarModel.ts";
 import { decideLedgerLoad, hasLocalOnlyRecords, nextLedgerTimestamp } from "./ledgerSync.ts";
+import { applyAccountExternalCommand, assertExternalCoverageAfterLedgerChange,
+  calculateAccountExternalAmount, type AccountExternalCommand } from "./accountExternalModel.ts";
 import {
   ACCOUNT_LEDGER_STORAGE_KEY,
   createDefaultLedger,
@@ -282,19 +284,24 @@ export function useAccountLedger(userId?: string, legacyBudgets: ExpenseBudget[]
       updater: (current: AccountLedgerData) => Pick<
         AccountLedgerData,
         "accounts" | "transactions"
-      >
+      >,
+      allowExternalShortfall = false
     ) => {
       const current = latestLedgerRef.current;
       const next = { ...current, ...updater(current), updatedAt: nextLedgerTimestamp(current.updatedAt) };
-      if (!safeSetStorageJson(ACCOUNT_LEDGER_STORAGE_KEY, next))
-        throw new Error("Thiết bị chưa lưu được sổ tài khoản. Hãy giải phóng bộ nhớ hoặc bật đồng bộ trước khi thử lại.");
+      if (!allowExternalShortfall) assertExternalCoverageAfterLedgerChange(current, next);
+      // Persist the pending marker first. A local write that succeeds without
+      // this marker could otherwise be replaced by an older cloud revision.
+      let pending: PendingLedger | null = null;
       if (userId) {
-        const pending = pendingRef.current?.userId === userId
+        pending = pendingRef.current?.userId === userId
           ? pendingRef.current : { userId, baseUpdatedAt: baseUpdatedAtRef.current };
         if (!safeSetStorageJson(PENDING_LEDGER_KEY, pending))
           throw new Error("Thiết bị chưa lưu được trạng thái đồng bộ.");
-        pendingRef.current = pending;
       }
+      if (!safeSetStorageJson(ACCOUNT_LEDGER_STORAGE_KEY, next))
+        throw new Error("Thiết bị chưa lưu được sổ tài khoản. Hãy giải phóng bộ nhớ hoặc bật đồng bộ trước khi thử lại.");
+      if (pending) pendingRef.current = pending;
       dirtyRef.current = true;
       latestLedgerRef.current = next;
       setLedger(next);
@@ -314,6 +321,11 @@ export function useAccountLedger(userId?: string, legacyBudgets: ExpenseBudget[]
     if (next !== latestLedgerRef.current) updateLedger(() => next);
   }, [updateLedger]);
 
+  const dispatchExternal = useCallback((command: AccountExternalCommand) => {
+    const next = applyAccountExternalCommand(latestLedgerRef.current, command);
+    if (next !== latestLedgerRef.current) updateLedger(() => next);
+  }, [updateLedger]);
+
   const saveAccount = useCallback(
     (account: FinancialAccount) => {
       updateLedger((current) => ({
@@ -330,6 +342,9 @@ export function useAccountLedger(userId?: string, legacyBudgets: ExpenseBudget[]
 
   const archiveAccount = useCallback(
     (accountId: string) => {
+      const account = latestLedgerRef.current.accounts.find((item) => item.id === accountId);
+      if (account && calculateAccountExternalAmount(account) > 0)
+        throw new Error("Tài khoản còn tiền đang ở ngoài. Hãy thu hồi hoặc chuyển khoản phải thu trước khi ẩn.");
       if (getAccountAllocation(latestLedgerRef.current, accountId) > 0)
         throw new Error("Tài khoản còn tiền trong hũ. Hãy giải phóng hoặc chuyển phần phân bổ trước khi ẩn.");
       const now = new Date().toISOString();
@@ -385,7 +400,7 @@ export function useAccountLedger(userId?: string, legacyBudgets: ExpenseBudget[]
   const replaceLedger = useCallback(
     (accounts: FinancialAccount[], transactions: AccountTransaction[],
       jars: AccountLedgerData["jars"] = [], jarActivities: AccountLedgerData["jarActivities"] = []) => {
-      updateLedger(() => ({ accounts, transactions, jars, jarActivities }));
+      updateLedger(() => ({ accounts, transactions, jars, jarActivities }), true);
     },
     [updateLedger]
   );
@@ -395,6 +410,7 @@ export function useAccountLedger(userId?: string, legacyBudgets: ExpenseBudget[]
     archiveAccount,
     cloudStatus,
     deleteTransaction,
+    dispatchExternal,
     dispatchJar,
     jars: ledger.jars,
     jarActivities: ledger.jarActivities,

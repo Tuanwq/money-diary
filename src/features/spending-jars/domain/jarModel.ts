@@ -47,6 +47,12 @@ export type JarView = {
   deficitAmount: number;
 };
 
+/** The progress bar represents money still available in the jar, not money spent. */
+export function getJarRemainingPercent(view: JarView): number {
+  if (view.jar.limitAmount <= 0) return 0;
+  return Math.min(100, Math.max(0, Math.round(view.remainingAmount / view.jar.limitAmount * 100)));
+}
+
 export function getJarView(ledger: JarLedger, jar: SpendingJar): JarView {
   const balances = new Map<string, number>();
   const transactions = new Map(ledger.transactions.map((item) => [item.id, item]));

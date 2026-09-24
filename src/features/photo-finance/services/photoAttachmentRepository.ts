@@ -37,6 +37,7 @@ async function unwrap<T>(operation: () => PromiseLike<{ data: T; error: unknown 
 export function createPhotoAttachmentRepository(client: SupabaseClient = supabase) {
   let readyOwner = "";
   let readyUntil = 0;
+  let preparing: { ownerId: string; promise: Promise<void> } | null = null;
   const images = createSignedPhotoCache(async (paths) => {
     const { data, error } = await client.storage.from(PHOTO_FINANCE_BUCKET)
       .createSignedUrls(paths, 3600);
@@ -49,12 +50,21 @@ export function createPhotoAttachmentRepository(client: SupabaseClient = supabas
     async prepare(ownerId: string) {
       await requireOwner(client, ownerId);
       if (readyOwner === ownerId && Date.now() < readyUntil) return;
+      if (preparing?.ownerId === ownerId) return preparing.promise;
+      const promise = (async () => {
+        try {
+          await unwrap(() => client.from("money_diary_financial_attachments")
+            .select("id").eq("owner_id", ownerId).limit(1));
+          readyOwner = ownerId;
+          readyUntil = Date.now() + 5 * 60 * 1000;
+        } catch (cause) { throw new Error(photoFinanceErrorMessage(cause), { cause }); }
+      })();
+      preparing = { ownerId, promise };
       try {
-        await unwrap(() => client.from("money_diary_financial_attachments")
-          .select("id").eq("owner_id", ownerId).limit(1));
-        readyOwner = ownerId;
-        readyUntil = Date.now() + 5 * 60 * 1000;
-      } catch (cause) { throw new Error(photoFinanceErrorMessage(cause), { cause }); }
+        await promise;
+      } finally {
+        if (preparing?.promise === promise) preparing = null;
+      }
     },
 
     async list(ownerId: string, signal?: AbortSignal): Promise<PhotoAttachment[]> {

@@ -22,6 +22,8 @@ export type FinancialAccount = {
   openingBalance: number;
   type: FinancialAccountType;
   updatedAt: string;
+  /** Availability annotations; account balance is still derived only from transactions. */
+  externalEntries?: import("./accountExternalModel.ts").AccountExternalEntry[];
 };
 
 export type AccountTransaction = {

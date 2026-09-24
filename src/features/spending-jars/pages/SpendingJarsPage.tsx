@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { ArrowLeft, Plus, WalletCards } from "lucide-react";
 import type { JarActivity, JarLedger, SpendingJar } from "../domain/jarModel.ts";
-import { getAccountAvailableToAllocate, getAccountAllocation, getJarView } from "../domain/jarModel.ts";
+import { getAccountAvailableToAllocate, getAccountAllocation, getJarRemainingPercent, getJarView } from "../domain/jarModel.ts";
 import { smartAllocate, type JarCommand } from "../services/jarService.ts";
 import { JarActivityList } from "../components/JarActivityList.tsx";
 import { calculateAccountBalance } from "../../account-ledger/accountLedgerModel.ts";
@@ -122,8 +122,8 @@ export function SpendingJarsPage({ ledger, cloudStatus, onBack, onCommand, onDel
       {active.length === 0 && <p className="jars-empty">Chưa có hũ nào. Tạo hũ đầu tiên hoặc đợi ngân sách theo nhãn được chuyển vào đây.</p>}
       <div className="jars-grid">{active.map((view) => <button className="jar-card" key={view.jar.id} onClick={() => setSelectedId(view.jar.id)} type="button">
         <span className="jar-card-title"><span>{view.jar.icon} {view.jar.name}</span><strong>{formatMoney(view.remainingAmount)}</strong></span>
-        <small>Đã chi {formatMoney(view.spentAmount)} · Hạn mức {formatMoney(view.jar.limitAmount)}</small>
-        <i className="jar-progress"><b style={{ width: `${Math.min(100, Math.max(0, (view.spentAmount / view.jar.limitAmount) * 100))}%` }} /></i>
+        <small>Còn {getJarRemainingPercent(view)}% · Đã chi {formatMoney(view.spentAmount)} · Hạn mức {formatMoney(view.jar.limitAmount)}</small>
+        <i className="jar-progress" role="progressbar" aria-label={`Tiền còn lại trong hũ ${view.jar.name}`} aria-valuenow={getJarRemainingPercent(view)} aria-valuemin={0} aria-valuemax={100}><b style={{ width: `${getJarRemainingPercent(view)}%` }} /></i>
         <span className="jar-card-sources">{view.sources.filter((item) => item.amount > 0).map((item) =>
           `${accountNames.get(item.accountId) ?? "Tài khoản đã xóa"}: ${formatMoney(item.amount)}`).join(" · ") || "Chưa phân bổ tiền"}</span>
         {view.deficitAmount > 0 && <span className="jars-warning">Nguồn đang thiếu {formatMoney(view.deficitAmount)}</span>}
@@ -143,8 +143,8 @@ export function SpendingJarsPage({ ledger, cloudStatus, onBack, onCommand, onDel
         <section className="jar-detail-hero" aria-label="Tổng quan hũ">
           <div className="jar-detail-hero-top"><span>{selected.status === "closed" ? "Hũ đã đóng" : "Còn trong hũ"}</span>
             <strong>{formatMoney(view.remainingAmount)}</strong></div>
-          <div className="jar-detail-progress-label"><span>Đã tiêu {formatMoney(view.spentAmount)}</span><span>Hạn mức {formatMoney(selected.limitAmount)}</span></div>
-          <i className="jar-progress"><b style={{ width: `${Math.min(100, Math.max(0, (view.spentAmount / selected.limitAmount) * 100))}%` }} /></i>
+          <div className="jar-detail-progress-label"><span>Còn {getJarRemainingPercent(view)}%</span><span>Đã tiêu {formatMoney(view.spentAmount)} · Hạn mức {formatMoney(selected.limitAmount)}</span></div>
+          <i className="jar-progress" role="progressbar" aria-label={`Tiền còn lại trong hũ ${selected.name}`} aria-valuenow={getJarRemainingPercent(view)} aria-valuemin={0} aria-valuemax={100}><b style={{ width: `${getJarRemainingPercent(view)}%` }} /></i>
           <p>Nhãn liên kết: {selected.linkedLabels.join(", ") || "Chưa liên kết"}</p>
         </section>
         {view.deficitAmount > 0 && <p className="jars-warning">Tài khoản nguồn hiện thấp hơn phần đã dành {formatMoney(view.deficitAmount)}. Hãy nạp thêm hoặc giải phóng tiền.</p>}

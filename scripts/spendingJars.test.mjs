@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { calculateAccountBalance } from "../src/features/account-ledger/accountLedgerModel.ts";
-import { getAccountAvailableToAllocate, getJarView, migrateExpenseBudgets } from
+import { getAccountAvailableToAllocate, getJarRemainingPercent, getJarView, migrateExpenseBudgets } from
   "../src/features/spending-jars/domain/jarModel.ts";
 import { applyJarCommand, planJarSpend, smartAllocate } from
   "../src/features/spending-jars/services/jarService.ts";
@@ -23,6 +23,7 @@ assert.equal(calculateAccountBalance(accounts[1], ledger.transactions), 2_000_00
 assert.equal(getAccountAvailableToAllocate(ledger, "a"), 0);
 assert.equal(getAccountAvailableToAllocate(ledger, "b"), 1_500_000);
 assert.deepEqual(view().sources, [{ accountId: "a", amount: 1_000_000 }, { accountId: "b", amount: 500_000 }]);
+assert.equal(getJarRemainingPercent(view()), 100);
 assert.throws(() => apply({ kind: "allocate", jarId: "food", accountId: "b", amount: 1 }), /hạn mức/);
 assert.deepEqual(smartAllocate(ledger, "food"), []);
 
@@ -35,6 +36,7 @@ assert.equal(calculateAccountBalance(accounts[0], ledger.transactions), 0);
 assert.equal(calculateAccountBalance(accounts[1], ledger.transactions), 1_800_000);
 assert.equal(view().remainingAmount, 300_000);
 assert.equal(view().spentAmount, 1_200_000);
+assert.equal(getJarRemainingPercent(view()), 20);
 assert.deepEqual(view().sources, [{ accountId: "b", amount: 300_000 }]);
 const unchanged = applyJarCommand(ledger, { kind: "spend", id: "dinner", now,
   jarId: "food", amount: 1_200_000, date: "2026-09-22", category: "Ăn uống",
@@ -52,6 +54,7 @@ apply({ kind: "refund", jarId: "food", accountId: "b", amount: 50_000,
   date: "2026-09-22", note: "Trả lại" });
 assert.equal(view().spentAmount, 250_000);
 assert.equal(view().remainingAmount, 1_250_000);
+assert.equal(getJarRemainingPercent(view()), 83);
 assert.equal(calculateAccountBalance(accounts[1], ledger.transactions), 1_750_000);
 assert.throws(() => apply({ kind: "refund", jarId: "food", accountId: "a", amount: 1,
   date: "2026-09-22", note: "Sai nguồn" }), /vượt số đã chi/);

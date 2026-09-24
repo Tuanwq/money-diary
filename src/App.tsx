@@ -692,6 +692,7 @@ export default function App() {
     cloudStatus: accountLedgerCloudStatus,
     deleteTransaction: deleteAccountTransaction,
     dispatchJar,
+    dispatchExternal,
     jars,
     jarActivities,
     replaceLedger,
@@ -3418,11 +3419,14 @@ if (route.kind === "daymark") {
           {page === "accounts" && (
             <LazyAccountLedgerPage
               accounts={financialAccounts}
+              onExternalCommand={dispatchExternal}
               jars={jars}
               jarActivities={jarActivities}
               onJarCommand={dispatchJar}
               archiveAccount={archiveAccount}
               cloudStatus={accountLedgerCloudStatus}
+              onRetrySync={retryAccountLedgerSync}
+              onUseCloudVersion={useCloudAccountLedger}
               deleteTransaction={(transactionId) => {
                 void deleteAccountTransactionWithPhotos(transactionId,
                   cloudDataUserId, deleteAccountTransaction).catch((cause) => {

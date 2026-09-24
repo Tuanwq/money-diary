@@ -1,11 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { buildPhotoTransaction } from "../src/features/photo-finance/services/photoTransactionDraft.ts";
+import { buildStoryTimeline } from "../src/features/photo-finance/services/dayStoryModel.ts";
 import { calculateAccountBalance, getLedgerSummary } from "../src/features/account-ledger/accountLedgerModel.ts";
 import { createPhotoDialogLock } from "../src/features/photo-finance/services/photoDialogLock.ts";
 import { createSignedPhotoCache } from "../src/features/photo-finance/services/signedPhotoCache.ts";
 import { formatMoneyInput, parseMoneyInput } from "../src/utils/money.ts";
-import { processPhoto } from "../src/features/photo-finance/services/photoImageProcessor.ts";
+import { isIosPhotoEnvironment, photoProcessingProfile, processPhoto } from
+  "../src/features/photo-finance/services/photoImageProcessor.ts";
 import { uploadProcessedPhotoImages } from "../src/features/photo-finance/services/photoUploadService.ts";
 import {
   buildDailyFinancialSummaries, formatCalendarNet, getCalendarDates,
@@ -28,6 +30,23 @@ const transfer = { id: "transfer", date, amount: 300_000, type: "transfer",
   source: "photo_finance", createdAt: "2026-09-16T12:00:00Z" };
 const untaggedDuplicate = { id: "old-ledger", date, amount: 500_000, type: "income",
   createdAt: "2026-09-16T12:00:00Z" };
+
+test("day story groups jar lines, labels transfers and links the correct photo", () => {
+  const jarLines = [
+    { id: "jar-a", date, type: "expense", amount: 50_000, source: "spending_jar", jarActivityId: "activity",
+      note: "Ăn tối", createdAt: "2026-09-16T18:00:00Z" },
+    { id: "jar-b", date, type: "expense", amount: 70_000, source: "spending_jar", jarActivityId: "activity",
+      note: "Ăn tối", createdAt: "2026-09-16T18:00:00Z" },
+  ];
+  const photo = { id: "image", sourceId: "jar-b" };
+  const timeline = buildStoryTimeline(date, [jarLines[0], jarLines[1], transfer, untaggedDuplicate],
+    [entry], [expense], [photo]);
+  assert.equal(timeline.filter((item) => item.id.startsWith("jar-")).length, 1);
+  assert.equal(timeline.find((item) => item.id === "jar-a").amount, 120_000);
+  assert.equal(timeline.find((item) => item.id === "jar-a").photoIndex, 0);
+  assert.equal(timeline.find((item) => item.id === "transfer").type, "transfer");
+  assert.equal(timeline.some((item) => item.id === "old-ledger"), false);
+});
 
 test("Daily Net includes HUB legacy income and photo transactions once, excluding transfer and ambiguous ledger rows", () => {
   const days = buildDailyFinancialSummaries([entry], [expense],
@@ -87,6 +106,17 @@ test("mobile photo upload retries a failed request and sends display then thumbn
     ["owner/photo/display.jpg", 7],
     ["owner/photo/thumbnail.jpg", 5],
   ]);
+});
+
+test("iOS photo profile avoids a large upload while preserving a readable display image", () => {
+  assert.equal(isIosPhotoEnvironment("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)", 5), true);
+  assert.equal(isIosPhotoEnvironment("Mozilla/5.0 (Macintosh; Intel Mac OS X)", 5), true);
+  assert.equal(isIosPhotoEnvironment("Mozilla/5.0 (Macintosh; Intel Mac OS X)", 0), false);
+  const ios = photoProcessingProfile(true);
+  const desktop = photoProcessingProfile(false);
+  assert.ok(ios.displayEdge >= 1200 && ios.displayEdge < desktop.displayEdge);
+  assert.ok(ios.thumbnailEdge < desktop.thumbnailEdge);
+  assert.ok(ios.displayQuality < desktop.displayQuality);
 });
 
 const accounts = [

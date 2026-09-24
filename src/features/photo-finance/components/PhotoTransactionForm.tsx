@@ -9,7 +9,7 @@ import { vietnamFinancialDate, vietnamFinancialTime } from "../services/photoFin
 import { buildPhotoTransaction } from "../services/photoTransactionDraft.ts";
 import type { PhotoAttachment } from "../types/photoFinance.ts";
 import type { createPhotoAttachmentRepository } from "../services/photoAttachmentRepository.ts";
-import { photoBlobDataUrl, processPhoto, type ProcessedPhoto } from "../services/photoImageProcessor.ts";
+import { processPhoto, type ProcessedPhoto } from "../services/photoImageProcessor.ts";
 import type { JarActivity, SpendingJar } from "../../spending-jars/domain/jarModel.ts";
 import { getJarView, suggestJar } from "../../spending-jars/domain/jarModel.ts";
 import { planJarSpend, type JarCommand } from "../../spending-jars/services/jarService.ts";
@@ -49,7 +49,7 @@ export function PhotoTransactionForm({ accounts, jars, jarActivities, transactio
   const [time, setTime] = useState(existing?.occurredAt
     ? vietnamFinancialTime(new Date(existing.occurredAt)) : vietnamFinancialTime(now));
   const [selectedPhoto, setSelectedPhoto] = useState<{
-    file: File; previewUrl: string; processed: ProcessedPhoto;
+    file: File; previewUrl: string; processed?: ProcessedPhoto;
   } | null>(null);
   const [savedId, setSavedId] = useState<string | null>(null);
   const [working, setWorking] = useState(false);
@@ -59,6 +59,9 @@ export function PhotoTransactionForm({ accounts, jars, jarActivities, transactio
   const photoSelectionRef = useRef(0);
   const processingRef = useRef<AbortController | null>(null);
   useEffect(() => () => { processingRef.current?.abort(); }, []);
+  useEffect(() => () => {
+    if (selectedPhoto?.previewUrl) URL.revokeObjectURL(selectedPhoto.previewUrl);
+  }, [selectedPhoto]);
   const attachmentIdRef = useRef<string | null>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const libraryInputRef = useRef<HTMLInputElement>(null);
@@ -80,14 +83,20 @@ export function PhotoTransactionForm({ accounts, jars, jarActivities, transactio
     photoSelectionRef.current = selection;
     setError("");
     setPreparingPhoto(true);
+    setSelectedPhoto({ file: next, previewUrl: "" });
     try {
       const processed = await processPhoto(next, controller.signal);
-      const previewUrl = await photoBlobDataUrl(processed.display);
-      if (!controller.signal.aborted && photoSelectionRef.current === selection)
+      if (!controller.signal.aborted && photoSelectionRef.current === selection) {
+        const previewUrl = URL.createObjectURL(processed.display);
         setSelectedPhoto({ file: next, previewUrl, processed });
+        // Check Storage/database access while the user enters the amount.
+        // submit() joins this request instead of paying the latency afterward.
+        if (ownerId) void repository.prepare(ownerId).catch(() => undefined);
+      }
     } catch (cause) {
       if (!controller.signal.aborted && photoSelectionRef.current === selection)
         setError(cause instanceof Error ? cause.message : "Không đọc được ảnh đã chọn.");
+      if (!controller.signal.aborted && photoSelectionRef.current === selection) setSelectedPhoto(null);
     } finally {
       if (!controller.signal.aborted && photoSelectionRef.current === selection) setPreparingPhoto(false);
     }
@@ -109,6 +118,7 @@ export function PhotoTransactionForm({ accounts, jars, jarActivities, transactio
     try {
       if (!ownerId) throw new Error("Hãy đăng nhập và bật đồng bộ cloud để lưu ảnh riêng tư.");
       if (preparingPhoto) throw new Error("Ảnh đang được chuẩn bị, hãy đợi một chút.");
+      if (file && !selectedPhoto?.processed) throw new Error("Ảnh chưa xử lý xong. Hãy thử chọn lại ảnh.");
       if (!file && !existing) throw new Error("Hãy chụp hoặc chọn một ảnh trước khi lưu.");
       if (!file && savedId) throw new Error("Hãy chọn lại ảnh để tải lên.");
 
@@ -152,7 +162,7 @@ export function PhotoTransactionForm({ accounts, jars, jarActivities, transactio
   }
 
   const inputProps = {
-    accept: "image/jpeg,image/png,image/webp",
+    accept: "image/jpeg,image/png,image/webp,image/heic,image/heif",
     onChange: (event: React.ChangeEvent<HTMLInputElement>) => {
       void chooseFile(event.target.files?.[0]);
       event.target.value = "";
@@ -160,17 +170,17 @@ export function PhotoTransactionForm({ accounts, jars, jarActivities, transactio
     type: "file" as const,
   };
 
-  return <form className={`photo-finance-form${previewUrl ? " has-photo" : ""}`}
+  return <form className={`photo-finance-form${selectedPhoto ? " has-photo" : ""}`}
     onSubmit={(event) => void submit(event)}>
     <input {...inputProps} capture="environment" className="photo-finance-file-input"
       ref={cameraInputRef} />
     <input {...inputProps} className="photo-finance-file-input" ref={libraryInputRef} />
 
-    {!previewUrl && !existing ? <section className="photo-finance-camera-start">
+    {!selectedPhoto && !existing ? <section className="photo-finance-camera-start">
       <div className="photo-finance-camera-frame" aria-hidden="true"><Camera size={44} /></div>
       <div className="photo-finance-camera-copy">
         <strong>Ghi lại một khoảnh khắc</strong>
-        <span>Ảnh gốc được giữ riêng tư và không bị ghi chữ lên.</span>
+        <span>Ảnh được nén, lưu riêng tư và không bị ghi chữ lên.</span>
       </div>
 
       <button aria-label="Mở camera" className="photo-finance-shutter" onClick={() => cameraInputRef.current?.click()}
@@ -185,7 +195,7 @@ export function PhotoTransactionForm({ accounts, jars, jarActivities, transactio
       <section className="photo-finance-compose">
         {previewUrl
           ? <img className="photo-finance-preview" src={previewUrl} alt="Ảnh sắp lưu" />
-          : <div className="photo-finance-existing-photo"><ImageIcon size={32} /><span>Giữ ảnh hiện tại</span></div>}
+          : <div className="photo-finance-existing-photo"><ImageIcon size={32} /><span>{preparingPhoto ? "Đang tối ưu ảnh..." : "Giữ ảnh hiện tại"}</span></div>}
         <div className="photo-finance-compose-tools">
           <button aria-label="Chụp lại" disabled={working || preparingPhoto} onClick={() => cameraInputRef.current?.click()} type="button">
             <RotateCcw size={17} /> <span>Chụp lại</span>
@@ -294,7 +304,7 @@ export function PhotoTransactionForm({ accounts, jars, jarActivities, transactio
       <button onClick={onStartNew} type="button">Tạo khoảnh khắc khác</button></p>}
     {error && <p className="photo-finance-error photo-finance-form-error" role="alert">{error}</p>}
 
-    {(previewUrl || existing) && <div className="photo-finance-form-actions">
+    {(selectedPhoto || existing) && <div className="photo-finance-form-actions">
       <button aria-label="Bỏ ảnh đã chọn" className="photo-finance-cancel" disabled={working}
         onClick={() => {
           if (savedId) onStartNew();
@@ -303,8 +313,8 @@ export function PhotoTransactionForm({ accounts, jars, jarActivities, transactio
       <button aria-label="Lưu khoảnh khắc" className="photo-finance-confirm" disabled={working || preparingPhoto}
         type="submit"><Check size={32} /></button>
     </div>}
-    {working && <p className="photo-finance-working" role="status">
-      {savedId ? "Đang tải ảnh lại..." : "Đang nén và lưu ảnh..."}
+    {(working || preparingPhoto) && <p className="photo-finance-working" role="status">
+      {preparingPhoto ? "Đang tối ưu ảnh..." : savedId ? "Đang tải ảnh lại..." : "Đang tải ảnh riêng tư..."}
     </p>}
   </form>;
 }

@@ -11,12 +11,11 @@ export async function uploadProcessedPhotoImages(
   thumbnailPath: string,
   upload: Upload,
 ) {
-  const displayBytes = await image.display.arrayBuffer();
-  const thumbnailBytes = await image.thumbnail.arrayBuffer();
-  for (const [path, bytes] of [
-    [storagePath, displayBytes],
-    [thumbnailPath, thumbnailBytes],
+  for (const [path, blob] of [
+    [storagePath, image.display],
+    [thumbnailPath, image.thumbnail],
   ] as const) {
+    const bytes = await blob.arrayBuffer();
     await retryPhotoOperation(async () => {
       const result = await upload(path, bytes);
       if (result.error) throw result.error;
