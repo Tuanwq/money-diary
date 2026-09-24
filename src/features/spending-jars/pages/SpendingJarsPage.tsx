@@ -1,10 +1,11 @@
 import { useState, type FormEvent } from "react";
 import { ArrowLeft, Plus, WalletCards } from "lucide-react";
 import type { JarActivity, JarLedger, SpendingJar } from "../domain/jarModel.ts";
-import { getAccountAvailableToAllocate, getAccountAllocation, getJarRemainingPercent, getJarView } from "../domain/jarModel.ts";
+import { getAccountAvailableToAllocate, getJarRemainingPercent, getJarView } from "../domain/jarModel.ts";
 import { smartAllocate, type JarCommand } from "../services/jarService.ts";
 import { JarActivityList } from "../components/JarActivityList.tsx";
-import { calculateAccountBalance } from "../../account-ledger/accountLedgerModel.ts";
+import { SpendingJarsOverview } from "../components/SpendingJarsOverview.tsx";
+import { AvailableAllocationSection } from "../components/AvailableAllocationSection.tsx";
 import { getToday } from "../../../utils/date.ts";
 import { formatMoney, formatMoneyInput, parseMoneyInput } from "../../../utils/money.ts";
 import "./SpendingJarsPage.css";
@@ -40,11 +41,15 @@ export function SpendingJarsPage({ ledger, cloudStatus, onBack, onCommand, onDel
   const selected = ledger.jars.find((jar) => jar.id === selectedId && jar.status !== "deleted") ?? null;
   const views = ledger.jars.filter((jar) => jar.status !== "deleted").map((jar) => getJarView(ledger, jar));
   const active = views.filter((view) => view.jar.status === "active");
-  const allocated = active.reduce((sum, view) => sum + view.remainingAmount + view.spentAmount, 0);
-  const spent = active.reduce((sum, view) => sum + view.spentAmount, 0);
-  const remaining = active.reduce((sum, view) => sum + view.remainingAmount, 0);
+  const closed = views.filter((view) => view.jar.status === "closed");
   const activeAccounts = ledger.accounts.filter((item) => !item.archivedAt);
   const accountNames = new Map(ledger.accounts.map((item) => [item.id, item.name]));
+
+  function openCreate() {
+    setJarForm(fieldsFrom());
+    setEditor("create");
+    setError("");
+  }
 
   function run(command: JarCommand) {
     try { onCommand(command); setError(""); return true; }
@@ -100,9 +105,9 @@ export function SpendingJarsPage({ ledger, cloudStatus, onBack, onCommand, onDel
   }
 
   return <div className="spending-jars-page">
-    <header className="jars-header"><button onClick={() => selected ? setSelectedId(null) : onBack()} type="button" aria-label="Quay lại"><ArrowLeft size={20} /></button>
-      <div><span>Money Diary</span><h1>{selected ? `${selected.icon} ${selected.name}` : "Hũ chi tiêu"}</h1></div>
-      {!selected && <button className="jars-primary" onClick={() => { setJarForm(fieldsFrom()); setEditor("create"); setError(""); }} type="button"><Plus size={17} /> Tạo hũ</button>}
+    <header className="jars-header"><button className="jars-back" onClick={() => selected ? setSelectedId(null) : onBack()} type="button" aria-label="Quay lại"><ArrowLeft size={20} /></button>
+      <div className="jars-header-copy"><span>Money Diary</span><h1>{selected ? <><span className="jars-header-icon" aria-hidden="true">{selected.icon}</span>{selected.name}</> : "Hũ chi tiêu"}</h1>{!selected && <p>Phân bổ tiền theo mục đích mà không tách khỏi tài khoản.</p>}</div>
+      {!selected && <button className="jars-primary" onClick={openCreate} type="button"><Plus size={17} /> Tạo hũ</button>}
     </header>
     {/migration|chưa thể|lỗi|xung đột/i.test(cloudStatus) && <div className="jars-warning" role="status">
       <p>{cloudStatus}. Dữ liệu trên thiết bị chưa được đồng bộ.</p>
@@ -114,29 +119,8 @@ export function SpendingJarsPage({ ledger, cloudStatus, onBack, onCommand, onDel
     </div>}
     {error && <p className="jars-error" role="alert">{error}</p>}
     {!selected ? <>
-      <section className="jars-summary" aria-label="Tổng quan các hũ">
-        <div><span>Tổng đã phân bổ</span><strong>{formatMoney(allocated)}</strong></div>
-        <div><span>Đã tiêu</span><strong>{formatMoney(spent)}</strong></div>
-        <div><span>Còn khả dụng</span><strong>{formatMoney(remaining)}</strong></div>
-      </section>
-      {active.length === 0 && <p className="jars-empty">Chưa có hũ nào. Tạo hũ đầu tiên hoặc đợi ngân sách theo nhãn được chuyển vào đây.</p>}
-      <div className="jars-grid">{active.map((view) => <button className="jar-card" key={view.jar.id} onClick={() => setSelectedId(view.jar.id)} type="button">
-        <span className="jar-card-title"><span>{view.jar.icon} {view.jar.name}</span><strong>{formatMoney(view.remainingAmount)}</strong></span>
-        <small>Còn {getJarRemainingPercent(view)}% · Đã chi {formatMoney(view.spentAmount)} · Hạn mức {formatMoney(view.jar.limitAmount)}</small>
-        <i className="jar-progress" role="progressbar" aria-label={`Tiền còn lại trong hũ ${view.jar.name}`} aria-valuenow={getJarRemainingPercent(view)} aria-valuemin={0} aria-valuemax={100}><b style={{ width: `${getJarRemainingPercent(view)}%` }} /></i>
-        <span className="jar-card-sources">{view.sources.filter((item) => item.amount > 0).map((item) =>
-          `${accountNames.get(item.accountId) ?? "Tài khoản đã xóa"}: ${formatMoney(item.amount)}`).join(" · ") || "Chưa phân bổ tiền"}</span>
-        {view.deficitAmount > 0 && <span className="jars-warning">Nguồn đang thiếu {formatMoney(view.deficitAmount)}</span>}
-      </button>)}</div>
-      {views.some((view) => view.jar.status === "closed") && <details className="jars-closed"><summary>Hũ đã đóng</summary>
-        {views.filter((view) => view.jar.status === "closed").map((view) => <button key={view.jar.id} onClick={() => setSelectedId(view.jar.id)} type="button">{view.jar.icon} {view.jar.name}</button>)}
-      </details>}
-      <section className="jars-accounts"><h2>Tiền có thể phân bổ theo tài khoản</h2>{activeAccounts.map((account) => <div key={account.id}>
-        <span>{account.name}<small>Số dư {formatMoney(calculateAccountBalance(account, ledger.transactions))} · Đã dành {formatMoney(getAccountAllocation(ledger, account.id))}</small></span>
-        <strong>{formatMoney(getAccountAvailableToAllocate(ledger, account.id))}</strong>
-        {getAccountAllocation(ledger, account.id) > calculateAccountBalance(account, ledger.transactions) &&
-          <small className="jars-warning">Tổng tiền đã dành vượt số dư thực tế. Hãy bổ sung tiền hoặc giải phóng phân bổ.</small>}
-      </div>)}</section>
+      <SpendingJarsOverview active={active} closed={closed} accountNames={accountNames} onCreate={openCreate} onOpen={setSelectedId} />
+      <AvailableAllocationSection ledger={ledger} accounts={activeAccounts} />
     </> : (() => {
       const view = getJarView(ledger, selected);
       return <>
@@ -144,7 +128,7 @@ export function SpendingJarsPage({ ledger, cloudStatus, onBack, onCommand, onDel
           <div className="jar-detail-hero-top"><span>{selected.status === "closed" ? "Hũ đã đóng" : "Còn trong hũ"}</span>
             <strong>{formatMoney(view.remainingAmount)}</strong></div>
           <div className="jar-detail-progress-label"><span>Còn {getJarRemainingPercent(view)}%</span><span>Đã tiêu {formatMoney(view.spentAmount)} · Hạn mức {formatMoney(selected.limitAmount)}</span></div>
-          <i className="jar-progress" role="progressbar" aria-label={`Tiền còn lại trong hũ ${selected.name}`} aria-valuenow={getJarRemainingPercent(view)} aria-valuemin={0} aria-valuemax={100}><b style={{ width: `${getJarRemainingPercent(view)}%` }} /></i>
+          <div className="jar-progress" role="progressbar" aria-label={`Tiền còn lại trong hũ ${selected.name}`} aria-valuenow={getJarRemainingPercent(view)} aria-valuemin={0} aria-valuemax={100}><span style={{ width: `${getJarRemainingPercent(view)}%` }} /></div>
           <p>Nhãn liên kết: {selected.linkedLabels.join(", ") || "Chưa liên kết"}</p>
         </section>
         {view.deficitAmount > 0 && <p className="jars-warning">Tài khoản nguồn hiện thấp hơn phần đã dành {formatMoney(view.deficitAmount)}. Hãy nạp thêm hoặc giải phóng tiền.</p>}
