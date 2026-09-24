@@ -159,6 +159,10 @@ export function useAppNavigation() {
     window.history.replaceState(
       {
         ...initialState,
+        photoJournalHasReturn:
+          initialState.page === "photoJournal" &&
+          currentHistoryState?.page === "photoJournal" &&
+          currentHistoryState.photoJournalHasReturn === true,
         scrollTop:
           typeof currentHistoryState?.scrollTop === "number"
             ? currentHistoryState.scrollTop
@@ -239,6 +243,8 @@ export function useAppNavigation() {
       goalScreen: targetGoalScreen,
       goalId: targetPage === nextPage ? nextGoalId : undefined,
       scrollTop: nextScrollTop,
+      photoJournalHasReturn:
+        targetPage === "photoJournal" && page !== "photoJournal" && !options?.replace,
     };
     const nextPath = window.location.pathname.startsWith("/money")
       ? targetPage === "goals"
@@ -270,6 +276,17 @@ export function useAppNavigation() {
     setNavigationVersion((current) => current + 1);
   }
 
+  function returnFromPhotoJournal() {
+    const state = window.history.state as Partial<AppHistoryState> | null;
+    if (page === "photoJournal" && state?.photoJournalHasReturn) {
+      window.history.back();
+      return;
+    }
+
+    // A direct journal link has no in-app screen to return to.
+    navigateTo("home", "menu", undefined, { replace: true });
+  }
+
   function resetMoneyNavigation() {
     pendingScrollTopRef.current = 0;
     setPage("home");
@@ -284,6 +301,7 @@ export function useAppNavigation() {
     goalScreen,
     setGoalScreen,
     navigateTo,
+    returnFromPhotoJournal,
     resetMoneyNavigation,
   };
 }

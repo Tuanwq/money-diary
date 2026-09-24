@@ -1,8 +1,13 @@
-.account-ledger-summary.has-availability{grid-template-columns:repeat(6,minmax(0,1fr))}
-.account-ledger-summary.has-availability>div{grid-column:span 2}
-.account-ledger-summary.has-availability>div:nth-child(-n+2){grid-column:span 3;border-bottom:1px solid var(--border)}
+.account-ledger-summary.has-availability{grid-template-columns:repeat(2,minmax(0,1fr))}
+.account-ledger-summary.has-availability>div{grid-column:span 1}
+.account-ledger-summary.has-availability>div:nth-child(-n+2){border-bottom:1px solid var(--border)}
 .account-ledger-summary.has-availability>div:nth-child(2){border-right:0}
-.account-ledger-summary.has-availability>div:last-child{border-right:0}
+.account-ledger-summary.has-availability>div:nth-child(4){border-right:0}
+.account-ledger-summary.has-availability>div.is-transfer{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;gap:1rem;border-top:1px solid var(--border);border-right:0;background:var(--surface-subtle)}
+.account-ledger-summary.has-availability .is-transfer strong{flex:none;color:var(--text-secondary);font-size:.95rem}
+.account-ledger-transfer-copy{display:grid;gap:.25rem;min-width:0}
+.account-ledger-transfer-copy span{display:inline-flex;align-items:center;gap:.4rem;color:var(--text-primary);font-weight:650}
+.account-ledger-transfer-copy small{color:var(--text-secondary);font-size:.72rem;line-height:1.4}
 .account-ledger-summary.has-availability .is-actual{background:color-mix(in srgb,var(--primary-soft) 58%,var(--surface));}
 .account-ledger-summary.has-availability .is-actual strong{color:var(--primary-text)}
 .account-ledger-summary.has-availability .is-actual small{font-size:.7rem;line-height:1.35;color:var(--text-secondary)}
@@ -29,4 +34,4 @@
 .account-external-item-end{display:grid;justify-items:end;gap:7px}.account-external-item-end>strong{font-size:.9rem;white-space:nowrap;color:var(--text-primary)}
 .account-external-item-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:5px}.account-external-item-actions button{display:inline-flex;align-items:center;gap:4px;padding:5px 7px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text-secondary);font-size:.68rem;font-weight:650}
 .external-money-modal{gap:.8rem}.external-money-help{margin:0;color:var(--text-secondary);font-size:.78rem;line-height:1.45}.external-money-account{margin:0;padding:8px 10px;border-radius:9px;background:var(--surface-subtle);color:var(--text-primary);font-size:.8rem}.external-money-fill{justify-self:start;border:0;background:transparent;color:var(--primary-text);font-size:.74rem;font-weight:700;text-decoration:underline}.external-money-error{margin:0;color:var(--danger);font-size:.78rem}
-@media(max-width:720px){.account-ledger-summary.has-availability{grid-template-columns:repeat(2,minmax(0,1fr))}.account-ledger-summary.has-availability>div,.account-ledger-summary.has-availability>div:nth-child(-n+2){grid-column:span 1}.account-ledger-summary.has-availability>div:nth-child(2n){border-right:0}.account-ledger-summary.has-availability>div:nth-child(-n+4){border-bottom:1px solid var(--border)}.account-ledger-summary.has-availability>div:last-child{grid-column:span 2}.account-ledger-summary.has-availability strong{white-space:normal;overflow-wrap:anywhere}.account-external-section{padding:.9rem}.account-external-section .account-ledger-section-heading{flex-wrap:wrap}.account-external-item{flex-wrap:wrap}.account-external-item-end{width:100%;display:flex;align-items:center;justify-content:space-between}.account-external-item-actions{flex:1}}
+@media(max-width:720px){.account-ledger-summary.has-availability strong{white-space:normal;overflow-wrap:anywhere}.account-ledger-summary.has-availability>div.is-transfer{align-items:flex-start;flex-direction:column;gap:.45rem}.account-external-section{padding:.9rem}.account-external-section .account-ledger-section-heading{flex-wrap:wrap}.account-external-item{flex-wrap:wrap}.account-external-item-end{width:100%;display:flex;align-items:center;justify-content:space-between}.account-external-item-actions{flex:1}}

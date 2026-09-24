@@ -16,6 +16,7 @@ import {
   WalletCards,
   X,
 } from "lucide-react";
+import "./accountExternal.css";
 import { useEffect, useMemo, useState } from "react";
 import { getToday } from "../../utils/date";
 import { getJarView, suggestJar, type JarActivity, type JarLedger, type SpendingJar } from
@@ -702,8 +703,11 @@ export function AccountLedgerPage({
           <span>Chi trong tháng</span>
           <strong className="is-expense">{formatMoney(summary.expense)}</strong>
         </div>
-        <div>
-          <span>Chuyển nội bộ</span>
+        <div className="is-transfer">
+          <div className="account-ledger-transfer-copy">
+            <span><ArrowLeftRight aria-hidden="true" size={16} /> Tiền chuyển giữa các tài khoản</span>
+            <small>Tổng luân chuyển trong tháng · không phải thu hoặc chi, không làm thay đổi tổng số dư.</small>
+          </div>
           <strong>{formatMoney(summary.transfer)}</strong>
         </div>
       </section>

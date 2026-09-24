@@ -41,7 +41,7 @@ export function PhotoJournalPage({
       <header className="photo-journal-header">
         <button className="photo-journal-back" onClick={onBack} type="button">
           <ArrowLeft aria-hidden="true" size={18} />
-          Tổng quan
+          Quay lại
         </button>
         <div className="photo-journal-heading">
           <span><Images aria-hidden="true" size={16} /> Ký ức tài chính</span>

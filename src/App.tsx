@@ -645,7 +645,7 @@ export default function App() {
   );
   const [isCloseDayDetailedMode, setIsCloseDayDetailedMode] = useState(false);
   const { route, navigateApp } = useBrowserRoute();
-  const { page, goalId, goalScreen, navigateTo, resetMoneyNavigation } =
+  const { page, goalId, goalScreen, navigateTo, returnFromPhotoJournal, resetMoneyNavigation } =
     useAppNavigation();
   const actionReturnLocationRef = useRef<ActionReturnLocation | null>(null);
   const [chartDays, setChartDays] = useState(7);
@@ -3398,6 +3398,7 @@ if (route.kind === "daymark") {
       email={session.user.email}
       isCloudRefreshing={isCloudRefreshing}
       navigateTo={navigateTo}
+      onBackFromPhotoJournal={returnFromPhotoJournal}
       onExportReport={exportToWord}
       onLogout={handleLogout}
       onOpenBalanceCheck={goToTodayBalanceCheck}
@@ -3507,7 +3508,7 @@ if (route.kind === "daymark") {
               entries={entries}
               expenses={expenses}
               ownerId={cloudDataUserId}
-              onBack={() => navigateTo("home")}
+              onBack={returnFromPhotoJournal}
               onDeleteTransaction={deleteAccountTransaction}
               onSaveTransaction={saveAccountTransaction}
               onJarCommand={dispatchJar}

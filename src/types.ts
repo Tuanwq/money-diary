@@ -122,6 +122,8 @@ export type AppHistoryState = {
   page: Page;
   goalScreen: GoalScreen;
   scrollTop?: number;
+  /** Set only when the journal was opened from another Money Diary screen. */
+  photoJournalHasReturn?: boolean;
 };
 
 export type CompletedGoal = {

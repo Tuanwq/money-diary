@@ -14,6 +14,7 @@ type MoneyPageShellProps = {
   email?: string;
   isCloudRefreshing: boolean;
   navigateTo: (page: Page, goalScreen?: GoalScreen) => void;
+  onBackFromPhotoJournal: () => void;
   onExportReport: () => void;
   onLogout: () => void;
   onOpenCloseDay: () => void;
@@ -37,6 +38,7 @@ export function MoneyPageShell({
   email,
   isCloudRefreshing,
   navigateTo,
+  onBackFromPhotoJournal,
   onExportReport,
   onLogout,
   onOpenCloseDay,
@@ -65,7 +67,7 @@ export function MoneyPageShell({
   const desktopSettingsButtonRef = useRef<HTMLButtonElement | null>(null);
   const moreButtonRef = useRef<HTMLButtonElement | null>(null);
   const mobileAccountButtonRef = useRef<HTMLButtonElement | null>(null);
-  const swipe = useSwipeNavigation(currentPage, (page) => navigateTo(page));
+  const swipe = useSwipeNavigation(currentPage, (page) => navigateTo(page), onBackFromPhotoJournal);
   const moreReturnFocusRef =
     moreReturnTarget === "desktopAccount"
       ? desktopAccountButtonRef
