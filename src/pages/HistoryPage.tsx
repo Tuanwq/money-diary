@@ -1,5 +1,12 @@
 import { BookOpenText } from "lucide-react";
-import { useState, type Dispatch, type SetStateAction } from "react";
+import { useMemo, useState, type Dispatch, type SetStateAction } from "react";
+import type { AccountTransaction, FinancialAccount } from "../features/account-ledger/accountLedgerModel.ts";
+import type { AccountReconciliation } from "../features/account-reconciliation/accountReconciliationModel.ts";
+import type { JarActivity, SpendingJar } from "../features/spending-jars/domain/jarModel.ts";
+import type { HubEntry, HubSettings } from "../types/hub.ts";
+import { summarizeFinancialTransactions } from "../features/finance-core/services/financialMetrics.ts";
+import { buildFinancialHistoryEvents, type FinancialHistoryKind } from "../features/history/services/financialHistoryModel.ts";
+import { FinancialHistoryFeed } from "../features/history/components/FinancialHistoryFeed.tsx";
 import { DeleteHistoryRecordDialog } from "../features/history/components/DeleteHistoryRecordDialog";
 import { HistoryErrorState, HistoryLoadingState } from "../features/history/components/HistoryAsyncState";
 import { HistoryDetailDrawer } from "../features/history/components/HistoryDetailDrawer";
@@ -16,12 +23,16 @@ type HistoryQuickFilter = "today" | "7days" | "30days" | "month" | "lastMonth" |
 
 type HistoryPageProps = {
   cloudLoadError?: string | null;
+  accounts: FinancialAccount[];
+  accountTransactions: AccountTransaction[];
+  accountReconciliations: AccountReconciliation[];
+  hubEntries: HubEntry[];
+  hubSettings: HubSettings;
+  jars: SpendingJar[];
+  jarActivities: JarActivity[];
   deleteEntry: (id: string) => void;
   editEntry: (entry: DailyEntry) => void;
   filteredEntries: DailyEntry[];
-  filteredEntriesHours: number;
-  filteredEntriesOrders: number;
-  filteredEntriesTotalMoney: number;
   historyCurrentPage: number;
   historyFromDate: string;
   historySearch: string;
@@ -49,12 +60,16 @@ const quickFilters = [
 
 export function HistoryPage({
   cloudLoadError,
+  accounts,
+  accountTransactions,
+  accountReconciliations,
+  hubEntries,
+  hubSettings,
+  jars,
+  jarActivities,
   deleteEntry,
   editEntry,
   filteredEntries,
-  filteredEntriesHours,
-  filteredEntriesOrders,
-  filteredEntriesTotalMoney,
   historyCurrentPage,
   historyFromDate,
   historySearch,
@@ -73,9 +88,26 @@ export function HistoryPage({
 }: HistoryPageProps) {
   const [selectedEntry, setSelectedEntry] = useState<DailyEntry | null>(null);
   const [pendingDelete, setPendingDelete] = useState<DailyEntry | null>(null);
+  const [kindFilter, setKindFilter] = useState<"all" | FinancialHistoryKind>("all");
+  const financialEvents = useMemo(() => buildFinancialHistoryEvents({
+    accounts, transactions: accountTransactions, reconciliations: accountReconciliations,
+    hubEntries, hubSettings, jars, jarActivities,
+  }), [accounts, accountTransactions, accountReconciliations, hubEntries, hubSettings, jars, jarActivities]);
+  const visibleEvents = useMemo(() => financialEvents.filter((event) => {
+    if (historyFromDate && event.date < historyFromDate) return false;
+    if (historyToDate && event.date > historyToDate) return false;
+    if (kindFilter !== "all" && event.kind !== kindFilter &&
+      !(kindFilter === "jar" && event.source === "spending_jar") &&
+      !(kindFilter === "hub" && event.source === "hub")) return false;
+    const query = historySearch.trim().toLocaleLowerCase("vi-VN");
+    return !query || [event.date, event.title, event.detail].some((value) =>
+      value.toLocaleLowerCase("vi-VN").includes(query));
+  }), [financialEvents, historyFromDate, historyToDate, historySearch, kindFilter]);
+  const visibleIds = new Set(visibleEvents.map((item) => item.transactionId).filter(Boolean));
+  const financialTotals = summarizeFinancialTransactions(accountTransactions.filter((item) => visibleIds.has(item.id)));
   const activeFilters: ActiveHistoryFilter[] = [];
-  const isInitialLoading = Boolean(isCloudLoading && sortedEntries.length === 0);
-  const hasInitialError = Boolean(cloudLoadError && sortedEntries.length === 0);
+  const isInitialLoading = Boolean(isCloudLoading && sortedEntries.length === 0 && financialEvents.length === 0);
+  const hasInitialError = Boolean(cloudLoadError && sortedEntries.length === 0 && financialEvents.length === 0);
 
   if (historyFromDate || historyToDate) {
     activeFilters.push({
@@ -99,7 +131,7 @@ export function HistoryPage({
         onReset={() => setHistoryQuickFilter("all")}
         onSearchChange={setHistorySearch}
         onToDateChange={setHistoryToDate}
-        placeholder="Tìm theo ngày, nhật ký hoặc ghi chú..."
+        placeholder="Tìm giao dịch, tài khoản, ghi chú..."
         quickFilters={quickFilters}
         search={historySearch}
         toDate={historyToDate}
@@ -109,14 +141,32 @@ export function HistoryPage({
         <HistorySummaryStrip
           isLoading={isInitialLoading}
           items={[
-            { label: "Số ngày có dữ liệu", value: String(filteredEntries.length) },
-            { label: "Tổng thu nhập", value: formatMoney(filteredEntriesTotalMoney) },
-            { label: "Tổng giờ", value: `${filteredEntriesHours} giờ` },
-            { label: "Tổng đơn", value: `${filteredEntriesOrders} đơn` },
+            { label: "Thu nhập", value: formatMoney(financialTotals.income) },
+            { label: "Chi tiêu", value: formatMoney(financialTotals.expense) },
+            { label: "Dòng tiền ròng", value: formatMoney(financialTotals.net) },
+            { label: "Chuyển nội bộ", value: formatMoney(financialTotals.transfer) },
           ]}
         />
       )}
 
+      <section className="history-record-section" aria-labelledby="financial-history-title">
+        <div className="history-section-heading"><div>
+          <h2 id="financial-history-title">Dòng hoạt động tài chính</h2>
+          <p>Thu, chi và chuyển tiền lấy từ Sổ tài khoản. Ca HUB, hũ và kiểm kê chỉ là hoạt động tham chiếu.</p>
+        </div></div>
+        <div className="financial-history-type-filter" role="group" aria-label="Lọc loại hoạt động">
+          {([ ["all", "Tất cả"], ["income", "Thu nhập"], ["expense", "Chi tiêu"],
+            ["transfer", "Chuyển nội bộ"], ["hub", "Ca HUB"],
+            ["reconciliation", "Kiểm kê"], ["jar", "Hũ"] ] as const).map(([kind, label]) =>
+            <button key={kind} className={kindFilter === kind ? "is-active" : ""}
+              type="button" onClick={() => setKindFilter(kind)}>{label}</button>)}
+        </div>
+        <FinancialHistoryFeed events={visibleEvents.slice(0, 100)} onOpenTransaction={() => navigateTo("accounts")} />
+        {visibleEvents.length > 100 && <p>Hiển thị 100 hoạt động mới nhất. Thu hẹp khoảng ngày để xem thêm.</p>}
+      </section>
+
+      <details className="history-legacy-journal">
+        <summary>Nhật ký cũ ({filteredEntries.length} ngày) · dữ liệu tài chính chưa đối chiếu, không cộng vào số liệu trên</summary>
       <section className="history-record-section" aria-labelledby="journal-history-title">
         <div className="history-section-heading">
           <div>
@@ -155,6 +205,7 @@ export function HistoryPage({
           onPageChange={setHistoryCurrentPage}
         />
       </section>
+      </details>
 
       <HistoryDetailDrawer
         isOpen={Boolean(selectedEntry)}

@@ -784,3 +784,12 @@
     transition: none;
   }
 }
+.analytics-legacy-notice {
+  background: #fff7e8;
+  border: 1px solid #ead7b9;
+  border-radius: 1rem;
+  color: #624820;
+  font-size: .85rem;
+  line-height: 1.5;
+  padding: .8rem 1rem;
+}

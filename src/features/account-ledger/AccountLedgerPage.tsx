@@ -201,6 +201,7 @@ function AccountForm({
 
 function TransactionForm({
   accounts,
+  initialType,
   jarLedger,
   onJarCommand,
   onClose,
@@ -208,6 +209,7 @@ function TransactionForm({
   transaction,
 }: {
   accounts: FinancialAccount[];
+  initialType?: AccountTransactionType;
   jarLedger: JarLedger;
   onJarCommand: (command: JarCommand) => void;
   onClose: () => void;
@@ -216,7 +218,7 @@ function TransactionForm({
 }) {
   const firstAccountId = accounts[0]?.id ?? "";
   const [type, setType] = useState<AccountTransactionType>(
-    transaction?.type ?? "expense"
+    transaction?.type ?? initialType ?? "expense"
   );
   const [accountId, setAccountId] = useState(
     transaction?.accountId ?? firstAccountId
@@ -300,6 +302,8 @@ function TransactionForm({
         note: note.trim(),
         purpose,
         ...(type === "transfer" ? { toAccountId } : {}),
+        ...(type !== "transfer" ? { toAccountId: undefined } : {}),
+        source: transaction?.source ?? "manual",
         type,
         updatedAt: now,
       });
@@ -495,6 +499,8 @@ function TransactionForm({
 
 export function AccountLedgerPage({
   accounts,
+  quickCreate,
+  onQuickCreateHandled,
   jars,
   jarActivities,
   onJarCommand,
@@ -509,6 +515,8 @@ export function AccountLedgerPage({
   transactions,
 }: {
   accounts: FinancialAccount[];
+  quickCreate?: { id: number; type: AccountTransactionType } | null;
+  onQuickCreateHandled?: () => void;
   jars: SpendingJar[];
   jarActivities: JarActivity[];
   onJarCommand: (command: JarCommand) => void;
@@ -978,14 +986,16 @@ export function AccountLedgerPage({
       {externalDialog && <AccountExternalForm key={`${externalDialog.kind}-${externalDialog.kind === "create" ? externalDialog.accountId : externalDialog.entry.id}`}
         accounts={activeAccounts} transactions={transactions} dialog={externalDialog}
         onClose={() => setExternalDialog(null)} onCommand={onExternalCommand} />}
-      {showTransactionForm && (
+      {(showTransactionForm || quickCreate) && (
         <TransactionForm
           accounts={activeAccounts}
+          initialType={quickCreate?.type ?? "expense"}
+          key={quickCreate?.id ?? editingTransaction?.id ?? "new"}
           jarLedger={{ accounts, transactions, jars, jarActivities }}
           onJarCommand={onJarCommand}
-          onClose={() => setShowTransactionForm(false)}
+          onClose={() => { setShowTransactionForm(false); onQuickCreateHandled?.(); }}
           onSave={saveTransaction}
-          transaction={editingTransaction}
+          transaction={quickCreate ? null : editingTransaction}
         />
       )}
     </div>

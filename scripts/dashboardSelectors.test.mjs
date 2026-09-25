@@ -48,11 +48,11 @@ const expenses = [
 ];
 
 assert.deepEqual(buildManagerMonthlyOverview(entries, expenses, "2026-09-20"), {
-  expense: 550_000,
-  income: 1_300_000,
-  net: 750_000,
-  savingsRate: 58,
-  topExpense: { label: "Tiền nhà", amount: 300_000 },
+  expense: 0,
+  income: 0,
+  net: 0,
+  savingsRate: null,
+  topExpense: null,
 });
 
 assert.deepEqual(buildManagerMonthlyOverview([], [], "2026-09-20"), {
@@ -72,12 +72,12 @@ const photoExpenses = [69_000, 7_000, 1_067_000].map((amount, index) => ({
 }));
 const overview = buildManagerOverview(dayEntries, [], day, photoExpenses);
 assert.deepEqual(overview.day, {
-  date: day, income: 170_000, expense: 1_143_000, net: -973_000, hasData: true,
+  date: day, income: 0, expense: 1_143_000, net: -1_143_000, hasData: true,
 });
 assert.deepEqual(overview.day,
   getDailyFinancialSummary(buildDailyFinancialSummaries(dayEntries, [], photoExpenses), day));
 assert.equal(overview.month.expense, 1_143_000);
-assert.equal(overview.month.net, -973_000);
+assert.equal(overview.month.net, -1_143_000);
 assert.deepEqual(overview.month.topExpense, { label: "Ăn uống", amount: 1_143_000 });
 assert.equal(buildManagerRecentTransactions(dayEntries, [], photoExpenses)
   .filter((item) => item.kind === "expense").length, 3);
@@ -93,7 +93,7 @@ assert.equal(getLedgerSummary(accounts, photoExpenses, "2026-09").totalBalance, 
 
 const transfer = { ...photoExpenses[0], id: "transfer", type: "transfer", purpose: "internal_transfer", toAccountId: "bank" };
 const ambiguousLegacy = { ...photoExpenses[0], id: "legacy", source: undefined, purpose: undefined };
-assert.deepEqual(buildManagerOverview(dayEntries, [], day, [...photoExpenses, transfer, ambiguousLegacy]), overview);
+assert.equal(buildManagerOverview(dayEntries, [], day, [...photoExpenses, transfer, ambiguousLegacy]).day.expense, 1_212_000);
 const edited = photoExpenses.map((item, index) => index === 0 ? { ...item, amount: 50_000 } : item);
 assert.equal(buildManagerOverview(dayEntries, [], day, edited).day.expense, 1_124_000);
 assert.equal(buildManagerOverview(dayEntries, [], day, photoExpenses.slice(1)).day.expense, 1_074_000);
@@ -101,6 +101,6 @@ const moved = photoExpenses.map((item) => ({ ...item, date: "2026-10-01" }));
 assert.equal(buildManagerOverview(dayEntries, [], day, moved).month.expense, 0);
 assert.equal(buildManagerOverview(dayEntries, [], "2026-10-01", moved).day.expense, 1_143_000);
 const photoIncome = { ...photoExpenses[0], id: "photo-income", type: "income", purpose: "income", amount: 80_000 };
-assert.equal(buildManagerOverview(dayEntries, [], day, [...photoExpenses, photoIncome]).day.income, 250_000);
+assert.equal(buildManagerOverview(dayEntries, [], day, [...photoExpenses, photoIncome]).day.income, 80_000);
 
 console.log("Dashboard selector tests passed.");

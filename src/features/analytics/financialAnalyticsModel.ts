@@ -6,8 +6,6 @@ import {
 import type {
   BalanceCheckEntry,
   CompletedGoal,
-  DailyEntry,
-  ExpenseEntry,
   Goals,
 } from "../../types";
 import type { HubEntry, HubSettings } from "../../types/hub";
@@ -17,14 +15,7 @@ import {
   getDateString,
   toDate,
 } from "../../utils/date";
-import {
-  getBonusMoney,
-  getExpenseTotal,
-  getMainIncome,
-  getOtherExpenseItems,
-  getReceivedMoney,
-  getTotalEntryMoney,
-} from "../../utils/entries";
+import { groupFinancialExpensesByCategory, groupFinancialTransactionsByDay, selectFinancialTransactions } from "../finance-core/services/financialMetrics.ts";
 import { getProgress, getSubGoalSaved } from "../../utils/goals";
 import {
   buildHubAnalyticsRows,
@@ -117,6 +108,7 @@ export type FinancialAnalyticsModel = {
   completedGoals: number;
   dailyPoints: AnalyticsDailyPoint[];
   expenseCategories: AnalyticsExpenseCategory[];
+  incomeCategories: Array<{ name: string; value: number }>;
   goals: AnalyticsGoalItem[];
   hubPerformance: HubPerformanceItem[];
   hubSummary: HubAnalyticsSummary;
@@ -143,9 +135,8 @@ type FinancialAnalyticsInput = {
   actualMoney: number;
   balanceChecks: BalanceCheckEntry[];
   completedGoals: CompletedGoal[];
-  entries: DailyEntry[];
-  expenses: ExpenseEntry[];
   goals: Goals;
+  goalAchievedAmount: number;
   hubEntries: HubEntry[];
   hubSettings: HubSettings;
   range: AnalyticsDateRange;
@@ -164,8 +155,11 @@ const EXPENSE_COLORS = [
 const WEEKDAY_NAMES = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"];
 
 function getRangeDays(range: Pick<AnalyticsDateRange, "fromDate" | "toDate">) {
-  const milliseconds =
-    toDate(range.toDate).getTime() - toDate(range.fromDate).getTime();
+  const civilDay = (value: string) => {
+    const [year, month, day] = value.split("-").map(Number);
+    return Date.UTC(year, month - 1, day);
+  };
+  const milliseconds = civilDay(range.toDate) - civilDay(range.fromDate);
 
   return Math.max(Math.floor(milliseconds / 86_400_000) + 1, 1);
 }
@@ -200,18 +194,8 @@ function enumerateDates(fromDate: string, toDate: string) {
   return dates;
 }
 
-function filterByRange<T extends { date: string }>(
-  items: T[],
-  range: AnalyticsDateRange
-) {
-  return items.filter(
-    (item) => item.date >= range.fromDate && item.date <= range.toDate
-  );
-}
-
 function buildDailyPoints(
-  entries: DailyEntry[],
-  expenses: ExpenseEntry[],
+  transactions: AccountTransaction[],
   hubEntries: HubEntry[],
   hubSettings: HubSettings,
   range: AnalyticsDateRange
@@ -234,21 +218,11 @@ function buildDailyPoints(
     });
   }
 
-  for (const entry of filterByRange(entries, range)) {
-    const point = result.get(entry.date);
+  for (const [date, financial] of groupFinancialTransactionsByDay(transactions, range)) {
+    const point = result.get(date);
     if (!point) continue;
-
-    point.workIncome += getMainIncome(entry);
-    point.bonus += getBonusMoney(entry);
-    point.received += getReceivedMoney(entry);
-    point.income += getTotalEntryMoney(entry);
-    point.hours += entry.workHours ?? 0;
-    point.orders += entry.orderCount ?? 0;
-  }
-
-  for (const expense of filterByRange(expenses, range)) {
-    const point = result.get(expense.date);
-    if (point) point.expense += getExpenseTotal(expense);
+    point.income = financial.income;
+    point.expense = financial.expense;
   }
 
   const hubRows = filterHubRowsByDate(
@@ -259,7 +233,11 @@ function buildDailyPoints(
 
   for (const row of hubRows) {
     const point = result.get(row.entry.date);
-    if (point) point.hubProfit += row.actualProfit;
+    if (point) {
+      point.hubProfit += row.actualProfit;
+      point.hours += row.hours;
+      point.orders += row.orderCount;
+    }
   }
 
   return [...result.values()].map((point) => ({
@@ -295,28 +273,10 @@ function summarizeDailyPoints(points: AnalyticsDailyPoint[]) {
 }
 
 function buildExpenseCategories(
-  expenses: ExpenseEntry[],
+  transactions: AccountTransaction[],
   range: AnalyticsDateRange
 ) {
-  const totals = new Map<string, number>();
-  const addValue = (name: string, value: number) => {
-    if (value <= 0) return;
-    totals.set(name, (totals.get(name) ?? 0) + value);
-  };
-
-  for (const expense of filterByRange(expenses, range)) {
-    addValue("Ăn sáng", expense.breakfast);
-    addValue("Ăn trưa", expense.lunch);
-    addValue("Ăn tối", expense.dinner);
-
-    for (const item of getOtherExpenseItems(expense)) {
-      addValue(item.label, item.amount);
-    }
-  }
-
-  const sorted = [...totals.entries()]
-    .map(([name, value]) => ({ name, value }))
-    .sort((a, b) => b.value - a.value);
+  const sorted = groupFinancialExpensesByCategory(transactions, range);
   const visible = sorted.slice(0, 5);
   const remaining = sorted
     .slice(5)
@@ -488,15 +448,13 @@ export function buildFinancialAnalyticsModel(
 ): FinancialAnalyticsModel {
   const previousRange = getPreviousRange(input.range);
   const dailyPoints = buildDailyPoints(
-    input.entries,
-    input.expenses,
+    input.transactions,
     input.hubEntries,
     input.hubSettings,
     input.range
   );
   const previousDailyPoints = buildDailyPoints(
-    input.entries,
-    input.expenses,
+    input.transactions,
     input.hubEntries,
     input.hubSettings,
     previousRange
@@ -529,8 +487,17 @@ export function buildFinancialAnalyticsModel(
     ).length,
     completedGoals: input.completedGoals.length,
     dailyPoints,
-    expenseCategories: buildExpenseCategories(input.expenses, input.range),
-    goals: buildGoals(input.goals, input.actualMoney),
+    expenseCategories: buildExpenseCategories(input.transactions, input.range),
+    incomeCategories: [...selectFinancialTransactions(input.transactions, input.range)
+      .filter((item) => item.type === "income")
+      .reduce((totals, item) => {
+        const name = item.category.trim() || "Thu nhập khác";
+        totals.set(name, (totals.get(name) ?? 0) + item.amount);
+        return totals;
+      }, new Map<string, number>())]
+      .map(([name, value]) => ({ name, value }))
+      .sort((left, right) => right.value - left.value),
+    goals: buildGoals(input.goals, input.goalAchievedAmount),
     hubPerformance: groupHubPerformance(hubRows, "hub", "actualProfit"),
     hubSummary,
     latestBalanceCheck:
@@ -570,13 +537,9 @@ export function buildFinancialAnalyticsModel(
 
 export function getAnalyticsAllDates(input: {
   accountTransactions: AccountTransaction[];
-  entries: DailyEntry[];
-  expenses: ExpenseEntry[];
   hubEntries: HubEntry[];
 }) {
   return [
-    ...input.entries.map((item) => item.date),
-    ...input.expenses.map((item) => item.date),
     ...input.hubEntries.map((item) => item.date),
     ...input.accountTransactions.map((item) => item.date),
   ].filter((date) => date <= getDateString());

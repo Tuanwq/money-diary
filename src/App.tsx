@@ -2,6 +2,7 @@ import { useBrowserRoute } from "./app/router/useBrowserRoute";
 import { HubSelectionPage } from "./features/hub/pages/HubSelectionPage";
 import { useAccountLedger } from "./features/account-ledger/useAccountLedger";
 import { getLedgerSummary } from "./features/account-ledger/accountLedgerModel";
+import type { AccountTransactionType } from "./features/account-ledger/accountLedgerModel";
 import { deleteAccountTransactionWithPhotos } from "./features/photo-finance/services/photoTransactionService.ts";
 import { useAccountReconciliations } from "./features/account-reconciliation/useAccountReconciliations";
 import { useAutomationRules } from "./features/automation/useAutomationRules";
@@ -647,6 +648,11 @@ export default function App() {
   const { route, navigateApp } = useBrowserRoute();
   const { page, goalId, goalScreen, navigateTo, returnFromPhotoJournal, resetMoneyNavigation } =
     useAppNavigation();
+  const [quickCreate, setQuickCreate] = useState<{ id: number; type: AccountTransactionType } | null>(null);
+  function openQuickTransaction(type: AccountTransactionType) {
+    setQuickCreate({ id: Date.now(), type });
+    navigateTo("accounts");
+  }
   const actionReturnLocationRef = useRef<ActionReturnLocation | null>(null);
   const [chartDays, setChartDays] = useState(7);
   const [forecastDays, setForecastDays] = useState(14);
@@ -1222,21 +1228,6 @@ const paginatedEntries = filteredEntries.slice(
   historyCurrentPage * ITEMS_PER_PAGE
 );
 
-const filteredEntriesTotalMoney = filteredEntries.reduce(
-  (sum, entry) => sum + getTotalEntryMoney(entry),
-  0
-);
-
-const filteredEntriesHours = filteredEntries.reduce(
-  (sum, entry) => sum + entry.workHours,
-  0
-);
-
-const filteredEntriesOrders = filteredEntries.reduce(
-  (sum, entry) => sum + (entry.orderCount ?? 0),
-  0
-);
-
 const sortedExpenses = [...expenses].sort((a, b) =>
   b.date.localeCompare(a.date)
 );
@@ -1494,20 +1485,11 @@ function getAppMoneyAtDate(date: string) {
   return data.at(-1)?.actualMoney ?? goals.bigGoalSaved;
 }
 
-const totalIncome = entries.reduce(
-  (sum, entry) => sum + getTotalEntryMoney(entry),
-  0
-);
-
-const totalExpense = expenses.reduce((sum, expense) => {
-  return (
-    sum +
-    expense.breakfast +
-    expense.lunch +
-    expense.dinner +
-    expense.other
-  );
-}, 0);
+// Word export still describes archived V1 diary rows. Keep its totals scoped to
+// those rows until the report itself is migrated to AccountTransaction.
+const totalIncome = entries.reduce((sum, entry) => sum + getTotalEntryMoney(entry), 0);
+const totalExpense = expenses.reduce((sum, expense) =>
+  sum + expense.breakfast + expense.lunch + expense.dinner + expense.other, 0);
 
 const currentGoalStartDate = goals.bigGoalStartDate ?? getToday();
 
@@ -1627,23 +1609,6 @@ const goalForecast = buildGoalForecast({
 
     setSelectedDate(value);
   }
-
-function goToTodayEntryForm() {
-  rememberActionReturnLocation();
-  setIsCloseDayDetailedMode(false);
-  setEditingDate(null);
-  setEditingExpenseDate(null);
-  setSelectedDate(todayString);
-  setForm((prev) => ({
-    ...prev,
-    date: todayString,
-  }));
-  setExpenseForm((prev) => ({
-    ...prev,
-    date: todayString,
-  }));
-  navigateTo("entry");
-}
 
 function rememberActionReturnLocation() {
   actionReturnLocationRef.current = {
@@ -1807,10 +1772,6 @@ function closeBalanceCheckOverlay() {
 
   balanceCheckDraftDirtyRef.current = false;
   setBalanceCheckOverlay((current) => ({ ...current, isOpen: false }));
-}
-
-function goToTodayBalanceCheck() {
-  openBalanceCheckOverlay(todayString, "edit");
 }
 
 function handleExpenseSubmit(event: React.FormEvent) {
@@ -3401,14 +3362,16 @@ if (route.kind === "daymark") {
       onBackFromPhotoJournal={returnFromPhotoJournal}
       onExportReport={exportToWord}
       onLogout={handleLogout}
-      onOpenBalanceCheck={goToTodayBalanceCheck}
+      onOpenBalanceCheck={() => navigateTo("reconciliation")}
       onOpenAnalytics={() => navigateTo("analytics")}
       onOpenAccountLedger={() => navigateTo("accounts")}
       onOpenAccountReconciliation={() => navigateTo("reconciliation")}
       onOpenChangeLog={() => navigateTo("changes")}
       onOpenCloseDay={() => openCloseDay()}
-      onOpenExpense={goToTodayEntryForm}
-      onOpenIncome={() => navigateTo("hub")}
+      onOpenExpense={() => openQuickTransaction("expense")}
+      onOpenIncome={() => openQuickTransaction("income")}
+      onOpenTransfer={() => openQuickTransaction("transfer")}
+      onOpenHub={() => navigateTo("hub")}
       onRetrySync={() => { void retryCloudLoad(); retryAccountLedgerSync(); }}
       onSwitchApp={openAppHub}
       syncStatus={accountAwareSyncStatus}
@@ -3420,6 +3383,8 @@ if (route.kind === "daymark") {
           {page === "accounts" && (
             <LazyAccountLedgerPage
               accounts={financialAccounts}
+              quickCreate={quickCreate}
+              onQuickCreateHandled={() => setQuickCreate(null)}
               onExternalCommand={dispatchExternal}
               jars={jars}
               jarActivities={jarActivities}
@@ -3450,6 +3415,7 @@ if (route.kind === "daymark") {
               entries={entries}
               expenses={expenses}
               goals={goals}
+              goalAchievedAmount={mainGoalProgress.achievedAmount}
               hubEntries={backupSource.hub.entries}
               hubSettings={backupSource.hub.settings}
             />
@@ -3742,6 +3708,13 @@ if (route.kind === "daymark") {
 
   {page === "history" && (
     <LazyHistoryPage
+      accounts={financialAccounts}
+      accountTransactions={accountTransactions}
+      accountReconciliations={accountReconciliations}
+      hubEntries={backupSource.hub.entries}
+      hubSettings={backupSource.hub.settings}
+      jars={jars}
+      jarActivities={jarActivities}
       historySearch={historySearch}
       setHistorySearch={updateHistorySearch}
       historyFromDate={historyFromDate}
@@ -3752,9 +3725,6 @@ if (route.kind === "daymark") {
       filteredEntries={filteredEntries}
       sortedEntries={sortedEntries}
       paginatedEntries={paginatedEntries}
-      filteredEntriesTotalMoney={filteredEntriesTotalMoney}
-      filteredEntriesHours={filteredEntriesHours}
-      filteredEntriesOrders={filteredEntriesOrders}
       cloudLoadError={cloudLoadError}
       isCloudLoading={isCloudLoading}
       onRetry={() => void retryCloudLoad()}

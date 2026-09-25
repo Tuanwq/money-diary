@@ -9,9 +9,9 @@ type HistoryLayoutProps = {
 };
 
 const tabs = [
-  { icon: BookOpenText, label: "Nhật ký", page: "history" as const },
-  { icon: ReceiptText, label: "Chi tiêu", page: "expenses" as const },
-  { icon: ClipboardCheck, label: "Kiểm kê số dư", page: "balanceChecks" as const },
+  { icon: BookOpenText, label: "Hoạt động", page: "history" as const },
+  { icon: ReceiptText, label: "Chi tiêu cũ", page: "expenses" as const },
+  { icon: ClipboardCheck, label: "Kiểm kê cũ", page: "balanceChecks" as const },
 ];
 
 export function HistoryLayout({ children, currentPage, navigateTo }: HistoryLayoutProps) {

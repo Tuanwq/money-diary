@@ -1,6 +1,5 @@
 import type { AccountTransaction } from "../../account-ledger/accountLedgerModel.ts";
 import type { DailyEntry, ExpenseEntry } from "../../../types.ts";
-import { getExpenseTotal, getTotalEntryMoney } from "../../../utils/entries.ts";
 import type { PhotoAttachment } from "../types/photoFinance.ts";
 
 export type StoryTimelineItem = {
@@ -14,7 +13,7 @@ export type StoryTimelineItem = {
 };
 
 export function buildStoryTimeline(date: string, transactions: AccountTransaction[],
-  entries: DailyEntry[], expenses: ExpenseEntry[], attachments: PhotoAttachment[]): StoryTimelineItem[] {
+  _entries: DailyEntry[], _expenses: ExpenseEntry[], attachments: PhotoAttachment[]): StoryTimelineItem[] {
   const seenJarActivities = new Set<string>();
   const photoByTransaction = new Map<string, number>();
   attachments.forEach((attachment, index) => {
@@ -28,8 +27,7 @@ export function buildStoryTimeline(date: string, transactions: AccountTransactio
   }
   return [
     ...transactions.filter((transaction) => {
-      if (transaction.date !== date ||
-        !(transaction.source === "photo_finance" || transaction.source === "spending_jar" || transaction.type === "transfer")) return false;
+      if (transaction.date !== date) return false;
       if (transaction.jarActivityId) {
         if (seenJarActivities.has(transaction.jarActivityId)) return false;
         seenJarActivities.add(transaction.jarActivityId);
@@ -43,13 +41,5 @@ export function buildStoryTimeline(date: string, transactions: AccountTransactio
         label: transaction.note || transaction.category, time: transaction.occurredAt ?? transaction.createdAt,
         transaction, photoIndex };
     }),
-    ...entries.filter((entry) => entry.date === date).map((entry): StoryTimelineItem => ({
-      id: `legacy-income-${entry.id}`, type: "income", amount: getTotalEntryMoney(entry),
-      label: entry.diary || entry.note || "Thu nhập Nhật ký / HUB", time: entry.createdAt,
-      transaction: null, photoIndex: -1 })),
-    ...expenses.filter((expense) => expense.date === date).map((expense): StoryTimelineItem => ({
-      id: `legacy-expense-${expense.id}`, type: "expense", amount: getExpenseTotal(expense),
-      label: expense.note || "Chi tiêu Nhật ký", time: expense.createdAt,
-      transaction: null, photoIndex: -1 })),
   ].filter((item) => item.amount > 0).sort((a, b) => b.time.localeCompare(a.time));
 }

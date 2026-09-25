@@ -1,0 +1,19 @@
+.financial-history-type-filter { display: flex; flex-wrap: wrap; gap: .45rem; margin: 1rem 0; }
+.financial-history-type-filter button { background: transparent; border: 1px solid var(--line, #dbe5df); border-radius: 999px; color: inherit; min-height: 40px; padding: .45rem .8rem; }
+.financial-history-type-filter button.is-active { background: #183b2d; border-color: #183b2d; color: white; }
+.financial-history-feed { display: grid; gap: .7rem; }
+.financial-history-feed h3 { font-size: .85rem; margin: .6rem 0; opacity: .7; }
+.financial-history-item { background: var(--surface, #fff); border: 1px solid var(--line, #dbe5df); border-radius: 1rem; padding: .9rem; }
+.financial-history-item__kind { color: #557365; font-size: .75rem; font-weight: 700; }
+.financial-history-item__main { align-items: start; display: flex; gap: .75rem; justify-content: space-between; margin-top: .25rem; }
+.financial-history-item__main > div { display: grid; gap: .15rem; min-width: 0; }
+.financial-history-item__main strong { overflow-wrap: anywhere; }
+.financial-history-item__main small { color: var(--text-muted, #64736b); }
+.financial-history-item__main b { flex-shrink: 0; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.financial-history-item.is-expense .financial-history-item__main b { color: #9b424b; }
+.financial-history-item.is-income .financial-history-item__main b { color: #246a4b; }
+.financial-history-item button { background: none; border: 0; color: #246a4b; cursor: pointer; margin-top: .45rem; padding: 0; text-decoration: underline; }
+.financial-history-empty { padding: 1.5rem; text-align: center; }
+.history-legacy-journal { margin-top: 1.25rem; }
+.history-legacy-journal > summary { color: var(--text-muted, #64736b); cursor: pointer; font-size: .85rem; padding: .8rem; }
+@media (max-width: 480px) { .financial-history-item__main { flex-direction: column; gap: .3rem; } }
