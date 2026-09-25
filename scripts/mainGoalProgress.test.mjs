@@ -51,12 +51,6 @@ const expenses = [{
 }];
 
 const transactions = [
-  { accountId: "driver", amount: 2_500_000, category: "Thu nhập",
-    createdAt: "2026-09-05T00:00:00.000Z", date: "2026-09-05", id: "earned",
-    note: "", purpose: "income", type: "income", updatedAt: "2026-09-05T00:00:00.000Z" },
-  { accountId: "driver", amount: 500_000, category: "Chi thường ngày",
-    createdAt: "2026-09-05T00:00:00.000Z", date: "2026-09-05", id: "daily-cost",
-    note: "", purpose: "daily_expense", type: "expense", updatedAt: "2026-09-05T00:00:00.000Z" },
   {
     accountId: "driver",
     amount: 1_000_000,
@@ -124,9 +118,9 @@ const paced = buildMainGoalProgress({
     lunch: 50_000, dinner: 0, other: 0, otherItems: [] }],
   goals,
   transactions: [
-    { ...transactions[0], id: "new-income", amount: 600_000, date: "2026-09-03",
+    { ...transactions[0], id: "new-income", amount: 100_000, date: "2026-09-03",
       purpose: "income", type: "income" },
-    { ...transactions[0], id: "new-expense", amount: 150_000, date: "2026-09-03",
+    { ...transactions[0], id: "new-expense", amount: 50_000, date: "2026-09-03",
       purpose: "daily_expense", type: "expense" },
   ],
 });
@@ -160,9 +154,7 @@ assert.equal(withOpening.progress, 45);
 assert.equal(withOpening.requiredPerDay, 550_000);
 
 const journeyInput = {
-  asOfDate: "2026-09-05", expenses: [], transactions: [
-    ...transactions.slice(2), { ...transactions[0], id: "journey-income", amount: 798_000 },
-  ],
+  asOfDate: "2026-09-05", expenses: [], transactions,
   entries: [{ ...entries[0], income: 798_000 }],
   goals: { ...goals, bigGoalSaved: 10_000_000, bigGoalTarget: 13_500_000 },
 };

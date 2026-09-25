@@ -363,9 +363,6 @@ export function useAccountLedger(userId?: string, legacyBudgets: ExpenseBudget[]
 
   const saveTransaction = useCallback(
     (transaction: AccountTransaction) => {
-      if (transaction.sourceReference && latestLedgerRef.current.transactions.some((item) =>
-        item.id !== transaction.id && item.sourceReference === transaction.sourceReference))
-        throw new Error("Nguồn giao dịch này đã được ghi trong Sổ tài khoản.");
       if (latestLedgerRef.current.transactions.some((item) => item.id === transaction.id && item.jarActivityId))
         throw new Error("Giao dịch từ hũ cần được sửa trong chi tiết hũ để giữ đúng nguồn tiền.");
       updateLedger((current) => ({

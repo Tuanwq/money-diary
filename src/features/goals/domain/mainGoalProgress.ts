@@ -29,6 +29,10 @@ function isInsideGoal(date: string, startDate: string, endDate: string) {
   return date >= startDate && date <= endDate;
 }
 
+function getEntryIncome(entry: DailyEntry) {
+  return (entry.income ?? 0) + (entry.bonusMoney ?? 0) + (entry.receivedMoney ?? 0);
+}
+
 export function getGoalAffectingExpense(expense: ExpenseEntry) {
   const mealExpense = expense.breakfast + expense.lunch + expense.dinner;
   const savedItems = expense.otherItems?.filter((item) => item.amount > 0) ?? [];
@@ -50,6 +54,8 @@ function getRemainingDays(deadline: string, asOfDate: string) {
 
 export function buildMainGoalProgress({
   asOfDate,
+  entries,
+  expenses,
   goals,
   transactions,
 }: MainGoalProgressInput): MainGoalProgressSummary {
@@ -57,8 +63,18 @@ export function buildMainGoalProgress({
   const deadline = goals.bigGoalDeadline || asOfDate;
   const endDate = asOfDate < deadline ? asOfDate : deadline;
   const targetAmount = Math.max(goals.bigGoalTarget ?? 0, 0);
+  const goalEntries = entries.filter((item) => isInsideGoal(item.date, startDate, endDate));
+  const goalExpenseEntries = expenses.filter((item) =>
+    isInsideGoal(item.date, startDate, endDate)
+  );
   const goalTransactions = transactions.filter((item) =>
     isInsideGoal(item.date, startDate, endDate)
+  );
+
+  const diaryIncome = goalEntries.reduce((sum, entry) => sum + getEntryIncome(entry), 0);
+  const diaryExpenses = goalExpenseEntries.reduce(
+    (sum, expense) => sum + getGoalAffectingExpense(expense),
+    0
   );
   const transactionIncome = goalTransactions
     .filter((item) => item.type === "income" && item.purpose === "income")
@@ -69,8 +85,8 @@ export function buildMainGoalProgress({
   const unclassifiedTransactions = goalTransactions.filter(
     (item) => item.type !== "transfer" && !item.purpose
   ).length;
-  const goalIncome = transactionIncome;
-  const goalExpenses = transactionExpenses;
+  const goalIncome = diaryIncome + transactionIncome;
+  const goalExpenses = diaryExpenses + transactionExpenses;
   const goalNetAmount = goalIncome - goalExpenses;
   // Money earned before this recorded journey is an opening goal amount,
   // independent of the live balances in Account Ledger.

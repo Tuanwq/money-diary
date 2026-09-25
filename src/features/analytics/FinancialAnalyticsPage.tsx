@@ -61,7 +61,6 @@ type FinancialAnalyticsPageProps = {
   entries: DailyEntry[];
   expenses: ExpenseEntry[];
   goals: Goals;
-  goalAchievedAmount: number;
   hubEntries: HubEntry[];
   hubSettings: HubSettings;
 };
@@ -215,7 +214,6 @@ export function FinancialAnalyticsPage({
   entries,
   expenses,
   goals,
-  goalAchievedAmount,
   hubEntries,
   hubSettings,
 }: FinancialAnalyticsPageProps) {
@@ -227,9 +225,11 @@ export function FinancialAnalyticsPage({
     () =>
       getAnalyticsAllDates({
         accountTransactions,
+        entries,
+        expenses,
         hubEntries,
       }),
-    [accountTransactions, hubEntries]
+    [accountTransactions, entries, expenses, hubEntries]
   );
   const range = useMemo(
     () =>
@@ -249,8 +249,9 @@ export function FinancialAnalyticsPage({
         actualMoney,
         balanceChecks,
         completedGoals,
+        entries,
+        expenses,
         goals,
-        goalAchievedAmount,
         hubEntries,
         hubSettings,
         range,
@@ -262,8 +263,9 @@ export function FinancialAnalyticsPage({
       actualMoney,
       balanceChecks,
       completedGoals,
+      entries,
+      expenses,
       goals,
-      goalAchievedAmount,
       hubEntries,
       hubSettings,
       range,
@@ -338,11 +340,6 @@ export function FinancialAnalyticsPage({
           </span>
         </div>
       </header>
-
-      {(entries.length > 0 || expenses.length > 0) && <p className="analytics-legacy-notice">
-        {entries.length + expenses.length} bản ghi thu/chi cũ chưa được đối chiếu với tài khoản.
-        Thống kê tài chính chỉ tính giao dịch trong Sổ tài khoản để tránh cộng trùng.
-      </p>}
 
       <section className="analytics-filter-bar" aria-label="Chọn khoảng thống kê">
         <div className="analytics-period-options">
@@ -819,17 +816,23 @@ export function FinancialAnalyticsPage({
           <header className="analytics-panel__header">
             <div>
               <h2>Tổng hợp nguồn tiền</h2>
-              <p>Phân loại từ giao dịch thu đã ghi trong Sổ tài khoản.</p>
+              <p>Giải thích các thành phần tạo nên tổng thu nhập.</p>
             </div>
             <Scale aria-hidden="true" size={20} />
           </header>
           <div className="analytics-income-breakdown">
-            {model.incomeCategories.map((category) => (
-              <div key={category.name}>
-                <span>{category.name}</span>
-                <strong>{formatMoney(category.value)}</strong>
-              </div>
-            ))}
+            <div>
+              <span>Tiền làm được</span>
+              <strong>{formatMoney(model.totals.workIncome)}</strong>
+            </div>
+            <div>
+              <span>Tiền thưởng</span>
+              <strong>{formatMoney(model.totals.bonus)}</strong>
+            </div>
+            <div>
+              <span>Tiền nhận</span>
+              <strong>{formatMoney(model.totals.received)}</strong>
+            </div>
             <div className="is-total">
               <span>Tổng thu nhập</span>
               <strong>{formatMoney(model.totals.income)}</strong>

@@ -45,14 +45,14 @@ test("day story groups jar lines, labels transfers and links the correct photo",
   assert.equal(timeline.find((item) => item.id === "jar-a").amount, 120_000);
   assert.equal(timeline.find((item) => item.id === "jar-a").photoIndex, 0);
   assert.equal(timeline.find((item) => item.id === "transfer").type, "transfer");
-  assert.equal(timeline.some((item) => item.id === "old-ledger"), true);
+  assert.equal(timeline.some((item) => item.id === "old-ledger"), false);
 });
 
-test("Daily Net reads ledger only, including manual rows but excluding transfer and legacy diary", () => {
+test("Daily Net includes HUB legacy income and photo transactions once, excluding transfer and ambiguous ledger rows", () => {
   const days = buildDailyFinancialSummaries([entry], [expense],
     [photoExpense, photoIncome, transfer, untaggedDuplicate]);
   assert.deepEqual(getDailyFinancialSummary(days, date), {
-    date, income: 550_000, expense: 120_000, net: 430_000, hasData: true,
+    date, income: 550_000, expense: 220_000, net: 330_000, hasData: true,
   });
   assert.equal(formatCalendarNet(395_000), "+395k");
   assert.equal(formatCalendarNet(-80_000), "−80k");
@@ -82,7 +82,7 @@ test("calendar shows at most three photos, correct badge, cover priority and fol
   assert.equal(groupPhotoAttachmentsByDay(attachments, [edited]).get("2026-09-17").length, 5);
   assert.equal(groupPhotoAttachmentsByDay(attachments, []).size, 0);
   const updated = buildDailyFinancialSummaries([entry], [expense], [edited]);
-  assert.equal(getDailyFinancialSummary(updated, date).net, 0);
+  assert.equal(getDailyFinancialSummary(updated, date).net, 400_000);
   assert.equal(getDailyFinancialSummary(updated, "2026-09-17").net, -120_000);
 });
 

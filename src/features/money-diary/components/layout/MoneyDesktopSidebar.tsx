@@ -101,7 +101,7 @@ export function MoneyDesktopSidebar({
     {
       active: currentPage === "hub",
       icon: PackagePlus,
-      label: "Ca HUB",
+      label: "Thu nhập",
       onClick: () => navigateTo("hub"),
     },
     {

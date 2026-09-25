@@ -1,17 +1,28 @@
 import type { AccountTransaction } from "../../account-ledger/accountLedgerModel.ts";
 import type { DailyEntry, ExpenseEntry } from "../../../types.ts";
-import { groupFinancialTransactionsByDay } from "../../finance-core/services/financialMetrics.ts";
+import { getExpenseTotal, getTotalEntryMoney } from "../../../utils/entries.ts";
 import type { DailyFinancialSummary, PhotoAttachment } from "../types/photoFinance.ts";
 
-/** The journal is a view of the account ledger. Legacy journal amounts remain
- * stored for review but do not enter financial totals a second time. */
+/** Existing diary/expense amounts are legacy authority; only photo-owned ledger
+ * transactions are added, since an untagged ledger row may duplicate legacy. */
 export function buildDailyFinancialSummaries(
-  _entries: DailyEntry[], _expenses: ExpenseEntry[], transactions: AccountTransaction[]
+  entries: DailyEntry[], expenses: ExpenseEntry[], transactions: AccountTransaction[]
 ): Map<string, DailyFinancialSummary> {
   const days = new Map<string, DailyFinancialSummary>();
-  for (const [date, summary] of groupFinancialTransactionsByDay(transactions)) {
-    days.set(date, { date, income: summary.income, expense: summary.expense,
-      net: summary.net, hasData: true });
+  function add(date: string, income: number, expense: number) {
+    const previous = days.get(date) ?? { date, income: 0, expense: 0, net: 0, hasData: false };
+    const nextIncome = previous.income + income;
+    const nextExpense = previous.expense + expense;
+    days.set(date, { date, income: nextIncome, expense: nextExpense,
+      net: nextIncome - nextExpense, hasData: true });
+  }
+  for (const entry of entries) add(entry.date, getTotalEntryMoney(entry), 0);
+  for (const expense of expenses) add(expense.date, 0, getExpenseTotal(expense));
+  for (const transaction of transactions) {
+    if (transaction.source !== "photo_finance" && transaction.source !== "spending_jar") continue;
+    if (transaction.type === "income") add(transaction.date, transaction.amount, 0);
+    if (transaction.type === "expense") add(transaction.date, 0, transaction.amount);
+    // All transfers are excluded, regardless of account or provenance.
   }
   return days;
 }

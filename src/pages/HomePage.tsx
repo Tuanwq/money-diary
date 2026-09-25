@@ -1,5 +1,6 @@
 import { ArrowLeft, ArrowRight, CalendarRange, Camera, TrendingDown,
   TrendingUp, WalletCards, CookingPot } from "lucide-react";
+import { DataCompletionCard } from "../features/money-diary/components/dashboard/DataCompletionCard";
 import { GreetingHeader } from "../features/money-diary/components/dashboard/GreetingHeader";
 import { MainGoalCard } from "../features/money-diary/components/dashboard/MainGoalCard";
 import { RecentTransactions } from "../features/money-diary/components/dashboard/RecentTransactions";
@@ -50,18 +51,28 @@ type HomePageProps = {
 export function HomePage({
   actualMoney,
   balanceChecks,
+  cloudLoadError,
+  dataWarnings,
   entries,
   expenses,
   goToNextDay,
   goToPreviousDay,
   goToToday,
   handleSelectDate,
+  isCloudLoading,
   isSelectedToday,
   mainGoal,
   mainGoalName,
   navigateTo,
+  onDataWarningAction,
   onOpenJournal,
+  onOpenSelectedBalanceEditor,
+  openCloseDay,
+  retryCloudLoad,
+  selectedBalanceCheck,
   selectedDate,
+  selectedEntry,
+  selectedExpense,
   transactions,
   todayString,
 }: HomePageProps) {
@@ -69,6 +80,7 @@ export function HomePage({
     [entries, expenses, selectedDate, transactions]);
   const openHistory = () => navigateTo("history");
   const openGoal = () => navigateTo("goals", "current");
+  const requestNotificationPermission = () => navigateTo("settings");
 
   return (
     <div className="money-overview-page money-manager-overview">
@@ -107,11 +119,6 @@ export function HomePage({
 
       <MainGoalCard name={mainGoalName} onOpenGoals={openGoal} summary={mainGoal} />
 
-      {(entries.length > 0 || expenses.length > 0) && <p className="manager-legacy-notice">
-        {entries.length + expenses.length} bản ghi thu/chi cũ vẫn được giữ trong Lịch sử.
-        Chúng chưa có tài khoản đối ứng nên chưa cộng vào số dư, mục tiêu và thống kê Sổ tài khoản.
-      </p>}
-
       <button className="money-card manager-jars-shortcut" onClick={() => navigateTo("spendingJars")} type="button">
         <CookingPot size={20} aria-hidden="true" /> <span><strong>Hũ chi tiêu</strong><small>Dành tiền cho các khoản sắp chi · vuốt sang phải</small></span><ArrowRight size={18} />
       </button>
@@ -129,6 +136,24 @@ export function HomePage({
           </div>
           <button className="money-text-action" onClick={() => navigateTo("analytics")} type="button">Xem thống kê <ArrowRight size={16} /></button>
       </section>
+
+      <DataCompletionCard
+        balanceCheck={selectedBalanceCheck}
+        entry={selectedEntry}
+        error={cloudLoadError}
+        expense={selectedExpense}
+        isLoading={isCloudLoading}
+        isSelectedToday={isSelectedToday}
+        onAddExpense={() => openCloseDay(selectedDate)}
+        onAddIncome={() => openCloseDay(selectedDate)}
+        onCheckBalance={onOpenSelectedBalanceEditor}
+        onEnableNotifications={requestNotificationPermission}
+        onOpenHistory={openHistory}
+        onRetry={retryCloudLoad}
+        onWarningAction={onDataWarningAction}
+        selectedDate={selectedDate}
+        warnings={dataWarnings}
+      />
 
       <RecentTransactions entries={entries} expenses={expenses} accountTransactions={transactions} onViewAll={openHistory} />
 
