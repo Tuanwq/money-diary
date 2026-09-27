@@ -226,7 +226,7 @@ export function applyJarCommand(ledger: JarLedger, command: JarCommand): JarLedg
   if (command.kind === "close") {
     const sources = getJarView(ledger, jar).sources;
     return { ...ledger, jars: ledger.jars.map((item) => item.id === jar.id
-      ? { ...item, status: "closed", updatedAt: command.now } : item),
+      ? { ...item, status: "closed", linkedLabels: [], updatedAt: command.now } : item),
     jarActivities: [...ledger.jarActivities,
       ...sources.filter((source) => source.amount > 0).map((source) => ({
         id: `${command.id}:release:${source.accountId}`, jarId: jar.id, kind: "release" as const,

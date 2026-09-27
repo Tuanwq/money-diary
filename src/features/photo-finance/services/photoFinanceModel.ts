@@ -2,9 +2,10 @@ import type { AccountTransaction } from "../../account-ledger/accountLedgerModel
 import type { DailyEntry, ExpenseEntry } from "../../../types.ts";
 import { getExpenseTotal, getTotalEntryMoney } from "../../../utils/entries.ts";
 import type { DailyFinancialSummary, PhotoAttachment } from "../types/photoFinance.ts";
+import { isIndependentReportingTransaction } from "../../analytics/reportingTransactions.ts";
 
-/** Existing diary/expense amounts are legacy authority; only photo-owned ledger
- * transactions are added, since an untagged ledger row may duplicate legacy. */
+/** Existing diary/expense amounts are legacy authority; only independently
+ * sourced ledger rows are added, since an untagged row may duplicate legacy. */
 export function buildDailyFinancialSummaries(
   entries: DailyEntry[], expenses: ExpenseEntry[], transactions: AccountTransaction[]
 ): Map<string, DailyFinancialSummary> {
@@ -19,7 +20,7 @@ export function buildDailyFinancialSummaries(
   for (const entry of entries) add(entry.date, getTotalEntryMoney(entry), 0);
   for (const expense of expenses) add(expense.date, 0, getExpenseTotal(expense));
   for (const transaction of transactions) {
-    if (transaction.source !== "photo_finance" && transaction.source !== "spending_jar") continue;
+    if (!isIndependentReportingTransaction(transaction)) continue;
     if (transaction.type === "income") add(transaction.date, transaction.amount, 0);
     if (transaction.type === "expense") add(transaction.date, 0, transaction.amount);
     // All transfers are excluded, regardless of account or provenance.

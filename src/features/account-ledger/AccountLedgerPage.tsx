@@ -299,6 +299,8 @@ function TransactionForm({
         id: transaction?.id ?? crypto.randomUUID(),
         note: note.trim(),
         purpose,
+        // Preserve ambiguous legacy provenance when editing old rows.
+        source: transaction ? transaction.source : "manual",
         ...(type === "transfer" ? { toAccountId } : {}),
         type,
         updatedAt: now,

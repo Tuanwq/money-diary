@@ -2,6 +2,7 @@ import type { AccountTransaction } from "../../account-ledger/accountLedgerModel
 import type { DailyEntry, ExpenseEntry } from "../../../types.ts";
 import { getExpenseTotal, getTotalEntryMoney } from "../../../utils/entries.ts";
 import type { PhotoAttachment } from "../types/photoFinance.ts";
+import { isIndependentReportingTransaction } from "../../analytics/reportingTransactions.ts";
 
 export type StoryTimelineItem = {
   id: string;
@@ -29,7 +30,7 @@ export function buildStoryTimeline(date: string, transactions: AccountTransactio
   return [
     ...transactions.filter((transaction) => {
       if (transaction.date !== date ||
-        !(transaction.source === "photo_finance" || transaction.source === "spending_jar" || transaction.type === "transfer")) return false;
+        !(isIndependentReportingTransaction(transaction) || transaction.type === "transfer")) return false;
       if (transaction.jarActivityId) {
         if (seenJarActivities.has(transaction.jarActivityId)) return false;
         seenJarActivities.add(transaction.jarActivityId);

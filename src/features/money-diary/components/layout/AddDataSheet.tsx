@@ -1,4 +1,4 @@
-import { ClipboardCheck, PackagePlus, ReceiptText } from "lucide-react";
+import { Camera, PackagePlus, ReceiptText } from "lucide-react";
 import type { RefObject } from "react";
 import { MoneyBottomSheet } from "./MoneyBottomSheet";
 
@@ -6,7 +6,7 @@ type AddDataSheetProps = {
   isOpen: boolean;
   onAddExpense: () => void;
   onAddIncome: () => void;
-  onCheckBalance: () => void;
+  onCapturePhoto: () => void;
   onClose: () => void;
   returnFocusRef?: RefObject<HTMLButtonElement | null>;
 };
@@ -15,7 +15,7 @@ export function AddDataSheet({
   isOpen,
   onAddExpense,
   onAddIncome,
-  onCheckBalance,
+  onCapturePhoto,
   onClose,
   returnFocusRef,
 }: AddDataSheetProps) {
@@ -33,10 +33,10 @@ export function AddDataSheet({
       onClick: onAddExpense,
     },
     {
-      description: "Cập nhật số dư hiện tại của bạn.",
-      icon: ClipboardCheck,
-      label: "Kiểm kê số dư",
-      onClick: onCheckBalance,
+      description: "Chụp ảnh và ghi lại giao dịch.",
+      icon: Camera,
+      label: "Chụp ảnh",
+      onClick: onCapturePhoto,
     },
   ];
 

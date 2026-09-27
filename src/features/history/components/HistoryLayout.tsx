@@ -1,5 +1,5 @@
-import { BookOpenText, ClipboardCheck, ReceiptText } from "lucide-react";
-import { useEffect, useRef, type ReactNode } from "react";
+import { BookOpenText, ReceiptText } from "lucide-react";
+import type { ReactNode } from "react";
 import type { GoalScreen, Page } from "../../../types";
 
 type HistoryLayoutProps = {
@@ -11,17 +11,9 @@ type HistoryLayoutProps = {
 const tabs = [
   { icon: BookOpenText, label: "Nhật ký", page: "history" as const },
   { icon: ReceiptText, label: "Chi tiêu", page: "expenses" as const },
-  { icon: ClipboardCheck, label: "Kiểm kê số dư", page: "balanceChecks" as const },
 ];
 
 export function HistoryLayout({ children, currentPage, navigateTo }: HistoryLayoutProps) {
-  const activeTabRef = useRef<HTMLButtonElement | null>(null);
-
-  useEffect(() => {
-    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    activeTabRef.current?.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "nearest", inline: "center" });
-  }, [currentPage]);
-
   return (
     <section className="history-layout">
       <header className="history-layout__header">
@@ -38,7 +30,6 @@ export function HistoryLayout({ children, currentPage, navigateTo }: HistoryLayo
             return (
               <button
                 key={tab.page}
-                ref={active ? activeTabRef : undefined}
                 type="button"
                 className={active ? "is-active" : ""}
                 aria-current={active ? "page" : undefined}

@@ -647,6 +647,7 @@ export default function App() {
   const { route, navigateApp } = useBrowserRoute();
   const { page, goalId, goalScreen, navigateTo, returnFromPhotoJournal, resetMoneyNavigation } =
     useAppNavigation();
+  const [photoCaptureIntent, setPhotoCaptureIntent] = useState<string | null>(null);
   const actionReturnLocationRef = useRef<ActionReturnLocation | null>(null);
   const [chartDays, setChartDays] = useState(7);
   const [forecastDays, setForecastDays] = useState(14);
@@ -1289,15 +1290,6 @@ const paginatedExpenses = filteredExpenses.slice(
   expenseCurrentPage * ITEMS_PER_PAGE
 );
 
-const filteredExpensesTotal = filteredExpenses.reduce((sum, expense) => {
-  return (
-    sum +
-    expense.breakfast +
-    expense.lunch +
-    expense.dinner +
-    expense.other
-  );
-}, 0);
 
 const safeChartDays = Math.min(Math.max(chartDays, 1), 365);
 
@@ -1807,10 +1799,6 @@ function closeBalanceCheckOverlay() {
 
   balanceCheckDraftDirtyRef.current = false;
   setBalanceCheckOverlay((current) => ({ ...current, isOpen: false }));
-}
-
-function goToTodayBalanceCheck() {
-  openBalanceCheckOverlay(todayString, "edit");
 }
 
 function handleExpenseSubmit(event: React.FormEvent) {
@@ -3401,7 +3389,10 @@ if (route.kind === "daymark") {
       onBackFromPhotoJournal={returnFromPhotoJournal}
       onExportReport={exportToWord}
       onLogout={handleLogout}
-      onOpenBalanceCheck={goToTodayBalanceCheck}
+      onOpenPhotoCapture={() => {
+        setPhotoCaptureIntent(crypto.randomUUID());
+        navigateTo("photoJournal");
+      }}
       onOpenAnalytics={() => navigateTo("analytics")}
       onOpenAccountLedger={() => navigateTo("accounts")}
       onOpenAccountReconciliation={() => navigateTo("reconciliation")}
@@ -3502,6 +3493,8 @@ if (route.kind === "daymark") {
           )}
           {page === "photoJournal" && (
             <LazyPhotoJournalPage
+              captureIntent={photoCaptureIntent}
+              onCaptureIntentConsumed={() => setPhotoCaptureIntent(null)}
               accounts={financialAccounts}
               jars={jars}
               jarActivities={jarActivities}
@@ -3742,6 +3735,8 @@ if (route.kind === "daymark") {
 
   {page === "history" && (
     <LazyHistoryPage
+      accountTransactions={accountTransactions}
+      financialAccounts={financialAccounts}
       historySearch={historySearch}
       setHistorySearch={updateHistorySearch}
       historyFromDate={historyFromDate}
@@ -3779,6 +3774,8 @@ if (route.kind === "daymark") {
   )}
   {page === "expenses" && (
     <LazyExpensesPage
+      accountTransactions={accountTransactions}
+      financialAccounts={financialAccounts}
       expenseSearch={expenseSearch}
       setExpenseSearch={updateExpenseSearch}
       expenseFromDate={expenseFromDate}
@@ -3798,7 +3795,6 @@ if (route.kind === "daymark") {
       deleteExpenseBudget={deleteExpenseBudget}
       setExpenseQuickFilter={setExpenseQuickFilter}
       filteredExpenses={filteredExpenses}
-      filteredExpensesTotal={filteredExpensesTotal}
       expenses={expenses}
       paginatedExpenses={paginatedExpenses}
       cloudLoadError={cloudLoadError}

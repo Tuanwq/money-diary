@@ -34,6 +34,7 @@ import {
   type HubAnalyticsSummary,
   type HubPerformanceItem,
 } from "../../utils/hubAnalytics";
+import { getReportingTransactions } from "./reportingTransactions";
 
 export type AnalyticsPeriod =
   | "7d"
@@ -71,6 +72,7 @@ export type AnalyticsDailyPoint = {
   hours: number;
   hubProfit: number;
   income: number;
+  ledgerIncome: number;
   label: string;
   net: number;
   orders: number;
@@ -117,10 +119,12 @@ export type FinancialAnalyticsModel = {
   completedGoals: number;
   dailyPoints: AnalyticsDailyPoint[];
   expenseCategories: AnalyticsExpenseCategory[];
+  incomeBreakdown: Array<{ name: string; value: number }>;
   goals: AnalyticsGoalItem[];
   hubPerformance: HubPerformanceItem[];
   hubSummary: HubAnalyticsSummary;
   latestBalanceCheck: BalanceCheckEntry | null;
+  transferVolume: number;
   metrics: Record<AnalyticsMetricKey, AnalyticsMetric>;
   previousRange: AnalyticsDateRange;
   range: AnalyticsDateRange;
@@ -130,6 +134,7 @@ export type FinancialAnalyticsModel = {
     expense: number;
     hours: number;
     income: number;
+    ledgerIncome: number;
     net: number;
     orders: number;
     received: number;
@@ -212,11 +217,13 @@ function filterByRange<T extends { date: string }>(
 function buildDailyPoints(
   entries: DailyEntry[],
   expenses: ExpenseEntry[],
+  transactions: AccountTransaction[],
   hubEntries: HubEntry[],
   hubSettings: HubSettings,
   range: AnalyticsDateRange
 ) {
   const result = new Map<string, AnalyticsDailyPoint>();
+  const hubDates = new Set(hubEntries.map((entry) => entry.date));
 
   for (const date of enumerateDates(range.fromDate, range.toDate)) {
     result.set(date, {
@@ -226,6 +233,7 @@ function buildDailyPoints(
       hours: 0,
       hubProfit: 0,
       income: 0,
+      ledgerIncome: 0,
       label: formatDateShort(date),
       net: 0,
       orders: 0,
@@ -242,13 +250,29 @@ function buildDailyPoints(
     point.bonus += getBonusMoney(entry);
     point.received += getReceivedMoney(entry);
     point.income += getTotalEntryMoney(entry);
-    point.hours += entry.workHours ?? 0;
-    point.orders += entry.orderCount ?? 0;
+    // A HUB shift owns work metrics on its date. The diary remains the fallback
+    // for historical days that do not have a HUB shift.
+    if (!hubDates.has(entry.date)) {
+      point.hours += entry.workHours ?? 0;
+      point.orders += entry.orderCount ?? 0;
+    }
   }
 
   for (const expense of filterByRange(expenses, range)) {
     const point = result.get(expense.date);
     if (point) point.expense += getExpenseTotal(expense);
+  }
+
+  for (const transaction of filterByRange(getReportingTransactions(transactions), range)) {
+    const point = result.get(transaction.date);
+    if (!point) continue;
+    if (transaction.type === "income") {
+      point.income += transaction.amount;
+      point.ledgerIncome += transaction.amount;
+    } else if (transaction.type === "expense") {
+      point.expense += transaction.amount;
+    }
+    // An internal transfer changes account location, not income or expense.
   }
 
   const hubRows = filterHubRowsByDate(
@@ -259,7 +283,11 @@ function buildDailyPoints(
 
   for (const row of hubRows) {
     const point = result.get(row.entry.date);
-    if (point) point.hubProfit += row.actualProfit;
+    if (point) {
+      point.hubProfit += row.actualProfit;
+      point.hours += row.hours;
+      point.orders += row.orderCount;
+    }
   }
 
   return [...result.values()].map((point) => ({
@@ -276,6 +304,7 @@ function summarizeDailyPoints(points: AnalyticsDailyPoint[]) {
       expense: total.expense + point.expense,
       hours: total.hours + point.hours,
       income: total.income + point.income,
+      ledgerIncome: total.ledgerIncome + point.ledgerIncome,
       net: total.net + point.net,
       orders: total.orders + point.orders,
       received: total.received + point.received,
@@ -286,6 +315,7 @@ function summarizeDailyPoints(points: AnalyticsDailyPoint[]) {
       expense: 0,
       hours: 0,
       income: 0,
+      ledgerIncome: 0,
       net: 0,
       orders: 0,
       received: 0,
@@ -296,6 +326,7 @@ function summarizeDailyPoints(points: AnalyticsDailyPoint[]) {
 
 function buildExpenseCategories(
   expenses: ExpenseEntry[],
+  transactions: AccountTransaction[],
   range: AnalyticsDateRange
 ) {
   const totals = new Map<string, number>();
@@ -311,6 +342,12 @@ function buildExpenseCategories(
 
     for (const item of getOtherExpenseItems(expense)) {
       addValue(item.label, item.amount);
+    }
+  }
+
+  for (const transaction of filterByRange(getReportingTransactions(transactions), range)) {
+    if (transaction.type === "expense") {
+      addValue(transaction.category.trim() || "Chưa phân loại", transaction.amount);
     }
   }
 
@@ -490,6 +527,7 @@ export function buildFinancialAnalyticsModel(
   const dailyPoints = buildDailyPoints(
     input.entries,
     input.expenses,
+    input.transactions,
     input.hubEntries,
     input.hubSettings,
     input.range
@@ -497,6 +535,7 @@ export function buildFinancialAnalyticsModel(
   const previousDailyPoints = buildDailyPoints(
     input.entries,
     input.expenses,
+    input.transactions,
     input.hubEntries,
     input.hubSettings,
     previousRange
@@ -517,6 +556,18 @@ export function buildFinancialAnalyticsModel(
   const hubSummary = summarizeHubRows(hubRows);
   const previousHubSummary = summarizeHubRows(previousHubRows);
   const accounts = buildAccounts(input.accounts, input.transactions);
+  const incomeByCategory = new Map<string, number>();
+  for (const transaction of filterByRange(getReportingTransactions(input.transactions), input.range)) {
+    if (transaction.type !== "income") continue;
+    const category = transaction.category.trim() || "Thu nhập khác";
+    incomeByCategory.set(category, (incomeByCategory.get(category) ?? 0) + transaction.amount);
+  }
+  const incomeBreakdown = [
+    { name: "Tiền làm được · Nhật ký", value: totals.workIncome },
+    { name: "Tiền thưởng · Nhật ký", value: totals.bonus },
+    { name: "Tiền nhận · Nhật ký", value: totals.received },
+    ...[...incomeByCategory].map(([name, value]) => ({ name, value })),
+  ].filter((item) => item.value !== 0);
 
   return {
     accounts,
@@ -529,7 +580,8 @@ export function buildFinancialAnalyticsModel(
     ).length,
     completedGoals: input.completedGoals.length,
     dailyPoints,
-    expenseCategories: buildExpenseCategories(input.expenses, input.range),
+    expenseCategories: buildExpenseCategories(input.expenses, input.transactions, input.range),
+    incomeBreakdown,
     goals: buildGoals(input.goals, input.actualMoney),
     hubPerformance: groupHubPerformance(hubRows, "hub", "actualProfit"),
     hubSummary,
@@ -541,6 +593,10 @@ export function buildFinancialAnalyticsModel(
           if (dateComparison !== 0) return dateComparison;
           return b.createdAt.localeCompare(a.createdAt);
         })[0] ?? null,
+    transferVolume: input.transactions
+      .filter((transaction) => transaction.type === "transfer" &&
+        transaction.date >= input.range.fromDate && transaction.date <= input.range.toDate)
+      .reduce((sum, transaction) => sum + transaction.amount, 0),
     metrics: {
       income: createMetric("income", totals.income, previousTotals.income),
       net: createMetric("net", totals.net, previousTotals.net),
@@ -578,6 +634,6 @@ export function getAnalyticsAllDates(input: {
     ...input.entries.map((item) => item.date),
     ...input.expenses.map((item) => item.date),
     ...input.hubEntries.map((item) => item.date),
-    ...input.accountTransactions.map((item) => item.date),
+    ...getReportingTransactions(input.accountTransactions).map((item) => item.date),
   ].filter((date) => date <= getDateString());
 }

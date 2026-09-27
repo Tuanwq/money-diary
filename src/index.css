@@ -8373,21 +8373,15 @@ textarea {
 }
 
 .history-navigation__track {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.45rem;
-  overflow-x: auto;
-  scrollbar-width: none;
-  scroll-snap-type: x mandatory;
-}
-
-.history-navigation__track::-webkit-scrollbar {
-  display: none;
 }
 
 .history-navigation button {
   display: inline-flex;
   min-height: 44px;
-  flex: 0 0 auto;
+  min-width: 0;
   align-items: center;
   justify-content: center;
   gap: 0.45rem;
@@ -8398,7 +8392,6 @@ textarea {
   color: var(--money-text-secondary);
   font-size: 0.82rem;
   font-weight: 700;
-  scroll-snap-align: start;
 }
 
 .history-navigation button.is-active {
@@ -9752,9 +9745,7 @@ textarea {
   }
 
   .history-navigation__track {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    overflow: visible;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .history-filter-toolbar {

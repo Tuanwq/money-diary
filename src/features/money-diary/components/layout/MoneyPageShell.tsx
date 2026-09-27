@@ -20,7 +20,7 @@ type MoneyPageShellProps = {
   onOpenCloseDay: () => void;
   onOpenExpense: () => void;
   onOpenIncome: () => void;
-  onOpenBalanceCheck: () => void;
+  onOpenPhotoCapture: () => void;
   onOpenAnalytics: () => void;
   onOpenAccountLedger: () => void;
   onOpenAccountReconciliation: () => void;
@@ -44,7 +44,7 @@ export function MoneyPageShell({
   onOpenCloseDay,
   onOpenExpense,
   onOpenIncome,
-  onOpenBalanceCheck,
+  onOpenPhotoCapture,
   onOpenAnalytics,
   onOpenAccountLedger,
   onOpenAccountReconciliation,
@@ -151,7 +151,7 @@ export function MoneyPageShell({
         isOpen={isAddSheetOpen}
         onAddExpense={onOpenExpense}
         onAddIncome={onOpenIncome}
-        onCheckBalance={onOpenBalanceCheck}
+        onCapturePhoto={onOpenPhotoCapture}
         onClose={() => setIsAddSheetOpen(false)}
         returnFocusRef={addReturnFocusRef}
       />

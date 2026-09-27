@@ -40,7 +40,7 @@ export type AccountTransaction = {
   type: AccountTransactionType;
   updatedAt: string;
   /** Photo Finance owns this transaction; legacy diary amounts are never written for it. */
-  source?: "photo_finance" | "spending_jar";
+  source?: "photo_finance" | "spending_jar" | "manual";
   /** A jar expense/refund belongs to one activity; several rows may share its activity ID. */
   jarId?: string;
   jarActivityId?: string;

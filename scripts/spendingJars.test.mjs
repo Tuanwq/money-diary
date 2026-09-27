@@ -61,9 +61,15 @@ assert.throws(() => apply({ kind: "refund", jarId: "food", accountId: "a", amoun
 
 apply({ kind: "close", jarId: "food" });
 assert.equal(ledger.jars[0].status, "closed");
+assert.deepEqual(ledger.jars[0].linkedLabels, []);
+assert.equal(ledger.transactions.find((transaction) => transaction.type === "expense")?.category, "Ăn uống");
 assert.equal(getAccountAvailableToAllocate(ledger, "a"), 1_000_000);
 assert.equal(getAccountAvailableToAllocate(ledger, "b"), 1_750_000);
 assert.equal(calculateAccountBalance(accounts[1], ledger.transactions), 1_750_000);
+const sibling = applyJarCommand(ledger, { kind: "create", id: "shared", now,
+  fields: { name: "Hũ khác", icon: "🫙", limitAmount: 100_000,
+    startDate: "2026-09-22", linkedLabels: ["Ăn uống"] } });
+assert.deepEqual(sibling.jars.find((jar) => jar.id === "shared").linkedLabels, ["Ăn uống"]);
 
 const budget = { id: "old-food", label: "Ăn uống", monthlyLimit: 1_500_000, createdAt: now };
 const migrated = migrateExpenseBudgets(ledger, [budget], now);

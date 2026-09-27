@@ -1,0 +1,17 @@
+.ledger-history-row > .expense-transaction-row__main {
+  grid-column: 1 / -1;
+}
+
+.ledger-history-row--income .expense-transaction-row__main > span:last-child strong {
+  color: var(--money-income);
+}
+
+.ledger-history-row--transfer .expense-transaction-row__main > span:last-child strong {
+  color: var(--money-primary);
+}
+
+.ledger-history-row > .history-view-action {
+  grid-column: 1 / -1;
+  justify-self: start;
+  margin-top: 0;
+}

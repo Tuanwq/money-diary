@@ -1,7 +1,7 @@
 import type { ExpenseBudget, ExpenseEntry } from "../../types";
-import { getMonthStart, getToday } from "../../utils/date";
-import { getExpenseTotal, getOtherExpenseItems } from "../../utils/entries";
-import { formatMoney } from "../../utils/money";
+import { getMonthStart, getToday } from "../../utils/date.ts";
+import { getExpenseTotal, getOtherExpenseItems } from "../../utils/entries.ts";
+import { formatMoney } from "../../utils/money.ts";
 
 export type ExpenseCategoryBreakdown = {
   label: string;

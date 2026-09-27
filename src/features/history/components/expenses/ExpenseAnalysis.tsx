@@ -8,9 +8,10 @@ type ExpenseAnalysisProps = {
   categories: ExpenseCategoryBreakdown[];
   labels: OtherExpenseBreakdownItem[];
   labelsTotal: number;
+  otherDetails: OtherExpenseBreakdownItem[];
 };
 
-export function ExpenseAnalysis({ categories, labels, labelsTotal }: ExpenseAnalysisProps) {
+export function ExpenseAnalysis({ categories, labels, labelsTotal, otherDetails }: ExpenseAnalysisProps) {
   const [showAllLabels, setShowAllLabels] = useState(false);
   const [showOtherDetails, setShowOtherDetails] = useState(false);
 
@@ -24,8 +25,8 @@ export function ExpenseAnalysis({ categories, labels, labelsTotal }: ExpenseAnal
               key={item.label}
               {...item}
               tone={getExpenseTone(index)}
-              details={item.label === "Khoản khác" ? labels : undefined}
-              detailsTotal={labelsTotal}
+              details={item.label === "Khoản khác" ? otherDetails : undefined}
+              detailsTotal={otherDetails.reduce((sum, detail) => sum + detail.total, 0)}
               isExpanded={item.label === "Khoản khác" && showOtherDetails}
               onToggle={item.label === "Khoản khác" ? () => setShowOtherDetails((value) => !value) : undefined}
             />

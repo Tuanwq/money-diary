@@ -124,6 +124,7 @@ function aggregateChartPoints(points: AnalyticsDailyPoint[]) {
       hours: 0,
       hubProfit: 0,
       income: 0,
+      ledgerIncome: 0,
       label: `${month.slice(5)}/${month.slice(0, 4)}`,
       net: 0,
       orders: 0,
@@ -136,6 +137,7 @@ function aggregateChartPoints(points: AnalyticsDailyPoint[]) {
     current.hours += point.hours;
     current.hubProfit += point.hubProfit;
     current.income += point.income;
+    current.ledgerIncome += point.ledgerIncome;
     current.net += point.net;
     current.orders += point.orders;
     current.received += point.received;
@@ -401,6 +403,10 @@ export function FinancialAnalyticsPage({
           <strong>{formatMoney(model.accountTotal)}</strong>
         </div>
         <div>
+          <span>Chuyển nội bộ</span>
+          <strong>{formatMoney(model.transferVolume)}</strong>
+        </div>
+        <div>
           <span>Mục tiêu hoàn thành</span>
           <strong>{model.completedGoals} mục tiêu</strong>
         </div>
@@ -517,7 +523,7 @@ export function FinancialAnalyticsPage({
           <header className="analytics-panel__header">
             <div>
               <h2>Cơ cấu chi tiêu</h2>
-              <p>Tỷ trọng theo bữa ăn và nhãn khoản khác.</p>
+              <p>Tỷ trọng khoản chi từ Nhật ký và Sổ tài khoản.</p>
             </div>
           </header>
           {model.expenseCategories.length > 0 ? (
@@ -816,23 +822,17 @@ export function FinancialAnalyticsPage({
           <header className="analytics-panel__header">
             <div>
               <h2>Tổng hợp nguồn tiền</h2>
-              <p>Giải thích các thành phần tạo nên tổng thu nhập.</p>
+              <p>Thu nhập đã ghi trong Nhật ký và giao dịch có nguồn rõ ràng.</p>
             </div>
             <Scale aria-hidden="true" size={20} />
           </header>
           <div className="analytics-income-breakdown">
-            <div>
-              <span>Tiền làm được</span>
-              <strong>{formatMoney(model.totals.workIncome)}</strong>
-            </div>
-            <div>
-              <span>Tiền thưởng</span>
-              <strong>{formatMoney(model.totals.bonus)}</strong>
-            </div>
-            <div>
-              <span>Tiền nhận</span>
-              <strong>{formatMoney(model.totals.received)}</strong>
-            </div>
+            {model.incomeBreakdown.map((item) => (
+              <div key={item.name}>
+                <span>{item.name}</span>
+                <strong>{formatMoney(item.value)}</strong>
+              </div>
+            ))}
             <div className="is-total">
               <span>Tổng thu nhập</span>
               <strong>{formatMoney(model.totals.income)}</strong>

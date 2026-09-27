@@ -9,16 +9,20 @@ import { HistoryPagination } from "../features/history/components/HistoryPaginat
 import { HistorySummaryStrip } from "../features/history/components/HistorySummaryStrip";
 import { ExpenseAnalysis } from "../features/history/components/expenses/ExpenseAnalysis";
 import { ExpenseDetails, ExpenseTransactionRow } from "../features/history/components/expenses/ExpenseTransactionRow";
-import { buildExpenseCategoryBreakdown, getDistinctExpenseDateCount, getTopExpense } from "../features/history/historySelectors";
+import { LedgerHistoryDetails, LedgerHistoryRow } from "../features/history/components/LedgerHistoryRow";
+import { buildCombinedExpenseReport, filterHistoryLedgerTransactions } from "../features/history/historyLedgerModel";
+import type { AccountTransaction, FinancialAccount } from "../features/account-ledger/accountLedgerModel";
 import type { ExpenseBudget, ExpenseEntry, GoalScreen, Page } from "../types";
 import { formatReportDate } from "../utils/date";
-import { buildOtherExpenseBreakdown, getExpenseTotal } from "../utils/entries";
+import { buildOtherExpenseBreakdown } from "../utils/entries";
 import { formatMoney } from "../utils/money";
 
 type ExpenseQuickFilter = "today" | "7days" | "30days" | "month" | "lastMonth" | "all";
 type ExpenseBudgetForm = { label: string; monthlyLimit: string };
 
 type ExpensesPageProps = {
+  accountTransactions: AccountTransaction[];
+  financialAccounts: FinancialAccount[];
   cancelEditExpenseBudget: () => void;
   cloudLoadError?: string | null;
   deleteExpense: (id: string) => void;
@@ -36,7 +40,6 @@ type ExpensesPageProps = {
   expenseTotalPages: number;
   expenses: ExpenseEntry[];
   filteredExpenses: ExpenseEntry[];
-  filteredExpensesTotal: number;
   isCloudLoading?: boolean;
   navigateTo: (nextPage: Page, nextGoalScreen?: GoalScreen) => void;
   onRetry?: () => void;
@@ -62,6 +65,8 @@ const quickFilters = [
 
 export function ExpensesPage(props: ExpensesPageProps) {
   const {
+    accountTransactions,
+    financialAccounts,
     cloudLoadError,
     deleteExpense,
     editExpense,
@@ -74,7 +79,6 @@ export function ExpensesPage(props: ExpensesPageProps) {
     expenseTotalPages,
     expenses,
     filteredExpenses,
-    filteredExpensesTotal,
     isCloudLoading,
     navigateTo,
     onRetry,
@@ -88,15 +92,23 @@ export function ExpensesPage(props: ExpensesPageProps) {
   } = props;
   const [selectedExpense, setSelectedExpense] = useState<ExpenseEntry | null>(null);
   const [pendingDelete, setPendingDelete] = useState<ExpenseEntry | null>(null);
-  const dayCount = getDistinctExpenseDateCount(filteredExpenses);
-  const averagePerDay = dayCount > 0 ? Math.round(filteredExpensesTotal / dayCount) : 0;
-  const topExpense = getTopExpense(filteredExpenses);
-  const otherBreakdown = buildOtherExpenseBreakdown(filteredExpenses);
-  const otherTotal = otherBreakdown.reduce((sum, item) => sum + item.total, 0);
-  const categoryBreakdown = buildExpenseCategoryBreakdown(filteredExpenses, filteredExpensesTotal);
+  const [selectedLedgerTransaction, setSelectedLedgerTransaction] = useState<AccountTransaction | null>(null);
+  const [ledgerPage, setLedgerPage] = useState(1);
+  const ledgerExpenses = filterHistoryLedgerTransactions(accountTransactions, {
+    fromDate: expenseFromDate, toDate: expenseToDate, search: expenseSearch,
+    category: expenseLabelFilter, type: "expense",
+  });
+  const report = buildCombinedExpenseReport(filteredExpenses, ledgerExpenses);
+  const ledgerPageCount = Math.max(1, Math.ceil(ledgerExpenses.length / 20));
+  const visibleLedgerExpenses = ledgerExpenses.slice((Math.min(ledgerPage, ledgerPageCount) - 1) * 20, Math.min(ledgerPage, ledgerPageCount) * 20);
+  const averagePerDay = report.dayCount > 0 ? Math.round(report.total / report.dayCount) : 0;
+  const allLabels = [...new Set([...expenseLabelOptions, ...accountTransactions
+    .filter((transaction) => transaction.type === "expense" && transaction.source)
+    .map((transaction) => transaction.category.trim()).filter(Boolean)])]
+    .sort((a, b) => a.localeCompare(b, "vi"));
   const activeFilters: ActiveHistoryFilter[] = [];
-  const isInitialLoading = Boolean(isCloudLoading && expenses.length === 0);
-  const hasInitialError = Boolean(cloudLoadError && expenses.length === 0);
+  const isInitialLoading = Boolean(isCloudLoading && expenses.length === 0 && accountTransactions.length === 0);
+  const hasInitialError = Boolean(cloudLoadError && expenses.length === 0 && accountTransactions.length === 0);
 
   if (expenseFromDate || expenseToDate) {
     activeFilters.push({ id: "date", label: buildDateFilterLabel(expenseFromDate, expenseToDate), onRemove: () => {
@@ -114,10 +126,10 @@ export function ExpensesPage(props: ExpensesPageProps) {
         activeFilters={activeFilters}
         extraFilters={
           <label className="history-extra-filter">
-            <span>Nhãn khoản khác</span>
+            <span>Nhãn chi tiêu</span>
             <select value={expenseLabelFilter} onChange={(event) => setExpenseLabelFilter(event.target.value)}>
               <option value="">Tất cả nhãn</option>
-              {expenseLabelOptions.map((label) => <option key={label} value={label}>{label}</option>)}
+              {allLabels.map((label) => <option key={label} value={label}>{label}</option>)}
             </select>
           </label>
         }
@@ -128,25 +140,25 @@ export function ExpensesPage(props: ExpensesPageProps) {
         onReset={() => setExpenseQuickFilter("all")}
         onSearchChange={setExpenseSearch}
         onToDateChange={setExpenseToDate}
-        placeholder="Tìm theo ngày, ghi chú hoặc nhãn..."
+        placeholder="Tìm theo ngày, ghi chú hoặc danh mục..."
         quickFilters={quickFilters}
         search={expenseSearch}
         toDate={expenseToDate}
       />
 
       {!hasInitialError && <HistorySummaryStrip isLoading={isInitialLoading} items={[
-        { label: "Tổng chi tiêu", value: formatMoney(filteredExpensesTotal) },
-        { label: "Số giao dịch", value: String(filteredExpenses.length), detail: `${dayCount} ngày có dữ liệu` },
+        { label: "Tổng chi tiêu", value: formatMoney(report.total) },
+        { label: "Số giao dịch", value: String(filteredExpenses.length + ledgerExpenses.length), detail: `${report.dayCount} ngày có dữ liệu` },
         { label: "Trung bình mỗi ngày", value: formatMoney(averagePerDay) },
-        { label: "Ngày chi cao nhất", value: topExpense ? formatMoney(getExpenseTotal(topExpense)) : "0 đ", detail: topExpense ? formatReportDate(topExpense.date) : "Chưa có" },
+        { label: "Ngày chi cao nhất", value: report.topDay ? formatMoney(report.topDay[1]) : "0 đ", detail: report.topDay ? formatReportDate(report.topDay[0]) : "Chưa có" },
       ]} />}
 
-      {!isInitialLoading && !hasInitialError && <ExpenseAnalysis categories={categoryBreakdown} labels={otherBreakdown} labelsTotal={otherTotal} />}
+      {!isInitialLoading && !hasInitialError && <ExpenseAnalysis categories={report.categories} labels={report.labels} labelsTotal={report.labelsTotal} otherDetails={buildOtherExpenseBreakdown(filteredExpenses)} />}
 
-      <section className="history-record-section" aria-labelledby="expense-list-title">
+      {(filteredExpenses.length > 0 || ledgerExpenses.length === 0 || isInitialLoading || hasInitialError) && <section className="history-record-section" aria-labelledby="expense-list-title">
         <div className="history-section-heading"><div><h2 id="expense-list-title">Các khoản chi</h2><p>{isInitialLoading ? "Đang tải dữ liệu..." : `Đang xem ${filteredExpenses.length} trên ${expenses.length} bản ghi.`}</p></div></div>
         {isInitialLoading ? <HistoryLoadingState /> : hasInitialError ? <HistoryErrorState message="Không tải được lịch sử chi tiêu" onRetry={onRetry} /> : filteredExpenses.length === 0 ? (
-          <div className="history-empty-state"><ReceiptText aria-hidden="true" size={24} /><h3>Chưa có khoản chi phù hợp</h3><p>Hãy thay đổi bộ lọc hoặc thêm khoản chi mới.</p></div>
+          <div className="history-empty-state"><ReceiptText aria-hidden="true" size={24} /><h3>Chưa có khoản chi từ nhật ký cũ</h3><p>Các giao dịch chi từ tài khoản được hiển thị bên dưới.</p></div>
         ) : (
           <div className="expense-transaction-list">
             {paginatedExpenses.map((expense) => (
@@ -155,7 +167,15 @@ export function ExpensesPage(props: ExpensesPageProps) {
           </div>
         )}
         <HistoryPagination currentPage={expenseCurrentPage} totalPages={expenseTotalPages} onPageChange={setExpenseCurrentPage} />
-      </section>
+      </section>}
+
+      {!hasInitialError && ledgerExpenses.length > 0 && <section className="history-record-section" aria-labelledby="ledger-expenses-title">
+        <div className="history-section-heading"><div><h2 id="ledger-expenses-title">Chi tiêu đã ghi vào tài khoản</h2><p>{ledgerExpenses.length} giao dịch từ ảnh, hũ hoặc nhập trực tiếp.</p></div></div>
+        {ledgerExpenses.length > 0 && <div className="expense-transaction-list">
+          {visibleLedgerExpenses.map((transaction) => <LedgerHistoryRow key={transaction.id} transaction={transaction} accounts={financialAccounts} onView={() => setSelectedLedgerTransaction(transaction)} />)}
+        </div>}
+        <HistoryPagination currentPage={Math.min(ledgerPage, ledgerPageCount)} totalPages={ledgerPageCount} onPageChange={setLedgerPage} />
+      </section>}
 
       {!isInitialLoading && !hasInitialError && <section className="history-panel">
         <h2>Hũ chi tiêu</h2>
@@ -165,6 +185,9 @@ export function ExpensesPage(props: ExpensesPageProps) {
 
       <HistoryDetailDrawer isOpen={Boolean(selectedExpense)} title="Chi tiết khoản chi" subtitle={selectedExpense ? formatReportDate(selectedExpense.date) : undefined} onClose={() => setSelectedExpense(null)} onEdit={selectedExpense ? () => editExpense(selectedExpense) : undefined}>
         {selectedExpense && <ExpenseDetails expense={selectedExpense} />}
+      </HistoryDetailDrawer>
+      <HistoryDetailDrawer isOpen={Boolean(selectedLedgerTransaction)} title="Chi tiết giao dịch" subtitle={selectedLedgerTransaction ? formatReportDate(selectedLedgerTransaction.date) : undefined} onClose={() => setSelectedLedgerTransaction(null)}>
+        {selectedLedgerTransaction && <><LedgerHistoryDetails transaction={selectedLedgerTransaction} accounts={financialAccounts} /><button type="button" className="history-view-action" onClick={() => { setSelectedLedgerTransaction(null); navigateTo("accounts"); }}>Mở Sổ tài khoản</button></>}
       </HistoryDetailDrawer>
 
       <DeleteHistoryRecordDialog isOpen={Boolean(pendingDelete)} title="Xóa khoản chi?" description={`Bạn sắp xóa khoản chi ngày ${pendingDelete ? formatReportDate(pendingDelete.date) : ""}. Thao tác này có thể được xem lại trong lịch sử thay đổi dữ liệu.`} onCancel={() => setPendingDelete(null)} onConfirm={() => {

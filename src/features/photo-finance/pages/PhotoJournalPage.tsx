@@ -10,6 +10,7 @@ import { PhotoFinanceExperience } from "../components/PhotoFinanceExperience.tsx
 import "./PhotoJournalPage.css";
 
 type PhotoJournalPageProps = {
+  captureIntent: string | null;
   accounts: FinancialAccount[];
   jars: SpendingJar[];
   jarActivities: JarActivity[];
@@ -17,6 +18,7 @@ type PhotoJournalPageProps = {
   expenses: ExpenseEntry[];
   ownerId?: string;
   onBack: () => void;
+  onCaptureIntentConsumed: () => void;
   onDeleteTransaction: (transactionId: string) => void;
   onSaveTransaction: (transaction: AccountTransaction) => void;
   onJarCommand: (command: JarCommand) => void;
@@ -24,6 +26,7 @@ type PhotoJournalPageProps = {
 };
 
 export function PhotoJournalPage({
+  captureIntent,
   accounts,
   jars,
   jarActivities,
@@ -31,6 +34,7 @@ export function PhotoJournalPage({
   expenses,
   ownerId,
   onBack,
+  onCaptureIntentConsumed,
   onDeleteTransaction,
   onSaveTransaction,
   onJarCommand,
@@ -59,6 +63,8 @@ export function PhotoJournalPage({
       </section>
 
       <PhotoFinanceExperience
+        captureIntent={captureIntent}
+        onCaptureIntentConsumed={onCaptureIntentConsumed}
         accounts={accounts}
         jars={jars}
         jarActivities={jarActivities}

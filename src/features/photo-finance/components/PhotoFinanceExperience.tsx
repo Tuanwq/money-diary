@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AccountTransaction, FinancialAccount } from "../../account-ledger/accountLedgerModel.ts";
 import type { DailyEntry, ExpenseEntry } from "../../../types.ts";
 import type { JarActivity, SpendingJar } from "../../spending-jars/domain/jarModel.ts";
@@ -15,7 +15,9 @@ import { PhotoFinanceCalendar } from "./PhotoFinanceCalendar.tsx";
 import "./photoFinance.css";
 
 export function PhotoFinanceExperience({ accounts, jars, jarActivities, entries, expenses, ownerId,
-  onDeleteTransaction, onSaveTransaction, onJarCommand, transactions }: {
+  captureIntent, onCaptureIntentConsumed, onDeleteTransaction, onSaveTransaction, onJarCommand, transactions }: {
+  captureIntent: string | null;
+  onCaptureIntentConsumed: () => void;
   accounts: FinancialAccount[];
   jars: SpendingJar[]; jarActivities: JarActivity[];
   entries: DailyEntry[]; expenses: ExpenseEntry[]; ownerId?: string;
@@ -30,6 +32,7 @@ export function PhotoFinanceExperience({ accounts, jars, jarActivities, entries,
   const [captureDate, setCaptureDate] = useState<string | undefined>();
   const [captureOpen, setCaptureOpen] = useState(false);
   const captureVisible = useRef(false);
+  const handledCaptureIntent = useRef<string | null>(null);
   const [editing, setEditing] = useState<AccountTransaction | undefined>();
   const [formKey, setFormKey] = useState(0);
   const [actionError, setActionError] = useState("");
@@ -43,13 +46,19 @@ export function PhotoFinanceExperience({ accounts, jars, jarActivities, entries,
   const dayHasPhotos = useCallback((date: string) =>
     (attachmentsByDay.get(date)?.length ?? 0) > 0, [attachmentsByDay]);
 
-  function openCapture(date: string, transaction?: AccountTransaction) {
+  const openCapture = useCallback((date: string, transaction?: AccountTransaction) => {
     captureVisible.current = true;
     setCaptureDate(date);
     setEditing(transaction);
     setCaptureOpen(true);
     setActionError("");
-  }
+  }, []);
+  useEffect(() => {
+    if (!captureIntent || handledCaptureIntent.current === captureIntent) return;
+    handledCaptureIntent.current = captureIntent;
+    openCapture(vietnamFinancialDate(new Date()));
+    onCaptureIntentConsumed();
+  }, [captureIntent, onCaptureIntentConsumed, openCapture]);
   const closeCapture = useCallback(() => {
     captureVisible.current = false;
     setCaptureOpen(false);
