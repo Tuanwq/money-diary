@@ -130,6 +130,7 @@ export function SpendingJarsPage({ ledger, cloudStatus, onBack, onCommand, onDel
           <div className="jar-detail-progress-label"><span>Còn {getJarRemainingPercent(view)}%</span><span>Đã tiêu {formatMoney(view.spentAmount)} · Hạn mức {formatMoney(selected.limitAmount)}</span></div>
           <div className="jar-progress" role="progressbar" aria-label={`Tiền còn lại trong hũ ${selected.name}`} aria-valuenow={getJarRemainingPercent(view)} aria-valuemin={0} aria-valuemax={100}><span style={{ width: `${getJarRemainingPercent(view)}%` }} /></div>
           <p>{selected.status === "closed" ? "Đã gỡ nhãn liên kết khi đóng hũ" : `Nhãn liên kết: ${selected.linkedLabels.join(", ") || "Chưa liên kết"}`}</p>
+          {selected.status === "closed" && view.remainingAmount === 0 && <p>Tiền chưa tiêu đã trở lại phần khả dụng của tài khoản; tổng số dư không đổi.</p>}
         </section>
         {view.deficitAmount > 0 && <p className="jars-warning">Tài khoản nguồn hiện thấp hơn phần đã dành {formatMoney(view.deficitAmount)}. Hãy nạp thêm hoặc giải phóng tiền.</p>}
         <section className="jar-sources"><h2>Nguồn tiền hiện tại</h2>{view.sources.filter((item) => item.amount > 0).map((item) => <div key={item.accountId}>

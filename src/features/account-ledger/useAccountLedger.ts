@@ -3,6 +3,7 @@ import { supabase } from "../../lib/supabase";
 import { safeSetStorageJson } from "../../utils/safeStorage";
 import type { ExpenseBudget } from "../../types.ts";
 import { applyJarCommand, type JarCommand } from "../spending-jars/services/jarService.ts";
+import { repairClosedJars } from "../spending-jars/services/closedJarMigration.ts";
 import { getAccountAllocation, migrateExpenseBudgets } from "../spending-jars/domain/jarModel.ts";
 import { decideLedgerLoad, hasLocalOnlyRecords, nextLedgerTimestamp } from "./ledgerSync.ts";
 import { applyAccountExternalCommand, assertExternalCoverageAfterLedgerChange,
@@ -18,6 +19,7 @@ import {
 
 const PENDING_LEDGER_KEY = `${ACCOUNT_LEDGER_STORAGE_KEY}:pending`;
 const RECOVERY_LEDGER_KEY = `${ACCOUNT_LEDGER_STORAGE_KEY}:recovery`;
+const EMPTY_LEGACY_BUDGETS: ExpenseBudget[] = [];
 type PendingLedger = { userId: string; baseUpdatedAt: string | null };
 
 function readPendingLedger(): PendingLedger | null {
@@ -42,7 +44,7 @@ function loadLocalLedger() {
   }
 }
 
-export function useAccountLedger(userId?: string, legacyBudgets: ExpenseBudget[] = []) {
+export function useAccountLedger(userId?: string, legacyBudgets: ExpenseBudget[] = EMPTY_LEGACY_BUDGETS) {
   const [ledger, setLedger] = useState<AccountLedgerData>(loadLocalLedger);
   const [cloudStatus, setCloudStatus] = useState("Đang lưu trên thiết bị");
   const [cloudReady, setCloudReady] = useState(false);
@@ -312,7 +314,9 @@ export function useAccountLedger(userId?: string, legacyBudgets: ExpenseBudget[]
 
   useEffect(() => {
     if (userId && !cloudReady) return;
-    const next = migrateExpenseBudgets(latestLedgerRef.current, legacyBudgets, new Date().toISOString());
+    const now = new Date().toISOString();
+    const repaired = repairClosedJars(latestLedgerRef.current, now);
+    const next = migrateExpenseBudgets(repaired, legacyBudgets, now);
     if (next !== latestLedgerRef.current) updateLedger(() => next);
   }, [cloudReady, legacyBudgets, updateLedger, userId]);
 

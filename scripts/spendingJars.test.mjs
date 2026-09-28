@@ -4,6 +4,7 @@ import { getAccountAvailableToAllocate, getJarRemainingPercent, getJarView, migr
   "../src/features/spending-jars/domain/jarModel.ts";
 import { applyJarCommand, planJarSpend, smartAllocate } from
   "../src/features/spending-jars/services/jarService.ts";
+import { repairClosedJars } from "../src/features/spending-jars/services/closedJarMigration.ts";
 
 const now = "2026-09-22T10:00:00.000Z";
 const accounts = [
@@ -66,10 +67,27 @@ assert.equal(ledger.transactions.find((transaction) => transaction.type === "exp
 assert.equal(getAccountAvailableToAllocate(ledger, "a"), 1_000_000);
 assert.equal(getAccountAvailableToAllocate(ledger, "b"), 1_750_000);
 assert.equal(calculateAccountBalance(accounts[1], ledger.transactions), 1_750_000);
+assert.equal(repairClosedJars(ledger, now), ledger);
 const sibling = applyJarCommand(ledger, { kind: "create", id: "shared", now,
   fields: { name: "Hũ khác", icon: "🫙", limitAmount: 100_000,
     startDate: "2026-09-22", linkedLabels: ["Ăn uống"] } });
 assert.deepEqual(sibling.jars.find((jar) => jar.id === "shared").linkedLabels, ["Ăn uống"]);
+
+const oldClosed = {
+  accounts, transactions: ledger.transactions,
+  jars: [
+    { ...ledger.jars[0], linkedLabels: ["Ăn uống", "Siêu thị"] },
+    sibling.jars.find((jar) => jar.id === "shared"),
+  ],
+  jarActivities: ledger.jarActivities.filter((activity) =>
+    activity.jarId !== "food" || activity.kind !== "release"),
+};
+const repaired = repairClosedJars(oldClosed, now);
+assert.deepEqual(repaired.jars[0].linkedLabels, []);
+assert.deepEqual(repaired.jars[1].linkedLabels, ["Ăn uống"]);
+assert.equal(getJarView(repaired, repaired.jars[0]).remainingAmount, 0);
+assert.equal(repaired.transactions, oldClosed.transactions);
+assert.equal(repairClosedJars(repaired, now), repaired);
 
 const budget = { id: "old-food", label: "Ăn uống", monthlyLimit: 1_500_000, createdAt: now };
 const migrated = migrateExpenseBudgets(ledger, [budget], now);

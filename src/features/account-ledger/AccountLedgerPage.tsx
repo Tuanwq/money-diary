@@ -416,7 +416,7 @@ function TransactionForm({
               value={category}
             >
               {[...new Set([...TRANSACTION_CATEGORIES[type], ...(type === "expense"
-                ? jarLedger.jars.flatMap((jar) => jar.linkedLabels) : [])])].map((item) => (
+                ? jarLedger.jars.filter((jar) => jar.status === "active").flatMap((jar) => jar.linkedLabels) : [])])].map((item) => (
                 <option key={item} value={item}>
                   {item}
                 </option>

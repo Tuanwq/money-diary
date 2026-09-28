@@ -266,7 +266,7 @@ export function PhotoTransactionForm({ accounts, jars, jarActivities, transactio
         <label><span className="sr-only">Danh mục</span><Pencil size={16} aria-hidden="true" />
           <select aria-label="Danh mục" disabled={!canEdit} onChange={(event) => setCategory(event.target.value)} value={category}>
             {[...new Set([...TRANSACTION_CATEGORIES[kind], ...(kind === "expense"
-              ? jars.flatMap((jar) => jar.linkedLabels) : [])])].map((item) => <option key={item}>{item}</option>)}
+              ? jars.filter((jar) => jar.status === "active").flatMap((jar) => jar.linkedLabels) : [])])].map((item) => <option key={item}>{item}</option>)}
           </select><ChevronDown size={15} aria-hidden="true" /></label>
         {!selectedJar && <label><span className="sr-only">Tài khoản</span><WalletCards size={17} aria-hidden="true" />
           <select aria-label={kind === "transfer" ? "Tài khoản chuyển" : "Tài khoản"} disabled={!canEdit}
