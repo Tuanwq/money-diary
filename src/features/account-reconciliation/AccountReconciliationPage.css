@@ -280,6 +280,10 @@
   color: var(--text-secondary);
 }
 
+.reconciliation-account-title small:last-child {
+  white-space: normal;
+}
+
 .reconciliation-money-input {
   position: relative;
   min-width: 0;

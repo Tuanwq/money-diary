@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { buildPhotoTransaction } from "../src/features/photo-finance/services/photoTransactionDraft.ts";
 import { buildStoryTimeline } from "../src/features/photo-finance/services/dayStoryModel.ts";
+import { buildPhotoGalleryItems, getPhotoMoneyLabel } from "../src/features/photo-finance/services/photoGalleryModel.ts";
 import { calculateAccountBalance, getLedgerSummary } from "../src/features/account-ledger/accountLedgerModel.ts";
 import { createPhotoDialogLock } from "../src/features/photo-finance/services/photoDialogLock.ts";
 import { createSignedPhotoCache } from "../src/features/photo-finance/services/signedPhotoCache.ts";
@@ -84,6 +85,19 @@ test("calendar shows at most three photos, correct badge, cover priority and fol
   const updated = buildDailyFinancialSummaries([entry], [expense], [edited]);
   assert.equal(getDailyFinancialSummary(updated, date).net, 400_000);
   assert.equal(getDailyFinancialSummary(updated, "2026-09-17").net, -120_000);
+});
+
+test("photo gallery shows newest attached images with amounts derived from transactions", () => {
+  const attachments = [
+    { id: "older", sourceType: "account_transaction", sourceId: "photo-1", createdAt: "2026-09-16T12:00:00Z" },
+    { id: "newer", sourceType: "account_transaction", sourceId: "photo-2", createdAt: "2026-09-16T13:00:00Z" },
+    { id: "missing", sourceType: "account_transaction", sourceId: "deleted", createdAt: "2026-09-16T14:00:00Z" },
+  ];
+  const items = buildPhotoGalleryItems(attachments, [photoExpense, photoIncome]);
+  assert.deepEqual(items.map((item) => item.attachment.id), ["newer", "older"]);
+  assert.equal(getPhotoMoneyLabel(items[0].transaction), "+50.000đ");
+  assert.equal(getPhotoMoneyLabel(items[1].transaction), "−120.000đ");
+  assert.equal(getPhotoMoneyLabel(transfer), "↔ 300.000đ");
 });
 
 test("photo persistence errors are actionable and do not expose raw Supabase messages", () => {

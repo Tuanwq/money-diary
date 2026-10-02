@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import {
   buildReconciliationLine,
   createReconciliationAdjustmentTransaction,
+  getAccountReconciliationBasis,
   getReconciliationTotals,
 } from "../src/features/account-reconciliation/accountReconciliationModel.ts";
 import {
@@ -56,6 +57,50 @@ assert.equal(
   calculateAccountBalanceAtDate(account, transactions, "2026-07-22"),
   250_000
 );
+
+const accountWithOutsideMoney = {
+  ...account,
+  externalEntries: [{
+    id: "loan-1",
+    accountId: account.id,
+    amount: 60_000,
+    type: "loaned",
+    note: "",
+    date: "2026-07-20",
+    recoveries: [{ id: "return-1", amount: 20_000, date: "2026-07-23",
+      createdAt: "2026-07-23T00:00:00.000Z" }],
+    createdAt: "2026-07-20T00:00:00.000Z",
+    updatedAt: "2026-07-23T00:00:00.000Z",
+  }, {
+    id: "future-outside",
+    accountId: account.id,
+    amount: 10_000,
+    type: "unavailable",
+    note: "",
+    date: "2026-07-24",
+    recoveries: [],
+    createdAt: "2026-07-24T00:00:00.000Z",
+    updatedAt: "2026-07-24T00:00:00.000Z",
+  }],
+};
+assert.deepEqual(getAccountReconciliationBasis(accountWithOutsideMoney, transactions, "2026-07-22"), {
+  bookBalance: 250_000,
+  externalAmount: 60_000,
+  expectedBalance: 190_000,
+});
+assert.deepEqual(getAccountReconciliationBasis(accountWithOutsideMoney, transactions, "2026-07-23"), {
+  bookBalance: 750_000,
+  externalAmount: 40_000,
+  expectedBalance: 710_000,
+});
+assert.equal(getAccountReconciliationBasis(accountWithOutsideMoney, transactions, "2026-07-19").externalAmount, 0);
+const physicalLine = buildReconciliationLine({
+  account: accountWithOutsideMoney,
+  actualBalance: 190_000,
+  ...getAccountReconciliationBasis(accountWithOutsideMoney, transactions, "2026-07-22"),
+});
+assert.equal(physicalLine.difference, 0, "outside money is not a reconciliation shortfall");
+assert.equal(physicalLine.externalAmount, 60_000, "save the basis for historical checks");
 
 const surplusLine = buildReconciliationLine({
   account,

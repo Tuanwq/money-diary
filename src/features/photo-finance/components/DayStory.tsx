@@ -14,11 +14,11 @@ import { ImageGallery } from "./ImageGallery.tsx";
 import { TransactionTimeline } from "./TransactionTimeline.tsx";
 import "./dayStory.css";
 
-export function DayStory({ accounts, attachments, date, entries, expenses, isOpen,
+export function DayStory({ accounts, attachments, date, entries, expenses, isOpen, initialPhotoId,
   onAddPhoto, onCapture, onClose, onDeletePhoto, onDeleteTransaction, onEditTransaction,
   onMakeCover, repository, summary, transactions }: {
   accounts: FinancialAccount[]; attachments: PhotoAttachment[]; date: string;
-  entries: DailyEntry[]; expenses: ExpenseEntry[]; isOpen: boolean;
+  entries: DailyEntry[]; expenses: ExpenseEntry[]; isOpen: boolean; initialPhotoId?: string;
   onAddPhoto: (transaction: AccountTransaction) => void; onCapture: () => void;
   onClose: () => void; onDeletePhoto: (attachment: PhotoAttachment) => void;
   onDeleteTransaction: (transaction: AccountTransaction) => void;
@@ -27,7 +27,8 @@ export function DayStory({ accounts, attachments, date, entries, expenses, isOpe
   repository: ReturnType<typeof createPhotoAttachmentRepository>;
   summary: DailyFinancialSummary; transactions: AccountTransaction[];
 }) {
-  const [imageIndex, setImageIndex] = useState(0);
+  const [imageIndex, setImageIndex] = useState(() => Math.max(0,
+    attachments.findIndex((attachment) => attachment.id === initialPhotoId)));
   const [viewerOpen, setViewerOpen] = useState(false);
   const timeline = useMemo(() => buildStoryTimeline(date, transactions, entries, expenses, attachments),
     [date, transactions, entries, expenses, attachments]);

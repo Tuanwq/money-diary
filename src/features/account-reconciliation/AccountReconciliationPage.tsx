@@ -23,7 +23,6 @@ import {
   parseMoneyInput,
 } from "../../utils/money";
 import {
-  calculateAccountBalanceAtDate,
   type AccountTransaction,
   type FinancialAccount,
   type FinancialAccountType,
@@ -33,6 +32,7 @@ import {
   RECONCILIATION_REASON_LABELS,
   buildReconciliationLine,
   createReconciliationAdjustmentTransaction,
+  getAccountReconciliationBasis,
   getReconciliationStatus,
   getReconciliationTotals,
   type AccountReconciliation,
@@ -157,26 +157,26 @@ export function AccountReconciliationPage({
   const selectedCheck = editingCheckId
     ? checkById.get(editingCheckId)
     : undefined;
+  const reconciliationBases = useMemo(
+    () =>
+      Object.fromEntries(
+        activeAccounts.map((account) => [
+          account.id,
+          getAccountReconciliationBasis(account, transactions, selectedDate),
+        ])
+      ) as Record<string, ReturnType<typeof getAccountReconciliationBasis>>,
+    [activeAccounts, selectedDate, transactions]
+  );
   const expectedBalances = useMemo(
     () =>
       Object.fromEntries(
-        activeAccounts.map((account) => {
-          const savedLine = selectedCheck?.lines.find(
-            (line) => line.accountId === account.id
-          );
-
-          return [
-            account.id,
-            savedLine?.expectedBalance ??
-              calculateAccountBalanceAtDate(
-                account,
-                transactions,
-                selectedDate
-              ),
-          ];
-        })
+        activeAccounts.map((account) => [
+          account.id,
+          selectedCheck?.lines.find((line) => line.accountId === account.id)
+            ?.expectedBalance ?? reconciliationBases[account.id].expectedBalance,
+        ])
       ) as Record<string, number>,
-    [activeAccounts, selectedCheck, selectedDate, transactions]
+    [activeAccounts, reconciliationBases, selectedCheck]
   );
   const draftSummary = useMemo(() => {
     const lines = activeAccounts.flatMap((account) => {
@@ -279,16 +279,19 @@ export function AccountReconciliationPage({
 
       if (!draft?.actual.trim()) return [];
 
+      const previousLine = selectedCheck?.lines.find(
+        (line) => line.accountId === account.id
+      );
+
       const newLine = buildReconciliationLine({
         account,
         actualBalance: parseMoneyInput(draft.actual),
         expectedBalance: expectedBalances[account.id] ?? 0,
+        bookBalance: previousLine ? previousLine.bookBalance : reconciliationBases[account.id].bookBalance,
+        externalAmount: previousLine ? previousLine.externalAmount : reconciliationBases[account.id].externalAmount,
         note: draft.note,
         reason: draft.reason,
       });
-      const previousLine = selectedCheck?.lines.find(
-        (line) => line.accountId === account.id
-      );
 
       return [
         previousLine?.adjustmentTransactionId
@@ -433,7 +436,7 @@ export function AccountReconciliationPage({
         aria-label="Tóm tắt kiểm kê gần nhất"
       >
         <div>
-          <span>Sổ dự kiến gần nhất</span>
+          <span>Dự kiến kiểm kê gần nhất</span>
           <strong>{formatMoney(latestTotals.expected)}</strong>
         </div>
         <div>
@@ -460,8 +463,8 @@ export function AccountReconciliationPage({
             <div>
               <h2>Nhập số dư thực tế</h2>
               <p>
-                Bỏ trống tài khoản chưa muốn kiểm kê. Số dư sổ được chốt theo
-                ngày đã chọn.
+                Bỏ trống tài khoản chưa muốn kiểm kê. Tiền thực có dự kiến =
+                số dư Sổ tài khoản trừ tiền còn ở ngoài vào ngày đã chọn.
               </p>
             </div>
             <label className="reconciliation-date-field">
@@ -510,6 +513,11 @@ export function AccountReconciliationPage({
               const savedLine = selectedCheck?.lines.find(
                 (line) => line.accountId === account.id
               );
+              const basis = reconciliationBases[account.id];
+              const bookBalance = savedLine?.bookBalance ?? basis.bookBalance;
+              const externalAmount = savedLine?.externalAmount ?? basis.externalAmount;
+              const hasSavedBasis = !savedLine ||
+                (savedLine.bookBalance !== undefined && savedLine.externalAmount !== undefined);
               const isAdjusted = Boolean(
                 savedLine?.adjustmentTransactionId
               );
@@ -525,7 +533,16 @@ export function AccountReconciliationPage({
                     </span>
                     <div>
                       <strong>{account.name}</strong>
-                      <small>Sổ dự kiến {formatMoney(expected)}</small>
+                      <small>
+                        {hasSavedBasis ? "Thực có dự kiến" : "Dự kiến đã lưu"} {formatMoney(expected)}
+                      </small>
+                      {hasSavedBasis ? (
+                        <small>
+                          Sổ {formatMoney(bookBalance)} − tiền ở ngoài {formatMoney(externalAmount)}
+                        </small>
+                      ) : (
+                        <small>Giữ nguyên số dự kiến của lần kiểm kê cũ.</small>
+                      )}
                     </div>
                   </div>
 
@@ -613,7 +630,7 @@ export function AccountReconciliationPage({
 
           <div className="reconciliation-form-review">
             <div>
-              <span>Sổ dự kiến</span>
+              <span>Dự kiến kiểm kê</span>
               <strong>{formatMoney(draftSummary.expected)}</strong>
             </div>
             <div>
@@ -725,7 +742,7 @@ export function AccountReconciliationPage({
                     <span>{check.lines.length} tài khoản</span>
                   </div>
                   <div>
-                    <span>Sổ dự kiến</span>
+                    <span>Dự kiến đã lưu</span>
                     <strong>{formatMoney(totals.expected)}</strong>
                   </div>
                   <div>

@@ -2,6 +2,8 @@ import type {
   AccountTransaction,
   FinancialAccount,
 } from "../account-ledger/accountLedgerModel";
+import { calculateAccountBalanceAtDate } from "../account-ledger/accountLedgerModel.ts";
+import { calculateAccountExternalAmountAtDate } from "../account-ledger/accountExternalModel.ts";
 
 export const ACCOUNT_RECONCILIATION_STORAGE_KEY =
   "money_diary_account_reconciliations";
@@ -26,6 +28,8 @@ export type AccountReconciliationLine = {
   adjustedAt?: string;
   difference: number;
   expectedBalance: number;
+  bookBalance?: number;
+  externalAmount?: number;
   note: string;
   reason: ReconciliationReason;
 };
@@ -72,6 +76,20 @@ export function calculateReconciliationDifference(
   return actualBalance - expectedBalance;
 }
 
+export function getAccountReconciliationBasis(
+  account: FinancialAccount,
+  transactions: AccountTransaction[],
+  date: string
+) {
+  const bookBalance = calculateAccountBalanceAtDate(account, transactions, date);
+  const externalAmount = calculateAccountExternalAmountAtDate(account, date);
+  return {
+    bookBalance,
+    externalAmount,
+    expectedBalance: bookBalance - externalAmount,
+  };
+}
+
 export function getReconciliationStatus(difference: number) {
   if (difference > 0) return "surplus" as const;
   if (difference < 0) return "shortage" as const;
@@ -82,12 +100,16 @@ export function buildReconciliationLine({
   account,
   actualBalance,
   expectedBalance,
+  bookBalance,
+  externalAmount,
   note = "",
   reason = "unknown",
 }: {
   account: FinancialAccount;
   actualBalance: number;
   expectedBalance: number;
+  bookBalance?: number;
+  externalAmount?: number;
   note?: string;
   reason?: ReconciliationReason;
 }): AccountReconciliationLine {
@@ -100,6 +122,8 @@ export function buildReconciliationLine({
       expectedBalance
     ),
     expectedBalance,
+    ...(bookBalance !== undefined ? { bookBalance } : {}),
+    ...(externalAmount !== undefined ? { externalAmount } : {}),
     note: note.trim(),
     reason,
   };

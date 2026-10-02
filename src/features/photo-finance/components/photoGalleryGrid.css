@@ -1,0 +1,20 @@
+.photo-gallery{min-width:0;padding:14px;border-radius:22px;background:#121715;color:#f4f7f3}
+.photo-gallery-header{display:flex;align-items:end;justify-content:space-between;gap:12px;margin:4px 2px 16px}
+.photo-gallery-header span{display:inline-flex;align-items:center;gap:5px;color:#9dc8aa;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.04em}
+.photo-gallery-header h2{margin:4px 0 0;font-size:clamp(25px,6vw,32px);line-height:1.1}
+.photo-gallery-header p{margin:5px 0 0;color:#adbbb0;font-size:12px;line-height:1.4}
+.photo-gallery-capture,.photo-gallery-more,.photo-gallery-empty button{display:inline-flex;align-items:center;justify-content:center;gap:5px;flex:none;min-height:38px;padding:7px 11px;border:0;border-radius:11px;background:#345d46;color:#fff;font-size:12px;font-weight:750}
+.photo-gallery-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px}
+.photo-gallery-tile{position:relative;display:block;min-width:0;aspect-ratio:1;overflow:hidden;padding:0;border:0;border-radius:11px;background:#303a33;color:#fff;text-align:left;isolation:isolate}
+.photo-gallery-tile::after{content:"";position:absolute;inset:55% 0 0;background:linear-gradient(transparent,rgb(0 0 0 / 55%));pointer-events:none}
+.photo-gallery-tile img{display:block;width:100%;height:100%;object-fit:cover;transition:transform .18s ease}
+.photo-gallery-tile:hover img{transform:scale(1.04)}
+.photo-gallery-tile:focus-visible,.photo-gallery-capture:focus-visible,.photo-gallery-more:focus-visible{outline:3px solid #b7eac3;outline-offset:2px}
+.photo-gallery-placeholder{display:grid;width:100%;height:100%;place-items:center;color:#8ca191}
+.photo-gallery-money{position:absolute;z-index:1;left:6px;bottom:6px;max-width:calc(100% - 12px);overflow:hidden;padding:4px 6px;border-radius:7px;background:rgb(8 12 9 / 77%);color:#fff;font-size:clamp(10px,2.6vw,13px);font-weight:800;text-overflow:ellipsis;white-space:nowrap;box-shadow:0 1px 5px rgb(0 0 0 / 20%)}
+.photo-gallery-money.is-expense{color:#ffb5b9}.photo-gallery-money.is-income{color:#b7eac3}.photo-gallery-money.is-transfer{color:#c9d6f3}
+.photo-gallery-more{display:flex;width:100%;margin-top:12px;background:#25382d}
+.photo-gallery-empty{display:grid;justify-items:center;gap:9px;padding:42px 16px;text-align:center;color:#adbbb0}
+.photo-gallery-empty strong{color:#f4f7f3}.photo-gallery-empty p{margin:0;font-size:12px}
+@media(min-width:700px){.photo-gallery{padding:22px}.photo-gallery-grid{grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}.photo-gallery-money{left:9px;bottom:9px;font-size:13px}}
+@media(max-width:360px){.photo-gallery{padding:10px}.photo-gallery-grid{gap:3px}.photo-gallery-tile{border-radius:7px}.photo-gallery-money{left:3px;bottom:3px;max-width:calc(100% - 6px);font-size:9px;padding:3px 4px}}
