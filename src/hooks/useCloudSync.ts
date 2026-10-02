@@ -313,6 +313,11 @@ export function useCloudSync({
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       setSession(nextSession);
+      if (!nextSession) {
+        void import("../features/photo-finance/services/androidPhotoWidget.ts")
+          .then(({ clearAndroidPhotoWidget }) => clearAndroidPhotoWidget())
+          .catch(() => undefined);
+      }
     });
 
     return () => subscription.unsubscribe();

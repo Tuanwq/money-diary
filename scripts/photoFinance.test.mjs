@@ -3,6 +3,7 @@ import test from "node:test";
 import { buildPhotoTransaction } from "../src/features/photo-finance/services/photoTransactionDraft.ts";
 import { buildStoryTimeline } from "../src/features/photo-finance/services/dayStoryModel.ts";
 import { buildPhotoGalleryItems, getPhotoMoneyLabel } from "../src/features/photo-finance/services/photoGalleryModel.ts";
+import { buildLatestPhotoWidgetDetails } from "../src/features/photo-finance/services/photoWidgetModel.ts";
 import { calculateAccountBalance, getLedgerSummary } from "../src/features/account-ledger/accountLedgerModel.ts";
 import { createPhotoDialogLock } from "../src/features/photo-finance/services/photoDialogLock.ts";
 import { createSignedPhotoCache } from "../src/features/photo-finance/services/signedPhotoCache.ts";
@@ -98,6 +99,25 @@ test("photo gallery shows newest attached images with amounts derived from trans
   assert.equal(getPhotoMoneyLabel(items[0].transaction), "+50.000đ");
   assert.equal(getPhotoMoneyLabel(items[1].transaction), "−120.000đ");
   assert.equal(getPhotoMoneyLabel(transfer), "↔ 300.000đ");
+});
+
+test("Android widget details derive from the latest photo transaction and account", () => {
+  const item = { attachment: { id: "image" }, transaction: {
+    ...photoExpense, accountId: "bank", category: "Ăn uống", note: "Bữa tối",
+  } };
+  assert.deepEqual(buildLatestPhotoWidgetDetails(item, [{ id: "bank", name: "BIDV" }]), {
+    attachmentId: "image",
+    transactionId: "photo-1",
+    amountLabel: "−120.000đ",
+    type: "expense",
+    title: "Bữa tối",
+    detail: "BIDV · 18:21",
+  });
+  const transferDetails = buildLatestPhotoWidgetDetails({ attachment: { id: "transfer-image" },
+    transaction: { ...transfer, accountId: "bank", toAccountId: "cash" } },
+  [{ id: "bank", name: "BIDV" }, { id: "cash", name: "Tiền mặt" }]);
+  assert.equal(transferDetails.detail, "BIDV ↔ Tiền mặt · 16/09");
+  assert.equal(transferDetails.amountLabel, "↔ 300.000đ");
 });
 
 test("photo persistence errors are actionable and do not expose raw Supabase messages", () => {

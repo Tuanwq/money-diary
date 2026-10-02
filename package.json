@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "android:sync": "npm run build && cap sync android",
     "lint": "eslint .",
     "test:cloud-sync": "node --experimental-strip-types scripts/cloudSyncState.test.mjs",
     "test:account-ledger": "node --experimental-strip-types scripts/accountLedger.test.mjs",
@@ -32,6 +33,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@capacitor/android": "^8.5.2",
+    "@capacitor/core": "^8.5.2",
     "@supabase/supabase-js": "^2.108.2",
     "@tailwindcss/vite": "^4.3.1",
     "docx": "^9.7.1",
@@ -43,6 +46,7 @@
     "tailwindcss": "^4.3.1"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.5.2",
     "@eslint/js": "^10.0.1",
     "@types/node": "^24.12.3",
     "@types/react": "^19.2.14",

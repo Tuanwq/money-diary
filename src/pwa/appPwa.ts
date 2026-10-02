@@ -1,3 +1,4 @@
+import { Capacitor } from "@capacitor/core";
 import { APP_NOTIFICATION_CONFIG } from "../features/notifications/config";
 import { APP_PWA_CONFIGURED_EVENT } from "../features/app-update/appUpdateModel";
 import type { AppIdentifier } from "../features/notifications/types";
@@ -137,6 +138,7 @@ async function cleanupLegacyPwa() {
 export async function registerAppServiceWorker(
   appIdentifier: AppIdentifier
 ) {
+  if (Capacitor.isNativePlatform()) return null;
   if (!("serviceWorker" in navigator)) return null;
 
   legacyPwaCleanup ??= cleanupLegacyPwa();

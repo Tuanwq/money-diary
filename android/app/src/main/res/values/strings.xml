@@ -1,0 +1,10 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Money Diary</string>
+    <string name="title_activity_main">Money Diary</string>
+    <string name="package_name">com.moneydiary.app</string>
+    <string name="custom_url_scheme">com.moneydiary.app</string>
+    <string name="widget_photo_description">Ảnh giao dịch mới nhất</string>
+    <string name="widget_empty_amount">Chưa có ảnh</string>
+    <string name="widget_empty_title">Mở Nhật ký tài chính để ghi ảnh</string>
+</resources>

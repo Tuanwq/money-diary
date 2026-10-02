@@ -25,3 +25,9 @@ dist-ssr
 
 .vercel
 .env*
+
+# Android build outputs and machine-specific SDK paths
+android/.gradle/
+android/.idea/
+android/local.properties
+android/**/build/

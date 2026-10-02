@@ -1,3 +1,5 @@
+import { Capacitor } from "@capacitor/core";
+
 const LOCAL_HOSTNAMES = new Set([
   "localhost",
   "127.0.0.1",
@@ -7,6 +9,7 @@ const LOCAL_HOSTNAMES = new Set([
 ]);
 
 function isLocalRuntime() {
+  if (Capacitor.isNativePlatform()) return false;
   if (import.meta.env.DEV) return true;
   if (typeof window === "undefined") return false;
 

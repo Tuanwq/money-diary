@@ -6,6 +6,7 @@ import type { JarCommand } from "../../spending-jars/services/jarService.ts";
 import { usePhotoFinance } from "../hooks/usePhotoFinance.ts";
 import { usePhotoThumbnails } from "../hooks/usePhotoThumbnails.ts";
 import { buildPhotoGalleryItems } from "../services/photoGalleryModel.ts";
+import { updateAndroidPhotoWidget } from "../services/androidPhotoWidget.ts";
 import { buildDailyFinancialSummaries, getDailyFinancialSummary,
   groupPhotoAttachmentsByDay, getCalendarDates, getCalendarPhotoStack, vietnamFinancialDate } from "../services/photoFinanceModel.ts";
 import { deleteAccountTransactionWithPhotos } from "../services/photoTransactionService.ts";
@@ -55,6 +56,12 @@ export function PhotoFinanceExperience({ accounts, jars, jarActivities, entries,
   const galleryAttachments = useMemo(() => photoView === "gallery"
     ? visibleGalleryItems.map((item) => item.attachment) : [], [photoView, visibleGalleryItems]);
   const galleryThumbnails = usePhotoThumbnails(galleryAttachments, photos.repository);
+  useEffect(() => {
+    if (!ownerId || photos.status !== "ready") return;
+    if (photos.attachments.length > 0 && galleryItems.length === 0) return;
+    void updateAndroidPhotoWidget(ownerId, galleryItems[0], accounts, photos.repository)
+      .catch(() => { /* The journal remains usable if Android cannot refresh its widget. */ });
+  }, [ownerId, photos.status, photos.attachments.length, galleryItems, accounts, photos.repository]);
   const dayHasPhotos = useCallback((date: string) =>
     (attachmentsByDay.get(date)?.length ?? 0) > 0, [attachmentsByDay]);
 
