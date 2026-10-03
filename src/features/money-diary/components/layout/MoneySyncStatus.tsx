@@ -15,7 +15,9 @@ export function MoneySyncStatus({
   const hasError =
     normalizedStatus.includes("lỗi") ||
     normalizedStatus.includes("chưa thể") ||
-    normalizedStatus.includes("thiếu cấu hình");
+    normalizedStatus.includes("thiếu cấu hình") ||
+    normalizedStatus.includes("xung đột") ||
+    normalizedStatus.includes("migration");
   const isOffline = normalizedStatus.includes("ngoại tuyến");
   const isSyncing =
     isRefreshing || normalizedStatus.includes("đang đồng bộ");
@@ -56,13 +58,13 @@ export function MoneySyncStatus({
         type="button"
         className={`${className} money-sync-status-button`}
         onClick={onRetry}
-        title={`${label}. Nhấn để thử lại.`}
-        aria-label={`${label}. Thử đồng bộ lại`}
+        title={`${syncStatus}. Nhấn để thử lại.`}
+        aria-label={`${syncStatus}. Thử đồng bộ lại`}
         aria-live="polite"
         aria-atomic="true"
       >
         <SyncIcon aria-hidden="true" size={16} />
-        <span>{label}</span>
+        <span>{label}<small className="money-sync-status-detail">{syncStatus}</small></span>
       </button>
     );
   }

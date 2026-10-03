@@ -704,7 +704,7 @@ export default function App() {
     transactions: accountTransactions,
   } = useAccountLedger(cloudDataUserId, goals.expenseBudgets);
   const accountAwareSyncStatus = /migration|chưa thể|lỗi|xung đột/i.test(accountLedgerCloudStatus)
-    ? `Chưa thể đồng bộ Sổ tài khoản: ${accountLedgerCloudStatus}`
+    ? accountLedgerCloudStatus
     : /đang tải|đang lưu/i.test(accountLedgerCloudStatus)
       ? accountLedgerCloudStatus
       : syncStatus;

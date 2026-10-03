@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "../../lib/supabase";
 import { safeSetStorageJson } from "../../utils/safeStorage";
+import { captureAppError } from "../error-monitoring/appErrorMonitor";
 import type { ExpenseBudget } from "../../types.ts";
 import { applyJarCommand, type JarCommand } from "../spending-jars/services/jarService.ts";
 import { repairClosedJars } from "../spending-jars/services/closedJarMigration.ts";
 import { getAccountAllocation, migrateExpenseBudgets } from "../spending-jars/domain/jarModel.ts";
 import { decideLedgerLoad, hasLocalOnlyRecords, nextLedgerTimestamp } from "./ledgerSync.ts";
+import { describeLedgerCloudError } from "./ledgerCloudError.ts";
 import { applyAccountExternalCommand, assertExternalCoverageAfterLedgerChange,
   calculateAccountExternalAmount, type AccountExternalCommand } from "./accountExternalModel.ts";
 import {
@@ -86,7 +88,9 @@ export function useAccountLedger(userId?: string, legacyBudgets: ExpenseBudget[]
         if (!active) return;
         if (revisionResult.error) {
           console.error(revisionResult.error);
-          setCloudStatus("Chưa thể đồng bộ sổ tài khoản");
+          const record = captureAppError({ category: "sync", message: "Không thể kiểm tra sổ tài khoản trên cloud",
+            detail: `${revisionResult.error.code}: ${revisionResult.error.message}` });
+          setCloudStatus(`Chưa thể đồng bộ sổ tài khoản · ${describeLedgerCloudError(revisionResult.error)} · ${record.code}`);
           return;
         }
         if (revisionResult.data?.updated_at === cachedRevision) {
@@ -121,7 +125,9 @@ export function useAccountLedger(userId?: string, legacyBudgets: ExpenseBudget[]
 
       if (error) {
         console.error(error);
-        setCloudStatus("Chưa thể đồng bộ sổ tài khoản");
+        const record = captureAppError({ category: "sync", message: "Không thể tải sổ tài khoản từ cloud",
+          detail: `${error.code}: ${error.message}` });
+        setCloudStatus(`Chưa thể đồng bộ sổ tài khoản · ${describeLedgerCloudError(error)} · ${record.code}`);
         return;
       }
 
@@ -204,17 +210,21 @@ export function useAccountLedger(userId?: string, legacyBudgets: ExpenseBudget[]
   useEffect(() => {
     if (!userId) return;
     const refresh = () => {
-      if (document.visibilityState === "visible" && cloudReady && !dirtyRef.current) retrySync();
+      if (document.visibilityState === "visible" &&
+        ((cloudReady && !dirtyRef.current) || /chưa thể|lỗi/i.test(cloudStatus))) retrySync();
     };
+    const resumeOnline = () => retrySync();
     document.addEventListener("visibilitychange", refresh);
     window.addEventListener("focus", refresh);
+    window.addEventListener("online", resumeOnline);
     const interval = window.setInterval(refresh, 30_000);
     return () => {
       document.removeEventListener("visibilitychange", refresh);
       window.removeEventListener("focus", refresh);
+      window.removeEventListener("online", resumeOnline);
       window.clearInterval(interval);
     };
-  }, [cloudReady, userId, retrySync]);
+  }, [cloudReady, cloudStatus, userId, retrySync]);
 
   const useCloudVersion = useCallback(() => {
     if (!userId) return;
@@ -254,9 +264,11 @@ export function useAccountLedger(userId?: string, legacyBudgets: ExpenseBudget[]
               .select("updated_at").maybeSingle();
         if (error) {
           console.error(error);
+          const record = captureAppError({ category: "sync", message: "Không thể lưu sổ tài khoản lên cloud",
+            detail: `${error.code}: ${error.message}` });
           setCloudStatus(error.code === "23505"
             ? "Xung đột đồng bộ sổ tài khoản · bản cloud đã thay đổi"
-            : "Lỗi lưu sổ tài khoản");
+            : `Lỗi lưu sổ tài khoản · ${describeLedgerCloudError(error)} · ${record.code}`);
           return;
         }
         if (!data) {

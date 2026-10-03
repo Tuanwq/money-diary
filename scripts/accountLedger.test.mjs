@@ -6,6 +6,11 @@ import {
 } from "../src/features/account-ledger/accountLedgerModel.ts";
 import { decideLedgerLoad, hasLocalOnlyRecords, isPristineLedger, nextLedgerTimestamp } from
   "../src/features/account-ledger/ledgerSync.ts";
+import { describeLedgerCloudError } from "../src/features/account-ledger/ledgerCloudError.ts";
+
+assert.match(describeLedgerCloudError({ message: "TypeError: Failed to fetch" }), /kết nối/);
+assert.match(describeLedgerCloudError({ code: "42501", message: "permission denied" }), /quyền/);
+assert.match(describeLedgerCloudError({ status: 401, message: "JWT expired" }), /đăng nhập/);
 
 const accountA = {
   createdAt: "2026-07-01T00:00:00.000Z",

@@ -5328,6 +5328,10 @@ textarea {
   color: var(--money-expense);
 }
 
+.money-sync-status-detail {
+  display: none;
+}
+
 .money-sync-status.is-offline {
   color: var(--warning);
 }
@@ -6495,6 +6499,22 @@ textarea {
   .money-sidebar-footer > .money-sync-status {
     max-width: 100%;
     margin: 0.35rem 0.45rem 0;
+  }
+
+  .money-sidebar-footer > .money-sync-status.is-error {
+    align-items: flex-start;
+    overflow: visible;
+    text-align: left;
+    white-space: normal;
+  }
+
+  .money-sidebar-footer .money-sync-status-detail {
+    display: block;
+    margin-top: 0.2rem;
+    font-size: 0.68rem;
+    font-weight: 500;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
   }
 
   .money-sidebar-account {
