@@ -8,6 +8,7 @@ type MoneyMobileAppBarProps = {
   isCloudRefreshing: boolean;
   onOpenAccount: () => void;
   onRetrySync: () => void;
+  onResolveSyncConflict: () => void;
   syncStatus: string;
 };
 
@@ -16,6 +17,7 @@ export function MoneyMobileAppBar({
   isCloudRefreshing,
   onOpenAccount,
   onRetrySync,
+  onResolveSyncConflict,
   syncStatus,
 }: MoneyMobileAppBarProps) {
   return (
@@ -34,6 +36,7 @@ export function MoneyMobileAppBar({
         <MoneySyncStatus
           isRefreshing={isCloudRefreshing}
           onRetry={onRetrySync}
+          onResolveConflict={onResolveSyncConflict}
           syncStatus={syncStatus}
         />
         <button

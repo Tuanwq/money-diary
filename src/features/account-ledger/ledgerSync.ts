@@ -10,6 +10,23 @@ function externalSignature(entry: AccountExternalEntry) {
 
 export type LedgerLoadDecision = "cloud" | "pending" | "conflict" | "empty" | "upload";
 
+function canonicalJson(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonicalJson);
+  if (value && typeof value === "object")
+    return Object.fromEntries(Object.entries(value)
+      .filter(([, item]) => item !== undefined)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, item]) => [key, canonicalJson(item)]));
+  return value;
+}
+
+/** A changed row revision alone is not a financial conflict. */
+export function areLedgerContentsEqual(local: AccountLedgerData, cloud: AccountLedgerData) {
+  const content = ({ accounts, transactions, jars, jarActivities }: AccountLedgerData) =>
+    JSON.stringify(canonicalJson({ accounts, transactions, jars, jarActivities }));
+  return content(local) === content(cloud);
+}
+
 export function isPristineLedger(ledger: AccountLedgerData) {
   if (ledger.transactions.length || ledger.jars.length || ledger.jarActivities.length) return false;
   if (ledger.accounts.some((account) => account.externalEntries?.length)) return false;

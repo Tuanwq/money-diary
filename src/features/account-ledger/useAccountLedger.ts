@@ -6,7 +6,7 @@ import type { ExpenseBudget } from "../../types.ts";
 import { applyJarCommand, type JarCommand } from "../spending-jars/services/jarService.ts";
 import { repairClosedJars } from "../spending-jars/services/closedJarMigration.ts";
 import { getAccountAllocation, migrateExpenseBudgets } from "../spending-jars/domain/jarModel.ts";
-import { decideLedgerLoad, hasLocalOnlyRecords, nextLedgerTimestamp } from "./ledgerSync.ts";
+import { areLedgerContentsEqual, decideLedgerLoad, hasLocalOnlyRecords, nextLedgerTimestamp } from "./ledgerSync.ts";
 import { describeLedgerCloudError } from "./ledgerCloudError.ts";
 import { applyAccountExternalCommand, assertExternalCoverageAfterLedgerChange,
   calculateAccountExternalAmount, type AccountExternalCommand } from "./accountExternalModel.ts";
@@ -152,8 +152,22 @@ export function useAccountLedger(userId?: string, legacyBudgets: ExpenseBudget[]
       loadedUserRef.current = userId;
       const decision = decideLedgerLoad(localLedger, cloudLedger, pending?.baseUpdatedAt);
       if (decision === "conflict") {
+        if (cloudLedger && areLedgerContentsEqual(localLedger, cloudLedger)) {
+          if (!safeSetStorageJson(ACCOUNT_LEDGER_STORAGE_KEY, cloudLedger)) {
+            setCloudStatus("Chưa thể lưu bản cloud trên thiết bị · hãy kiểm tra dung lượng");
+            return;
+          }
+          localStorage.removeItem(PENDING_LEDGER_KEY);
+          pendingRef.current = null;
+          dirtyRef.current = false;
+          latestLedgerRef.current = cloudLedger;
+          setLedger(cloudLedger);
+          setCloudReady(true);
+          setCloudStatus("Sổ tài khoản đã đồng bộ");
+          return;
+        }
         setCloudReady(false);
-        setCloudStatus("Xung đột đồng bộ sổ tài khoản · bản cloud đã thay đổi");
+        setCloudStatus("Xung đột đồng bộ sổ tài khoản · dữ liệu trên máy và cloud khác nhau · mở Tài khoản để xử lý");
         return;
       }
       if (decision === "pending") {

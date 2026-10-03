@@ -33,6 +33,7 @@ type MoneyDesktopSidebarProps = {
   onOpenAdd: () => void;
   onOpenSettings: () => void;
   onRetrySync: () => void;
+  onResolveSyncConflict: () => void;
   onSwitchApp: () => void;
   settingsButtonRef: RefObject<HTMLButtonElement | null>;
   syncStatus: string;
@@ -57,6 +58,7 @@ export function MoneyDesktopSidebar({
   onOpenAdd,
   onOpenSettings,
   onRetrySync,
+  onResolveSyncConflict,
   onSwitchApp,
   settingsButtonRef,
   syncStatus,
@@ -189,6 +191,7 @@ export function MoneyDesktopSidebar({
         <MoneySyncStatus
           isRefreshing={isCloudRefreshing}
           onRetry={onRetrySync}
+          onResolveConflict={onResolveSyncConflict}
           syncStatus={syncStatus}
         />
       </div>

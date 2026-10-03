@@ -4,7 +4,7 @@ import {
   createDefaultLedger,
   getLedgerSummary,
 } from "../src/features/account-ledger/accountLedgerModel.ts";
-import { decideLedgerLoad, hasLocalOnlyRecords, isPristineLedger, nextLedgerTimestamp } from
+import { areLedgerContentsEqual, decideLedgerLoad, hasLocalOnlyRecords, isPristineLedger, nextLedgerTimestamp } from
   "../src/features/account-ledger/ledgerSync.ts";
 import { describeLedgerCloudError } from "../src/features/account-ledger/ledgerCloudError.ts";
 
@@ -90,6 +90,13 @@ const deletedOnCloud = { ...newerCloudLedger, updatedAt: "2026-09-23T09:00:00Z" 
 assert.equal(decideLedgerLoad(staleIosLedger, deletedOnCloud, undefined), "cloud");
 assert.equal(hasLocalOnlyRecords(staleIosLedger, deletedOnCloud), true);
 assert.equal(decideLedgerLoad(staleIosLedger, deletedOnCloud, "2026-09-22T00:00:00Z"), "conflict");
+assert.equal(areLedgerContentsEqual(staleIosLedger, deletedOnCloud), false);
+assert.equal(areLedgerContentsEqual(localJarLedger, { ...localJarLedger,
+  updatedAt: "2026-09-24T00:00:00Z",
+  accounts: localJarLedger.accounts.map((account) => ({ name: account.name,
+    id: account.id, createdAt: account.createdAt, openingBalance: account.openingBalance,
+    type: account.type, updatedAt: account.updatedAt })),
+}), true);
 assert.equal(decideLedgerLoad(staleIosLedger, deletedOnCloud, deletedOnCloud.updatedAt), "pending");
 assert.equal(decideLedgerLoad(pristineLedger, null, undefined), "empty");
 assert.equal(nextLedgerTimestamp("2026-09-23T09:00:00.000Z", Date.parse("2026-09-23T08:00:00.000Z")),

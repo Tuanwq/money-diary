@@ -100,6 +100,7 @@ export function MoneyPageShell({
             navigateTo("settings");
           }}
           onRetrySync={onRetrySync}
+          onResolveSyncConflict={onOpenAccountLedger}
           onSwitchApp={onSwitchApp}
           settingsButtonRef={desktopSettingsButtonRef}
           syncStatus={syncStatus}
@@ -114,6 +115,7 @@ export function MoneyPageShell({
               setIsMoreSheetOpen(true);
             }}
             onRetrySync={onRetrySync}
+            onResolveSyncConflict={onOpenAccountLedger}
             syncStatus={syncStatus}
           />
 

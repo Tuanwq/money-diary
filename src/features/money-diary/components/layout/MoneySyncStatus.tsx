@@ -2,12 +2,14 @@ import { Cloud, CloudOff, RefreshCw } from "lucide-react";
 
 type MoneySyncStatusProps = {
   isRefreshing: boolean;
+  onResolveConflict?: () => void;
   onRetry: () => void;
   syncStatus: string;
 };
 
 export function MoneySyncStatus({
   isRefreshing,
+  onResolveConflict,
   onRetry,
   syncStatus,
 }: MoneySyncStatusProps) {
@@ -19,6 +21,7 @@ export function MoneySyncStatus({
     normalizedStatus.includes("xung đột") ||
     normalizedStatus.includes("migration");
   const isOffline = normalizedStatus.includes("ngoại tuyến");
+  const isConflict = normalizedStatus.includes("xung đột");
   const isSyncing =
     isRefreshing || normalizedStatus.includes("đang đồng bộ");
   const isSynced =
@@ -57,9 +60,9 @@ export function MoneySyncStatus({
       <button
         type="button"
         className={`${className} money-sync-status-button`}
-        onClick={onRetry}
-        title={`${syncStatus}. Nhấn để thử lại.`}
-        aria-label={`${syncStatus}. Thử đồng bộ lại`}
+        onClick={isConflict && onResolveConflict ? onResolveConflict : onRetry}
+        title={`${syncStatus}. Nhấn để ${isConflict ? "xem cách xử lý" : "thử lại"}.`}
+        aria-label={`${syncStatus}. ${isConflict ? "Xem cách xử lý" : "Thử đồng bộ lại"}`}
         aria-live="polite"
         aria-atomic="true"
       >
