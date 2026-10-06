@@ -29,6 +29,7 @@ import {
   type OfflineSyncOperation,
 } from "../features/offline-sync/offlineSyncQueue";
 import { captureAppError } from "../features/error-monitoring/appErrorMonitor";
+import { getAuthEmailRedirectUrl } from "../features/auth/authRedirect";
 import { supabase, supabaseEnvError } from "../lib/supabase";
 import type {
   BalanceCheckEntry,
@@ -742,7 +743,11 @@ export function useCloudSync({
       return;
     }
 
-    const { error } = await supabase.auth.signUp({ email, password });
+    const { error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { emailRedirectTo: getAuthEmailRedirectUrl() },
+    });
     if (error) {
       alert(error.message);
       return;
@@ -751,6 +756,31 @@ export function useCloudSync({
     alert(
       "Đăng ký thành công. Nếu Supabase yêu cầu xác nhận email, hãy mở email để xác nhận."
     );
+  }
+
+  async function handleResendConfirmation() {
+    if (supabaseEnvError) {
+      alert(supabaseEnvError);
+      return;
+    }
+
+    const email = authEmail.trim();
+    if (!email) {
+      alert("Nhập email đã đăng ký để nhận lại link xác nhận.");
+      return;
+    }
+
+    const { error } = await supabase.auth.resend({
+      type: "signup",
+      email,
+      options: { emailRedirectTo: getAuthEmailRedirectUrl() },
+    });
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    alert("Nếu email này đang chờ xác nhận, chúng tôi đã gửi một link mới. Hãy mở email mới nhất.");
   }
 
   async function handleLogin() {
@@ -808,6 +838,7 @@ export function useCloudSync({
     setSyncStatus,
     markLocalChanged,
     handleSignUp,
+    handleResendConfirmation,
     handleLogin,
     handleLogout,
   };

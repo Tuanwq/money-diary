@@ -1,6 +1,13 @@
 import { ThemeToggle } from "../components/ThemeToggle";
 import type { ThemeMode } from "../hooks/useThemeMode";
 
+function hasExpiredConfirmationLink(): boolean {
+  if (typeof window === "undefined") return false;
+  const hash = new URLSearchParams(window.location.hash.slice(1));
+  const query = new URLSearchParams(window.location.search);
+  return hash.get("error_code") === "otp_expired" || query.get("error_code") === "otp_expired";
+}
+
 type AuthPageProps = {
   authEmail: string;
   setAuthEmail: (value: string) => void;
@@ -8,6 +15,7 @@ type AuthPageProps = {
   setAuthPassword: (value: string) => void;
   handleLogin: () => void;
   handleSignUp: () => void;
+  handleResendConfirmation: () => void;
   supabaseEnvError?: string;
   themeMode: ThemeMode;
   toggleThemeMode: () => void;
@@ -20,10 +28,13 @@ export function AuthPage({
   setAuthPassword,
   handleLogin,
   handleSignUp,
+  handleResendConfirmation,
   supabaseEnvError = "",
   themeMode,
   toggleThemeMode,
 }: AuthPageProps) {
+  const expiredLink = hasExpiredConfirmationLink();
+
   return (
     <main className="mx-auto max-w-md px-4 py-8">
       <section className="rounded-2xl bg-white p-5 shadow-sm">
@@ -44,6 +55,12 @@ export function AuthPage({
         {supabaseEnvError && (
           <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 p-3 text-sm font-medium text-red-700">
             {supabaseEnvError}
+          </div>
+        )}
+
+        {expiredLink && (
+          <div role="alert" className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+            Link xác nhận đã hết hạn hoặc đã được sử dụng. Nhập email đã đăng ký bên dưới rồi gửi lại link mới.
           </div>
         )}
 
@@ -94,6 +111,14 @@ export function AuthPage({
               className="rounded-xl border bg-white px-5 py-2 font-medium hover:bg-slate-100"
             >
               Đăng ký
+            </button>
+            <button
+              type="button"
+              onClick={handleResendConfirmation}
+              disabled={Boolean(supabaseEnvError)}
+              className="rounded-xl border bg-white px-5 py-2 font-medium hover:bg-slate-100"
+            >
+              Gửi lại email xác nhận
             </button>
           </div>
         </form>

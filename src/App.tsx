@@ -669,6 +669,7 @@ export default function App() {
     setSyncStatus,
     markLocalChanged,
     handleSignUp,
+    handleResendConfirmation,
     handleLogin,
     handleLogout,
     supabaseEnvError,
@@ -3340,6 +3341,7 @@ if (!session) {
         setAuthPassword={setAuthPassword}
         handleLogin={handleLogin}
         handleSignUp={handleSignUp}
+        handleResendConfirmation={handleResendConfirmation}
         supabaseEnvError={supabaseEnvError}
         themeMode={themeMode}
         toggleThemeMode={toggleThemeMode}

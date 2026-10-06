@@ -1,5 +1,21 @@
 project_id = "wmsutkcvdkipfznrxzxj"
 
+[auth]
+site_url = "https://money-diary-puce.vercel.app"
+additional_redirect_urls = ["https://money-diary-puce.vercel.app/login"]
+
+[auth.mfa.totp]
+enroll_enabled = true
+verify_enabled = true
+
+[auth.email]
+enable_confirmations = true
+max_frequency = "1m"
+otp_length = 8
+
+[storage.vector]
+enabled = false
+
 [functions.dispatch-notifications]
 verify_jwt = false
 
