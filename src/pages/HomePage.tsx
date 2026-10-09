@@ -21,6 +21,7 @@ import "./HomePage.css";
 
 type HomePageProps = {
   actualMoney: number;
+  spendableMoney: number;
   balanceChecks: BalanceCheckEntry[];
   cloudLoadError: string | null;
   dataWarnings: DataWarning[];
@@ -50,6 +51,7 @@ type HomePageProps = {
 
 export function HomePage({
   actualMoney,
+  spendableMoney,
   balanceChecks,
   cloudLoadError,
   dataWarnings,
@@ -96,11 +98,11 @@ export function HomePage({
 
       <section className="manager-balance-card" aria-labelledby="manager-balance-title">
         <div className="manager-balance-heading">
-          <span><WalletCards aria-hidden="true" size={17} /> Tổng tiền hiện có</span>
+          <span><WalletCards aria-hidden="true" size={17} /> Tổng tiền hiện có (có thể dùng ngay)</span>
           <button type="button" onClick={() => navigateTo("accounts")}>Xem tài khoản <ArrowRight size={16} /></button>
         </div>
-        <strong id="manager-balance-title">{formatMoney(actualMoney)}</strong>
-        <p>Tổng số dư hiện tại trong Sổ tài khoản. Tiến độ hành trình được theo dõi riêng ở mục tiêu bên dưới.</p>
+        <strong id="manager-balance-title">{formatMoney(spendableMoney)}</strong>
+        <p>Trên tổng số dư {formatMoney(actualMoney)} trong Sổ tài khoản.</p>
 
         <div className="manager-day-strip" aria-label="Biến động ngày đang xem">
           <div><span>Thu trong ngày</span><strong className="is-positive">+{formatMoney(day.income)}</strong></div>

@@ -2,6 +2,7 @@ import { useBrowserRoute } from "./app/router/useBrowserRoute";
 import { HubSelectionPage } from "./features/hub/pages/HubSelectionPage";
 import { useAccountLedger } from "./features/account-ledger/useAccountLedger";
 import { getLedgerSummary } from "./features/account-ledger/accountLedgerModel";
+import { calculateActualAvailableBalance } from "./features/account-ledger/accountExternalModel.ts";
 import { deleteAccountTransactionWithPhotos } from "./features/photo-finance/services/photoTransactionService.ts";
 import { useAccountReconciliations } from "./features/account-reconciliation/useAccountReconciliations";
 import { useAutomationRules } from "./features/automation/useAutomationRules";
@@ -1538,6 +1539,13 @@ const balanceChartTitle =
 const actualMoney = getLedgerSummary(
   financialAccounts, accountTransactions, todayString.slice(0, 7)
 ).totalBalance;
+const spendableMoney = calculateActualAvailableBalance({
+  accounts: financialAccounts,
+  transactions: accountTransactions,
+  jars,
+  jarActivities,
+  updatedAt: "",
+});
 
 const mainGoalProgress = useMemo(
   () => buildMainGoalProgress({
@@ -3464,6 +3472,7 @@ if (route.kind === "daymark") {
           {page === "home" && (
             <HomePage
               actualMoney={actualMoney}
+              spendableMoney={spendableMoney}
               balanceChecks={balanceChecks}
               cloudLoadError={cloudLoadError}
               dataWarnings={dataWarnings}
