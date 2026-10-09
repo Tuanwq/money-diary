@@ -237,6 +237,7 @@ function TransactionForm({
   const [purpose, setPurpose] = useState<TransactionPurpose | "">(
     transaction?.purpose ?? (transaction ? "" : getDefaultTransactionPurpose(type))
   );
+  const [purposeTouched, setPurposeTouched] = useState(false);
   const [jarId, setJarId] = useState("");
   const [jarChoiceTouched, setJarChoiceTouched] = useState(false);
   const [jarSourceId, setJarSourceId] = useState("");
@@ -244,6 +245,7 @@ function TransactionForm({
   const selectedJarId = type === "expense" && !transaction
     ? (jarChoiceTouched ? jarId : suggestedJar?.id ?? "") : "";
   const selectedJar = jarLedger.jars.find((jar) => jar.id === selectedJarId && jar.status === "active");
+  const effectivePurpose = selectedJar && !purposeTouched ? "goal_allocation" : purpose;
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -258,6 +260,7 @@ function TransactionForm({
     setType(nextType);
     setCategory(TRANSACTION_CATEGORIES[nextType][0]);
     setPurpose(getDefaultTransactionPurpose(nextType));
+    setPurposeTouched(false);
   }
 
   function handleSubmit(event: React.FormEvent) {
@@ -274,7 +277,7 @@ function TransactionForm({
       return;
     }
 
-    if (!purpose) {
+    if (!effectivePurpose) {
       alert("Hãy chọn giao dịch này ảnh hưởng đến mục tiêu như thế nào.");
       return;
     }
@@ -285,7 +288,7 @@ function TransactionForm({
       if (selectedJar) {
         onJarCommand({ kind: "spend", id: crypto.randomUUID(), now, jarId: selectedJar.id,
           accountId: jarSourceId || undefined, amount: parsedAmount, date, category,
-          note: note.trim(), purpose: purpose === "goal_allocation" ? "goal_allocation" : "daily_expense" });
+          note: note.trim(), purpose: effectivePurpose === "goal_allocation" ? "goal_allocation" : "daily_expense" });
         onClose();
         return;
       }
@@ -298,7 +301,7 @@ function TransactionForm({
         date,
         id: transaction?.id ?? crypto.randomUUID(),
         note: note.trim(),
-        purpose,
+        purpose: effectivePurpose,
         // Preserve ambiguous legacy provenance when editing old rows.
         source: transaction ? transaction.source : "manual",
         ...(type === "transfer" ? { toAccountId } : {}),
@@ -428,7 +431,7 @@ function TransactionForm({
             <label className="ledger-field">
               <span>Hũ chi tiêu</span>
               <select value={selectedJarId} onChange={(event) => {
-                setJarChoiceTouched(true); setJarId(event.target.value); setJarSourceId("");
+                setJarChoiceTouched(true); setJarId(event.target.value); setJarSourceId(""); setPurposeTouched(false);
               }}>
                 <option value="">Không dùng hũ</option>
                 {jarLedger.jars.filter((jar) => jar.status === "active").map((jar) =>
@@ -451,9 +454,9 @@ function TransactionForm({
           <label className="ledger-field">
             <span>Ảnh hưởng mục tiêu</span>
             <select
-              onChange={(event) => setPurpose(event.target.value as TransactionPurpose)}
+              onChange={(event) => { setPurpose(event.target.value as TransactionPurpose); setPurposeTouched(true); }}
               required
-              value={purpose}
+              value={effectivePurpose}
             >
               {transaction && !transaction.purpose && <option value="">Chưa phân loại</option>}
               {type === "income" && <option value="income">{TRANSACTION_PURPOSE_LABELS.income}</option>}

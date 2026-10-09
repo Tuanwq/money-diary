@@ -35,7 +35,7 @@ export function SpendingJarsPage({ ledger, cloudStatus, onBack, onCommand, onDel
   const [date, setDate] = useState(getToday());
   const [category, setCategory] = useState("");
   const [note, setNote] = useState("");
-  const [purpose, setPurpose] = useState<"daily_expense" | "goal_allocation">("daily_expense");
+  const [purpose, setPurpose] = useState<"daily_expense" | "goal_allocation">("goal_allocation");
   const [editingActivity, setEditingActivity] = useState<JarActivity | null>(null);
   const [error, setError] = useState("");
   const selected = ledger.jars.find((jar) => jar.id === selectedId && jar.status !== "deleted") ?? null;
@@ -62,7 +62,7 @@ export function SpendingJarsPage({ ledger, cloudStatus, onBack, onCommand, onDel
     const source = selected ? getJarView(ledger, selected).sources.find((item) => item.amount > 0) : null;
     setAccountId(next === "spend" && !activity ? "" : source?.accountId ?? activeAccounts[0]?.id ?? "");
     setAmount(""); setToJarId(""); setNote(activity?.note ?? ""); setDate(getToday());
-    setPurpose("daily_expense");
+    setPurpose("goal_allocation");
     setCategory(selected?.linkedLabels[0] ?? "Khác");
     if (activity?.kind === "spend") {
       const transactions = (activity.transactionIds ?? []).flatMap((id) => {

@@ -39,6 +39,7 @@ export function PhotoTransactionForm({ accounts, jars, jarActivities, transactio
   const [purpose, setPurpose] = useState<TransactionPurpose>(
     existing?.purpose ?? getDefaultTransactionPurpose(existing?.type ?? "income")
   );
+  const [purposeTouched, setPurposeTouched] = useState(false);
   const [accountId, setAccountId] = useState(existing?.accountId ?? activeAccounts[0]?.id ?? "");
   const [jarId, setJarId] = useState("");
   const [jarChoiceTouched, setJarChoiceTouched] = useState(false);
@@ -73,6 +74,7 @@ export function PhotoTransactionForm({ accounts, jars, jarActivities, transactio
   const selectedJarId = kind === "expense" && !existing
     ? (jarChoiceTouched ? jarId : suggestedJar?.id ?? "") : "";
   const selectedJar = jars.find((jar) => jar.id === selectedJarId && jar.status === "active");
+  const effectivePurpose = selectedJar && !purposeTouched ? "goal_allocation" : purpose;
 
   async function chooseFile(next: File | undefined) {
     if (!next) return;
@@ -107,6 +109,7 @@ export function PhotoTransactionForm({ accounts, jars, jarActivities, transactio
     setKind(next);
     setCategory(TRANSACTION_CATEGORIES[next][0]);
     setPurpose(getDefaultTransactionPurpose(next));
+    setPurposeTouched(false);
   }
 
   async function submit(event: React.FormEvent) {
@@ -131,7 +134,7 @@ export function PhotoTransactionForm({ accounts, jars, jarActivities, transactio
         ? `jar-spend:${activityId}:0` : existing?.id ?? crypto.randomUUID());
       const transaction = savedId || selectedJar ? null : buildPhotoTransaction({
         id: transactionId, accounts, existing, type: kind, amount: value,
-        accountId, toAccountId, category, purpose, date, time, note,
+        accountId, toAccountId, category, purpose: effectivePurpose, date, time, note,
         now: new Date().toISOString(),
       });
 
@@ -142,7 +145,7 @@ export function PhotoTransactionForm({ accounts, jars, jarActivities, transactio
       if (selectedJar && !savedId) {
         onJarCommand({ kind: "spend", id: activityId, now: new Date().toISOString(),
           jarId: selectedJar.id, amount: value, accountId: jarSourceId || undefined,
-          date, category, note, purpose: purpose === "goal_allocation" ? "goal_allocation" : "daily_expense",
+          date, category, note, purpose: effectivePurpose === "goal_allocation" ? "goal_allocation" : "daily_expense",
           occurredAt: new Date(`${date}T${time}:00+07:00`).toISOString() });
         setSavedId(transactionId);
       } else if (transaction) {
@@ -233,21 +236,21 @@ export function PhotoTransactionForm({ accounts, jars, jarActivities, transactio
       </div>
 
       {kind === "expense" && <div className="photo-finance-purpose" role="group" aria-label="Ảnh hưởng đến mục tiêu">
-        <button aria-pressed={purpose === "daily_expense"}
-          className={purpose === "daily_expense" ? "is-active" : ""}
-          disabled={!canEdit} onClick={() => setPurpose("daily_expense")} type="button">
+        <button aria-pressed={effectivePurpose === "daily_expense"}
+          className={effectivePurpose === "daily_expense" ? "is-active" : ""}
+          disabled={!canEdit} onClick={() => { setPurpose("daily_expense"); setPurposeTouched(true); }} type="button">
           Chi thường ngày
         </button>
-        <button aria-pressed={purpose === "goal_allocation"}
-          className={purpose === "goal_allocation" ? "is-active" : ""}
-          disabled={!canEdit} onClick={() => setPurpose("goal_allocation")} type="button">
+        <button aria-pressed={effectivePurpose === "goal_allocation"}
+          className={effectivePurpose === "goal_allocation" ? "is-active" : ""}
+          disabled={!canEdit} onClick={() => { setPurpose("goal_allocation"); setPurposeTouched(true); }} type="button">
           Phân bổ mục tiêu
         </button>
       </div>}
       {kind === "expense" && !existing && jars.some((jar) => jar.status === "active") &&
         <div className="photo-finance-jar-link">
           <label>Hũ chi tiêu<select aria-label="Hũ chi tiêu" disabled={!canEdit} value={selectedJarId}
-            onChange={(event) => { setJarChoiceTouched(true); setJarId(event.target.value); setJarSourceId(""); }}>
+            onChange={(event) => { setJarChoiceTouched(true); setJarId(event.target.value); setJarSourceId(""); setPurposeTouched(false); }}>
             <option value="">Không dùng hũ</option>
             {jars.filter((jar) => jar.status === "active").map((jar) =>
               <option key={jar.id} value={jar.id}>{jar.icon} {jar.name} · còn {formatMoneyInput(String(getJarView(jarLedger, jar).remainingAmount))}đ</option>)}
