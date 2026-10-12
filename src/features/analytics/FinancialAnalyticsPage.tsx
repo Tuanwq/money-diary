@@ -33,7 +33,6 @@ import type {
   FinancialAccount,
 } from "../account-ledger/accountLedgerModel";
 import type {
-  BalanceCheckEntry,
   CompletedGoal,
   DailyEntry,
   ExpenseEntry,
@@ -56,7 +55,7 @@ type FinancialAnalyticsPageProps = {
   accounts: FinancialAccount[];
   accountTransactions: AccountTransaction[];
   actualMoney: number;
-  balanceChecks: BalanceCheckEntry[];
+  spendableMoney: number;
   completedGoals: CompletedGoal[];
   entries: DailyEntry[];
   expenses: ExpenseEntry[];
@@ -69,7 +68,8 @@ type KpiDefinition = {
   icon: ComponentType<{ "aria-hidden"?: boolean | "true"; size?: number }>;
   label: string;
   lowerIsBetter?: boolean;
-  metric: AnalyticsMetric;
+  metric?: AnalyticsMetric;
+  detail?: string;
   value: string;
 };
 
@@ -162,14 +162,14 @@ function KpiCard({
 }: {
   definition: KpiDefinition;
 }) {
-  const { changePercent } = definition.metric;
+  const changePercent = definition.metric?.changePercent;
   const isNew = changePercent === null;
   const favorable =
-    changePercent !== null &&
+    changePercent !== null && changePercent !== undefined &&
     (definition.lowerIsBetter ? changePercent <= 0 : changePercent >= 0);
   const Icon = definition.icon;
   const TrendIcon =
-    changePercent !== null && changePercent < 0
+    changePercent !== null && changePercent !== undefined && changePercent < 0
       ? ArrowDownRight
       : ArrowUpRight;
 
@@ -183,7 +183,7 @@ function KpiCard({
       </header>
       <strong>{definition.value}</strong>
       <footer>
-        <span
+        {definition.metric ? <span
           className={`analytics-kpi-card__change ${
             favorable ? "is-positive" : "is-negative"
           } ${isNew ? "is-neutral" : ""}`}
@@ -191,8 +191,8 @@ function KpiCard({
           {!isNew && <TrendIcon aria-hidden="true" size={14} />}
           {isNew
             ? "Chưa có kỳ trước"
-            : `${Math.abs(changePercent)}% so với kỳ trước`}
-        </span>
+            : `${Math.abs(changePercent ?? 0)}% so với kỳ trước`}
+        </span> : <span className="analytics-kpi-card__change is-neutral">{definition.detail}</span>}
       </footer>
     </article>
   );
@@ -211,7 +211,7 @@ export function FinancialAnalyticsPage({
   accounts,
   accountTransactions,
   actualMoney,
-  balanceChecks,
+  spendableMoney,
   completedGoals,
   entries,
   expenses,
@@ -249,7 +249,7 @@ export function FinancialAnalyticsPage({
       buildFinancialAnalyticsModel({
         accounts,
         actualMoney,
-        balanceChecks,
+        asOfDate: today,
         completedGoals,
         entries,
         expenses,
@@ -263,7 +263,6 @@ export function FinancialAnalyticsPage({
       accounts,
       accountTransactions,
       actualMoney,
-      balanceChecks,
       completedGoals,
       entries,
       expenses,
@@ -271,6 +270,7 @@ export function FinancialAnalyticsPage({
       hubEntries,
       hubSettings,
       range,
+      today,
     ]
   );
   const trendPoints = useMemo(
@@ -279,24 +279,38 @@ export function FinancialAnalyticsPage({
   );
   const kpis: KpiDefinition[] = [
     {
+      icon: WalletCards,
+      label: "Có thể dùng ngay",
+      detail: "Số dư hiện tại sau khoản đang ở ngoài",
+      value: formatMoney(spendableMoney),
+    },
+    {
       icon: CircleDollarSign,
-      label: "Tổng thu nhập",
+      label: "Tổng số dư",
+      detail: "Số dư hiện tại trong tài khoản",
+      value: formatMoney(model.accountTotal),
+    },
+    {
+      icon: CircleDollarSign,
+      label: "Thu trong kỳ",
       metric: model.metrics.income,
       value: formatMoney(model.metrics.income.value),
     },
     {
       icon: WalletCards,
-      label: "Dòng tiền ròng",
+      label: "Ròng trong kỳ",
       metric: model.metrics.net,
       value: formatMoney(model.metrics.net.value),
     },
     {
       icon: ReceiptText,
-      label: "Tổng chi tiêu",
+      label: "Chi trong kỳ",
       lowerIsBetter: true,
       metric: model.metrics.expense,
       value: formatMoney(model.metrics.expense.value),
     },
+  ];
+  const workKpis: KpiDefinition[] = [
     {
       icon: Clock3,
       label: "Giờ làm",
@@ -318,7 +332,8 @@ export function FinancialAnalyticsPage({
       value: formatMoney(model.metrics.hubProfit.value),
     },
   ];
-  const latestDifference = model.latestBalanceCheck?.difference ?? 0;
+  const issuesToReview = model.dataQuality.omittedTransactions +
+    model.dataQuality.possibleOverlaps + model.dataQuality.unclassifiedPurpose;
 
   return (
     <section className="financial-analytics-page">
@@ -330,8 +345,7 @@ export function FinancialAnalyticsPage({
           </span>
           <h1>Thống kê tổng hợp</h1>
           <p>
-            Thu nhập, chi tiêu, ca Hub, tài khoản và mục tiêu trên cùng một màn
-            hình.
+            Dòng tiền theo kỳ, số dư hiện tại và tiến độ mục tiêu.
           </p>
         </div>
         <div className="financial-analytics-header__range">
@@ -395,38 +409,34 @@ export function FinancialAnalyticsPage({
           </strong>
         </div>
         <div>
-          <span>Ca Hub</span>
-          <strong>{model.hubSummary.shifts} ca</strong>
-        </div>
-        <div>
-          <span>Số dư tài khoản</span>
-          <strong>{formatMoney(model.accountTotal)}</strong>
-        </div>
-        <div>
           <span>Chuyển nội bộ</span>
           <strong>{formatMoney(model.transferVolume)}</strong>
         </div>
         <div>
-          <span>Mục tiêu hoàn thành</span>
-          <strong>{model.completedGoals} mục tiêu</strong>
+          <span>Còn thiếu mục tiêu hiện tại</span>
+          <strong>{formatMoney(model.mainGoalSummary.remainingAmount)}</strong>
         </div>
         <div>
-          <span>Lệch kiểm kê gần nhất</span>
-          <strong
-            className={
-              latestDifference === 0
-                ? ""
-                : latestDifference > 0
-                  ? "is-positive"
-                  : "is-negative"
-            }
-          >
-            {model.latestBalanceCheck
-              ? formatMoney(latestDifference)
-              : "Chưa kiểm kê"}
-          </strong>
+          <span>Dấu hiệu cần đối chiếu</span>
+          <strong>{issuesToReview} dấu hiệu</strong>
+        </div>
+        <div>
+          <span>Mục tiêu đã hoàn thành</span>
+          <strong>{model.completedGoals} mục tiêu</strong>
         </div>
       </section>
+
+      <details className="analytics-data-quality" open={issuesToReview > 0}>
+        <summary>Đối chiếu nguồn số liệu · {issuesToReview} dấu hiệu cần xem</summary>
+        <p>Thu và chi trong kỳ gồm Nhật ký cũ cùng các giao dịch có nguồn ghi rõ. Khoản chuyển nội bộ không tính vào thu hoặc chi.</p>
+        <div className="analytics-data-quality__grid">
+          <span>Nhật ký cũ: thu {formatMoney(model.dataQuality.legacyIncome)}, chi {formatMoney(model.dataQuality.legacyExpense)}</span>
+          <span>Giao dịch mới: thu {formatMoney(model.dataQuality.transactionIncome)}, chi {formatMoney(model.dataQuality.transactionExpense)}</span>
+          <span>{model.dataQuality.omittedTransactions} giao dịch sổ cũ chưa rõ nguồn ({formatMoney(model.dataQuality.omittedAmount)}) chưa được cộng vào thu–chi để tránh đếm trùng.</span>
+          <span>{model.dataQuality.unclassifiedPurpose} giao dịch mới chưa rõ mục đích ({formatMoney(model.dataQuality.unclassifiedPurposeAmount)}). Thu–chi vẫn ghi nhận, nhưng tiến độ mục tiêu có thể chưa tính khoản này.</span>
+          <span>{model.dataQuality.possibleOverlaps} khoản có thể trùng ({formatMoney(model.dataQuality.possibleOverlapAmount)}). Đây chỉ là gợi ý đối chiếu theo ngày, loại, số tiền và danh mục; chưa tự loại khỏi báo cáo.</span>
+        </div>
+      </details>
 
       <div className="analytics-dashboard-grid">
         <section className="analytics-panel analytics-panel--trend">
@@ -578,6 +588,9 @@ export function FinancialAnalyticsPage({
             </div>
             <span>{formatMoney(model.hubSummary.actualProfitPerHour)}/giờ</span>
           </header>
+          <div className="analytics-work-kpis" aria-label="Chỉ số công việc HUB">
+            {workKpis.map((definition) => <KpiCard definition={definition} key={definition.label} />)}
+          </div>
           <div className="analytics-chart">
             {model.hubPerformance.length > 0 ? (
               <ResponsiveContainer height="100%" width="100%">
@@ -704,7 +717,7 @@ export function FinancialAnalyticsPage({
           <header className="analytics-panel__header">
             <div>
               <h2>Tiến độ mục tiêu</h2>
-              <p>Mục tiêu chính và các khoản đang dành riêng.</p>
+              <p>Tiến độ hiện tại của hành trình; không phụ thuộc khoảng ngày thống kê.</p>
             </div>
             <Target aria-hidden="true" size={20} />
           </header>

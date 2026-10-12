@@ -3,8 +3,9 @@ import {
   type AccountTransaction,
   type FinancialAccount,
 } from "../account-ledger/accountLedgerModel";
+import { buildMainGoalProgress,
+  type MainGoalProgressSummary } from "../goals/domain/mainGoalProgress.ts";
 import type {
-  BalanceCheckEntry,
   CompletedGoal,
   DailyEntry,
   ExpenseEntry,
@@ -35,6 +36,8 @@ import {
   type HubPerformanceItem,
 } from "../../utils/hubAnalytics";
 import { getReportingTransactions } from "./reportingTransactions";
+import { buildAnalyticsDataQuality,
+  type AnalyticsDataQuality } from "./analyticsDataQuality.ts";
 
 export type AnalyticsPeriod =
   | "7d"
@@ -117,13 +120,14 @@ export type FinancialAnalyticsModel = {
   accountTotal: number;
   activeDays: number;
   completedGoals: number;
+  dataQuality: AnalyticsDataQuality;
   dailyPoints: AnalyticsDailyPoint[];
   expenseCategories: AnalyticsExpenseCategory[];
   incomeBreakdown: Array<{ name: string; value: number }>;
   goals: AnalyticsGoalItem[];
+  mainGoalSummary: MainGoalProgressSummary;
   hubPerformance: HubPerformanceItem[];
   hubSummary: HubAnalyticsSummary;
-  latestBalanceCheck: BalanceCheckEntry | null;
   transferVolume: number;
   metrics: Record<AnalyticsMetricKey, AnalyticsMetric>;
   previousRange: AnalyticsDateRange;
@@ -146,7 +150,7 @@ export type FinancialAnalyticsModel = {
 type FinancialAnalyticsInput = {
   accounts: FinancialAccount[];
   actualMoney: number;
-  balanceChecks: BalanceCheckEntry[];
+  asOfDate: string;
   completedGoals: CompletedGoal[];
   entries: DailyEntry[];
   expenses: ExpenseEntry[];
@@ -407,14 +411,14 @@ function buildWeekdayPerformance(points: AnalyticsDailyPoint[]) {
   }));
 }
 
-function buildGoals(goals: Goals, actualMoney: number): AnalyticsGoalItem[] {
-  const mainCurrent = Math.max(actualMoney, 0);
+function buildGoals(goals: Goals, mainProgress: MainGoalProgressSummary): AnalyticsGoalItem[] {
+  const mainCurrent = mainProgress.achievedAmount;
   const mainGoal: AnalyticsGoalItem = {
     current: mainCurrent,
     deadline: goals.bigGoalDeadline,
     id: "main-goal",
     name: goals.bigGoalName || "Mục tiêu chính",
-    progress: getProgress(mainCurrent, goals.bigGoalTarget),
+    progress: mainProgress.progress,
     target: goals.bigGoalTarget,
     type: "main",
   };
@@ -556,6 +560,19 @@ export function buildFinancialAnalyticsModel(
   const hubSummary = summarizeHubRows(hubRows);
   const previousHubSummary = summarizeHubRows(previousHubRows);
   const accounts = buildAccounts(input.accounts, input.transactions);
+  const mainGoalSummary = buildMainGoalProgress({
+    asOfDate: input.asOfDate,
+    entries: input.entries,
+    expenses: input.expenses,
+    goals: input.goals,
+    transactions: input.transactions,
+  });
+  const dataQuality = buildAnalyticsDataQuality({
+    entries: input.entries,
+    expenses: input.expenses,
+    transactions: input.transactions,
+    range: input.range,
+  });
   const incomeByCategory = new Map<string, number>();
   for (const transaction of filterByRange(getReportingTransactions(input.transactions), input.range)) {
     if (transaction.type !== "income") continue;
@@ -579,20 +596,14 @@ export function buildFinancialAnalyticsModel(
       (point) => point.income > 0 || point.expense > 0
     ).length,
     completedGoals: input.completedGoals.length,
+    dataQuality,
     dailyPoints,
     expenseCategories: buildExpenseCategories(input.expenses, input.transactions, input.range),
     incomeBreakdown,
-    goals: buildGoals(input.goals, input.actualMoney),
+    goals: buildGoals(input.goals, mainGoalSummary),
+    mainGoalSummary,
     hubPerformance: groupHubPerformance(hubRows, "hub", "actualProfit"),
     hubSummary,
-    latestBalanceCheck:
-      [...input.balanceChecks]
-        .filter((check) => check.date <= input.range.toDate)
-        .sort((a, b) => {
-          const dateComparison = b.date.localeCompare(a.date);
-          if (dateComparison !== 0) return dateComparison;
-          return b.createdAt.localeCompare(a.createdAt);
-        })[0] ?? null,
     transferVolume: input.transactions
       .filter((transaction) => transaction.type === "transfer" &&
         transaction.date >= input.range.fromDate && transaction.date <= input.range.toDate)

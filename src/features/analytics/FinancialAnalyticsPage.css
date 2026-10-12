@@ -164,7 +164,7 @@
 
 .analytics-kpi-grid {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 0.65rem;
   min-width: 0;
 }
@@ -278,6 +278,48 @@
 .analytics-account-list strong.is-negative,
 .analytics-ranking-table strong.is-negative {
   color: var(--danger);
+}
+
+.analytics-data-quality {
+  min-width: 0;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.85rem;
+  background: var(--surface);
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+}
+
+.analytics-data-quality summary {
+  color: var(--text-primary);
+  cursor: pointer;
+  font-weight: 650;
+}
+
+.analytics-data-quality p {
+  margin: 0.75rem 0 0;
+  line-height: 1.45;
+}
+
+.analytics-data-quality__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem 1rem;
+  margin-top: 0.65rem;
+  line-height: 1.45;
+}
+
+.analytics-work-kpis {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+  margin-bottom: 0.85rem;
+}
+
+.analytics-work-kpis .analytics-kpi-card {
+  min-height: 6.5rem;
+  padding: 0.65rem;
+  box-shadow: none;
 }
 
 .analytics-dashboard-grid {
@@ -658,6 +700,9 @@
 }
 
 @media (max-width: 820px) {
+  .analytics-work-kpis {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
   .financial-analytics-header {
     align-items: stretch;
     flex-direction: column;
@@ -710,6 +755,18 @@
 }
 
 @media (max-width: 560px) {
+  .analytics-data-quality__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .analytics-work-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .analytics-work-kpis .analytics-kpi-card:last-child {
+    grid-column: 1 / -1;
+  }
+
   .financial-analytics-page {
     gap: 0.7rem;
   }
@@ -741,6 +798,10 @@
   .analytics-kpi-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 0.5rem;
+  }
+
+  .analytics-kpi-grid .analytics-kpi-card:first-child {
+    grid-column: 1 / -1;
   }
 
   .analytics-kpi-card {

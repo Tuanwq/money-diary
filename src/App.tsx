@@ -3446,7 +3446,7 @@ if (route.kind === "daymark") {
               accounts={financialAccounts}
               accountTransactions={accountTransactions}
               actualMoney={actualMoney}
-              balanceChecks={balanceChecks}
+              spendableMoney={spendableMoney}
               completedGoals={completedGoals}
               entries={entries}
               expenses={expenses}
