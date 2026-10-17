@@ -36,6 +36,7 @@ import type {
   CompletedGoal,
   DailyEntry,
   ExpenseEntry,
+  ExpenseBudget,
   Goals,
 } from "../types";
 import { getCloudRenderState } from "./cloudSyncState";
@@ -245,6 +246,9 @@ export function useCloudSync({
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
   const [cloudLoaded, setCloudLoaded] = useState(!isMoneyCloudSyncEnabled);
+  const [remoteLegacyBudgets, setRemoteLegacyBudgets] = useState<{
+    userId: string; budgets: ExpenseBudget[];
+  } | null>(null);
   const [isCloudRefreshing, setIsCloudRefreshing] = useState(false);
   const [syncStatus, setSyncStatus] = useState(
     !isMoneyCloudSyncEnabled
@@ -510,6 +514,12 @@ export function useCloudSync({
         try {
           const remote = await loadRemoteSyncState(targetUserId);
           if (activeUserIdRef.current !== targetUserId) return;
+
+          // Only server data with this owner's RLS can seed the new jar model.
+          // The V1 local goals cache is unscoped and may belong to another login.
+          setRemoteLegacyBudgets({ userId: targetUserId,
+            budgets: Array.isArray(remote.snapshot.goals.expenseBudgets)
+              ? remote.snapshot.goals.expenseBudgets : [] });
 
           syncRevisionRef.current = remote.revision;
           const pending = getOfflineSyncOperations(targetUserId);
@@ -808,6 +818,7 @@ export function useCloudSync({
     lastSyncedSnapshotRef.current = null;
     syncRevisionRef.current = 0;
     setSession(null);
+    setRemoteLegacyBudgets(null);
     setCloudLoaded(!isMoneyCloudSyncEnabled);
     setIsCloudRefreshing(false);
     setSyncStatus(
@@ -833,6 +844,7 @@ export function useCloudSync({
     isCloudRefreshing,
     retryCloudLoad,
     isMoneyCloudSyncEnabled,
+    remoteLegacyBudgets,
     syncStatus,
     supabaseEnvError,
     setSyncStatus,

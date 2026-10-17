@@ -1,5 +1,6 @@
 import {
   calculateAccountBalance,
+  isExpenseReversal,
   type AccountTransaction,
   type FinancialAccount,
 } from "../account-ledger/accountLedgerModel";
@@ -270,7 +271,9 @@ function buildDailyPoints(
   for (const transaction of filterByRange(getReportingTransactions(transactions), range)) {
     const point = result.get(transaction.date);
     if (!point) continue;
-    if (transaction.type === "income") {
+    if (isExpenseReversal(transaction)) {
+      point.expense -= transaction.amount;
+    } else if (transaction.type === "income") {
       point.income += transaction.amount;
       point.ledgerIncome += transaction.amount;
     } else if (transaction.type === "expense") {
@@ -575,7 +578,7 @@ export function buildFinancialAnalyticsModel(
   });
   const incomeByCategory = new Map<string, number>();
   for (const transaction of filterByRange(getReportingTransactions(input.transactions), input.range)) {
-    if (transaction.type !== "income") continue;
+    if (transaction.type !== "income" || isExpenseReversal(transaction)) continue;
     const category = transaction.category.trim() || "Thu nhập khác";
     incomeByCategory.set(category, (incomeByCategory.get(category) ?? 0) + transaction.amount);
   }

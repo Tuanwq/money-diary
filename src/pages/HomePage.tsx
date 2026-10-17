@@ -7,6 +7,7 @@ import { RecentTransactions } from "../features/money-diary/components/dashboard
 import { buildManagerOverview } from "../features/money-diary/utils/managerDashboardSelectors";
 import { useMemo } from "react";
 import type { AccountTransaction } from "../features/account-ledger/accountLedgerModel";
+import { getFinancialPosition } from "../features/spending-jars/domain/financialPosition.ts";
 import type { MainGoalProgressSummary } from "../features/goals/domain/mainGoalProgress";
 import type {
   BalanceCheckEntry,
@@ -22,6 +23,7 @@ import "./HomePage.css";
 type HomePageProps = {
   actualMoney: number;
   spendableMoney: number;
+  financialPosition: ReturnType<typeof getFinancialPosition>;
   balanceChecks: BalanceCheckEntry[];
   cloudLoadError: string | null;
   dataWarnings: DataWarning[];
@@ -52,6 +54,7 @@ type HomePageProps = {
 export function HomePage({
   actualMoney,
   spendableMoney,
+  financialPosition,
   balanceChecks,
   cloudLoadError,
   dataWarnings,
@@ -106,7 +109,8 @@ export function HomePage({
 
         <div className="manager-day-strip" aria-label="Biến động ngày đang xem">
           <div><span>Thu trong ngày</span><strong className="is-positive">+{formatMoney(day.income)}</strong></div>
-          <div><span>Chi trong ngày</span><strong className="is-negative">−{formatMoney(day.expense)}</strong></div>
+          <div><span>Chi ròng trong ngày</span><strong className={day.expense < 0 ? "is-positive" : "is-negative"}>
+            {day.expense < 0 ? "+" : "−"}{formatMoney(Math.abs(day.expense))}</strong></div>
           <div><span>Thay đổi ròng</span><strong className={day.net < 0 ? "is-negative" : "is-positive"}>
             {day.net >= 0 ? "+" : "−"}{formatMoney(Math.abs(day.net))}
           </strong></div>
@@ -117,6 +121,25 @@ export function HomePage({
             <small>Chụp ảnh và lưu câu chuyện của khoản tiền</small></span></span>
           <span className="manager-journal-swipe"><ArrowLeft size={15} /> Vuốt sang trái</span>
         </button>
+      </section>
+
+      <section className="money-card manager-allocation-card" aria-label="Tiền trong tài khoản và hũ">
+        <div className="manager-card-title"><span><WalletCards size={17} aria-hidden="true" /> Tiền thực có đang được dùng thế nào</span></div>
+        <div className="manager-allocation-grid">
+          <div><span>Đã dành trong hũ</span><strong>{formatMoney(financialPosition.reserved)}</strong></div>
+          <div><span>Chưa dành trong hũ</span><strong>{formatMoney(Math.max(0, spendableMoney - financialPosition.reserved))}</strong></div>
+          <div><span>Có thể nạp thêm vào hũ</span><strong>{formatMoney(financialPosition.allocationCapacity)}</strong></div>
+        </div>
+        <div className="manager-allocation-bar" role="progressbar" aria-label="Tỷ lệ tiền thực có đã dành trong hũ"
+          aria-valuemin={0} aria-valuemax={100}
+          aria-valuenow={spendableMoney > 0 ? Math.min(100, Math.round(financialPosition.reserved / spendableMoney * 100)) : 0}>
+          <span style={{ width: `${spendableMoney > 0 ? Math.min(100, financialPosition.reserved / spendableMoney * 100) : 0}%` }} />
+        </div>
+        {(financialPosition.shortfall > 0 || financialPosition.needsReview > 0) && <p>
+          {financialPosition.shortfall > 0 && `Tiền đã dành vượt tiền thực có ${formatMoney(financialPosition.shortfall)}. `}
+          {financialPosition.needsReview > 0 && `${financialPosition.needsReview} tài khoản cần xác nhận quyền dùng cho hũ.`}
+        </p>}
+        <button className="money-text-action" type="button" onClick={() => navigateTo("spendingJars")}>Xem các hũ <ArrowRight size={16} /></button>
       </section>
 
       <MainGoalCard name={mainGoalName} onOpenGoals={openGoal} summary={mainGoal} />

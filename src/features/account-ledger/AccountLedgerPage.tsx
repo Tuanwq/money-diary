@@ -21,6 +21,7 @@ import { useEffect, useMemo, useState } from "react";
 import { getToday } from "../../utils/date";
 import { getJarView, suggestJar, type JarActivity, type JarLedger, type SpendingJar } from
   "../spending-jars/domain/jarModel.ts";
+import { getFinancialPosition } from "../spending-jars/domain/financialPosition.ts";
 import type { JarCommand } from "../spending-jars/services/jarService.ts";
 import {
   formatMoney,
@@ -40,6 +41,7 @@ import {
   type TransactionPurpose,
   type FinancialAccount,
   type FinancialAccountType,
+  type BudgetEligibility,
 } from "./accountLedgerModel";
 import { AccountExternalForm, AccountExternalSection, type ExternalDialog } from "./AccountExternalMoney.tsx";
 import { calculateAccountActualAvailable, calculateAccountExternalAmount,
@@ -76,6 +78,7 @@ function AccountForm({
   const [openingBalance, setOpeningBalance] = useState(
     account ? formatMoneyInput(String(account.openingBalance)) : ""
   );
+  const [budgetEligibility, setBudgetEligibility] = useState<BudgetEligibility>(account?.budgetEligibility ?? "needs_review");
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -104,6 +107,7 @@ function AccountForm({
       name: trimmedName,
       openingBalance: parseMoneyInput(openingBalance),
       type,
+      budgetEligibility,
       updatedAt: now,
     }); onClose(); }
     catch (cause) { alert(cause instanceof Error ? cause.message : "Không thể lưu tài khoản."); }
@@ -141,6 +145,17 @@ function AccountForm({
             placeholder="VD: Vietcombank"
             value={name}
           />
+        </label>
+
+        <label className="ledger-field">
+          <span>Dùng tiền tài khoản này cho hũ?</span>
+          <select value={budgetEligibility} onChange={(event) =>
+            setBudgetEligibility(event.target.value as BudgetEligibility)}>
+            <option value="needs_review">Cần xem lại</option>
+            <option value="eligible">Có thể phân bổ</option>
+            <option value="excluded">Không phân bổ</option>
+          </select>
+          <small>Tiền trong hũ vẫn nằm ở tài khoản; lựa chọn này chỉ kiểm soát phần có thể dành thêm.</small>
         </label>
 
         <label className="ledger-field">
@@ -506,6 +521,8 @@ export function AccountLedgerPage({
   onExternalCommand,
   archiveAccount,
   cloudStatus,
+  legacyLocalRecoveryCandidate,
+  onClaimLegacyLocalLedger,
   onRetrySync,
   onUseCloudVersion,
   deleteTransaction,
@@ -520,6 +537,8 @@ export function AccountLedgerPage({
   onExternalCommand: (command: AccountExternalCommand) => void;
   archiveAccount: (accountId: string) => void;
   cloudStatus: string;
+  legacyLocalRecoveryCandidate: { accounts: number; transactions: number; jars: number } | null;
+  onClaimLegacyLocalLedger: () => void;
   onRetrySync: () => void;
   onUseCloudVersion: () => void;
   deleteTransaction: (transactionId: string) => void;
@@ -554,6 +573,8 @@ export function AccountLedgerPage({
     const ledger = { accounts, transactions, jars, jarActivities, updatedAt: "" };
     return { actual: calculateActualAvailableBalance(ledger), external: calculateTotalExternalAmount(ledger) };
   }, [accounts, transactions, jars, jarActivities]);
+  const financialPosition = useMemo(() => getFinancialPosition({ accounts, transactions, jars, jarActivities }),
+    [accounts, transactions, jars, jarActivities]);
   const filteredTransactions = useMemo(() => {
     const normalizedSearch = search.trim().toLocaleLowerCase("vi-VN");
 
@@ -689,6 +710,16 @@ export function AccountLedgerPage({
           catch (cause) { alert(cause instanceof Error ? cause.message : "Chưa thể tải dữ liệu cloud."); }
         }}>Dùng bản cloud (giữ bản sao)</button>}
       </div>}
+      {legacyLocalRecoveryCandidate && <div className="account-external-sync-notice" role="status">
+        <span>Thiết bị còn sổ cũ chưa rõ tài khoản sở hữu ({legacyLocalRecoveryCandidate.accounts} tài khoản,
+          {" "}{legacyLocalRecoveryCandidate.transactions} giao dịch, {legacyLocalRecoveryCandidate.jars} hũ).
+          Dữ liệu này chưa được tự đồng bộ để tránh trộn hai người dùng.</span>
+        <button type="button" onClick={() => {
+          if (!window.confirm("Chỉ khôi phục nếu sổ cũ này thuộc chính tài khoản đang đăng nhập. Bản gốc trên thiết bị sẽ được giữ. Tiếp tục?")) return;
+          try { onClaimLegacyLocalLedger(); }
+          catch (cause) { window.alert(cause instanceof Error ? cause.message : "Chưa thể khôi phục sổ cũ."); }
+        }}>Khôi phục sổ cũ của tôi</button>
+      </div>}
 
       <section className="account-ledger-summary has-availability" aria-label="Tóm tắt sổ tài khoản">
         <div className="is-balance">
@@ -705,8 +736,8 @@ export function AccountLedgerPage({
           <strong className="is-income">{formatMoney(summary.income)}</strong>
         </div>
         <div>
-          <span>Chi trong tháng</span>
-          <strong className="is-expense">{formatMoney(summary.expense)}</strong>
+          <span>Chi ròng trong tháng</span>
+          <strong className={summary.expense < 0 ? "is-income" : "is-expense"}>{formatMoney(summary.expense)}</strong>
         </div>
         <div className="is-transfer">
           <div className="account-ledger-transfer-copy">
@@ -742,6 +773,7 @@ export function AccountLedgerPage({
             const Icon = ACCOUNT_ICONS[account.type];
             const balance = calculateAccountBalance(account, transactions);
             const external = calculateAccountExternalAmount(account);
+            const budgetRow = financialPosition.accounts.find((item) => item.accountId === account.id);
 
             return (
               <article
@@ -770,6 +802,11 @@ export function AccountLedgerPage({
                 <div className="account-external-breakdown">
                   <span>Thực có <strong>{formatMoney(calculateAccountActualAvailable(account, transactions))}</strong></span>
                   {external > 0 && <span className="is-outside">Đang ở ngoài <strong>{formatMoney(external)}</strong></span>}
+                  <span>Đã dành trong hũ <strong>{formatMoney(budgetRow?.reserved ?? 0)}</strong></span>
+                  <span>Chưa dành cho hũ <strong>{formatMoney(budgetRow?.unallocated ?? 0)}</strong></span>
+                  {budgetRow?.eligibility === "eligible" && <span>Có thể nạp hũ <strong>{formatMoney(budgetRow.allocationCapacity)}</strong></span>}
+                  {budgetRow?.jars.map((jar) => <small key={jar.id}>{jar.name}: {formatMoney(jar.amount)}</small>)}
+                  {budgetRow?.eligibility === "needs_review" && <small>Cần xem lại quyền phân bổ của tài khoản.</small>}
                   {external > balance && <small>Khoản ở ngoài đang vượt số dư. Hãy kiểm tra lại sổ.</small>}
                 </div>
                 <div className="account-balance-actions">

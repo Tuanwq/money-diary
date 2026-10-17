@@ -1,9 +1,11 @@
 import { calculateAccountBalance, type AccountTransaction, type TransactionPurpose } from "../../account-ledger/accountLedgerModel.ts";
-import { getAccountAvailableToAllocate, getJarView, type JarActivity, type JarLedger,
+import { calculateAccountExternalAmount } from "../../account-ledger/accountExternalModel.ts";
+import { getAccountAvailableToAllocate, getJarBudgetView, getJarView, type JarActivity, type JarLedger,
   type JarSource, type SpendingJar } from "../domain/jarModel.ts";
+import { getToday } from "../../../utils/date.ts";
 
 type Context = { id: string; now: string };
-type JarFields = Pick<SpendingJar, "name" | "icon" | "color" | "limitAmount" | "startDate" | "endDate" | "linkedLabels">;
+type JarFields = Pick<SpendingJar, "name" | "icon" | "color" | "limitAmount" | "startDate" | "endDate" | "linkedLabels" | "budgetPeriod">;
 export type JarCommand =
   | ({ kind: "create"; fields: JarFields } & Context)
   | ({ kind: "edit"; jarId: string; fields: JarFields } & Context)
@@ -15,7 +17,7 @@ export type JarCommand =
       category: string; note: string; purpose: "daily_expense" | "goal_allocation";
       activityId?: string; occurredAt?: string } & Context)
   | ({ kind: "refund"; jarId: string; accountId: string; amount: number; date: string;
-      note: string } & Context)
+      note: string; purpose?: "daily_expense" | "goal_allocation" } & Context)
   | ({ kind: "delete_spend"; jarId: string; activityId: string } & Context)
   | ({ kind: "close" | "delete"; jarId: string } & Context);
 
@@ -39,6 +41,8 @@ function normalizeFields(fields: JarFields) {
   const name = fields.name.trim();
   if (!name || name.length > 60) throw new Error("Tên hũ cần từ 1 đến 60 ký tự.");
   positive(fields.limitAmount);
+  if (fields.budgetPeriod && !["monthly", "custom", "legacy_total"].includes(fields.budgetPeriod))
+    throw new Error("Kỳ ngân sách không hợp lệ.");
   if (!/^\d{4}-\d{2}-\d{2}$/.test(fields.startDate) ||
     (fields.endDate && fields.endDate < fields.startDate))
     throw new Error("Ngày bắt đầu hoặc ngày kết thúc không hợp lệ.");
@@ -48,6 +52,8 @@ function normalizeFields(fields: JarFields) {
 
 function remainingLimit(ledger: JarLedger, jar: SpendingJar) {
   const view = getJarView(ledger, jar);
+  if ((jar.budgetPeriod ?? "legacy_total") !== "legacy_total")
+    return Math.max(0, getJarBudgetView(ledger, jar, getToday()).remaining - view.remainingAmount);
   return Math.max(0, jar.limitAmount - view.remainingAmount - view.spentAmount);
 }
 
@@ -86,7 +92,8 @@ export function planJarSpend(ledger: JarLedger, jarId: string, amount: number, a
   const lines: JarSource[] = [];
   for (const source of sources) {
     const account = getActiveAccount(ledger, source.accountId);
-    const available = Math.min(source.amount, Math.max(0, calculateAccountBalance(account, ledger.transactions)));
+    const available = Math.min(source.amount, Math.max(0,
+      calculateAccountBalance(account, ledger.transactions) - calculateAccountExternalAmount(account)));
     const take = Math.min(needed, available);
     if (take > 0) lines.push({ accountId: source.accountId, amount: take });
     needed -= take;
@@ -109,11 +116,21 @@ export function applyJarCommand(ledger: JarLedger, command: JarCommand): JarLedg
       createdAt: command.now, updatedAt: command.now }] };
   }
 
+  // Return the original aggregate on a repeated request, before checking the
+  // new balance or jar status, so a network retry cannot spend twice.
+  if (["allocate", "release", "refund", "close"].includes(command.kind) &&
+    ledger.jarActivities.some((activity) => activity.id === command.id)) return ledger;
+  if (command.kind === "smart_allocate" && ledger.jarActivities.some((activity) =>
+    activity.id.startsWith(`${command.id}:`))) return ledger;
+  if (command.kind === "transfer" && ledger.jarActivities.some((activity) =>
+    activity.id === `${command.id}:out`)) return ledger;
   const jar = getActiveJar(ledger, command.jarId);
   if (command.kind === "edit") {
     const fields = normalizeFields(command.fields);
     const view = getJarView(ledger, jar);
-    if (fields.limitAmount < view.remainingAmount + view.spentAmount)
+    if ((jar.budgetPeriod ?? "legacy_total") === "legacy_total" &&
+      fields.budgetPeriod !== "monthly" && fields.budgetPeriod !== "custom" &&
+      fields.limitAmount < view.remainingAmount + view.spentAmount)
       throw new Error("Hạn mức mới thấp hơn tổng đã tiêu và còn trong hũ.");
     return { ...ledger, jars: ledger.jars.map((item) => item.id === jar.id
       ? { ...item, ...fields, updatedAt: command.now } : item) };
@@ -125,7 +142,8 @@ export function applyJarCommand(ledger: JarLedger, command: JarCommand): JarLedg
       source.accountId === command.accountId)?.amount ?? 0;
     if (command.kind === "allocate" && command.amount > getAccountAvailableToAllocate(ledger, command.accountId))
       throw new Error("Tài khoản không còn đủ tiền chưa phân bổ.");
-    if (command.kind === "allocate" && command.amount > remainingLimit(ledger, jar))
+    if (command.kind === "allocate" && (jar.budgetPeriod ?? "legacy_total") === "legacy_total" &&
+      command.amount > remainingLimit(ledger, jar))
       throw new Error("Số tiền nạp vượt hạn mức hũ.");
     if (command.kind === "release" && command.amount > sourceRemaining)
       throw new Error("Nguồn này không còn đủ tiền trong hũ để giải phóng.");
@@ -149,7 +167,8 @@ export function applyJarCommand(ledger: JarLedger, command: JarCommand): JarLedg
     if (jar.id === destination.id) throw new Error("Hãy chọn một hũ khác.");
     const source = getJarView(ledger, jar).sources.find((item) => item.accountId === command.accountId);
     if (!source || source.amount < command.amount) throw new Error("Nguồn trong hũ không đủ tiền.");
-    if (command.amount > remainingLimit(ledger, destination)) throw new Error("Hũ nhận không còn đủ hạn mức.");
+    if ((destination.budgetPeriod ?? "legacy_total") === "legacy_total" &&
+      command.amount > remainingLimit(ledger, destination)) throw new Error("Hũ nhận không còn đủ hạn mức.");
     if (ledger.jarActivities.some((activity) => activity.id === `${command.id}:out`)) return ledger;
     return { ...ledger, jarActivities: [...ledger.jarActivities,
       { id: `${command.id}:out`, jarId: jar.id, kind: "transfer_out", accountId: command.accountId,
@@ -209,7 +228,8 @@ export function applyJarCommand(ledger: JarLedger, command: JarCommand): JarLedg
     const transactionId = `jar-refund:${command.id}`;
     const transaction: AccountTransaction = { id: transactionId, accountId: command.accountId,
       amount: command.amount, category: "Hoàn tiền", date: command.date, note: command.note.trim(),
-      type: "income", purpose: "goal_allocation", source: "spending_jar",
+      type: "income", purpose: command.purpose ?? "goal_allocation", source: "spending_jar",
+      reversesExpense: true,
       jarId: jar.id, jarActivityId: command.id, createdAt: command.now, updatedAt: command.now };
     return { ...ledger, transactions: [transaction, ...ledger.transactions],
       jarActivities: [...ledger.jarActivities, { id: command.id, jarId: jar.id, kind: "refund",

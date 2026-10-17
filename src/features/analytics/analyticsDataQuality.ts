@@ -1,4 +1,5 @@
 import type { AccountTransaction } from "../account-ledger/accountLedgerModel.ts";
+import { isExpenseReversal } from "../account-ledger/accountLedgerModel.ts";
 import type { DailyEntry, ExpenseEntry } from "../../types.ts";
 import { getExpenseTotal, getOtherExpenseItems } from "../../utils/entries.ts";
 import { isIndependentReportingTransaction } from "./reportingTransactions.ts";
@@ -75,15 +76,16 @@ export function buildAnalyticsDataQuality(input: {
       result.omittedAmount += transaction.amount;
       continue;
     }
-    if (transaction.type === "income") result.transactionIncome += transaction.amount;
+    if (isExpenseReversal(transaction)) result.transactionExpense -= transaction.amount;
+    else if (transaction.type === "income") result.transactionIncome += transaction.amount;
     else result.transactionExpense += transaction.amount;
-    if (!transaction.purpose ||
+    if (!isExpenseReversal(transaction) && (!transaction.purpose ||
       (transaction.type === "income" && transaction.purpose !== "income") ||
-      (transaction.type === "expense" && !["daily_expense", "goal_allocation"].includes(transaction.purpose))) {
+      (transaction.type === "expense" && !["daily_expense", "goal_allocation"].includes(transaction.purpose)))) {
       result.unclassifiedPurpose += 1;
       result.unclassifiedPurposeAmount += transaction.amount;
     }
-    if (legacyKeys.has(overlapKey(transaction.date, transaction.type,
+    if (!isExpenseReversal(transaction) && legacyKeys.has(overlapKey(transaction.date, transaction.type,
       transaction.amount, transaction.category))) {
       result.possibleOverlaps += 1;
       result.possibleOverlapAmount += transaction.amount;

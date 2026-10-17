@@ -59,4 +59,11 @@ test("analytics identifies ambiguous legacy rows and possible overlap without ch
   assert.equal(quality.unclassifiedPurposeAmount, 25_000);
   assert.equal(buildAnalyticsDataQuality({ entries, expenses, transactions: rows,
     range: { fromDate: "2026-09-21", toDate: "2026-09-27" } }).omittedTransactions, 0);
+  const refund = { ...income, id: "jar-refund:r1", source: "spending_jar",
+    reversesExpense: true, purpose: "daily_expense", amount: 20_000 };
+  const withRefund = buildAnalyticsDataQuality({ entries: [], expenses: [],
+    transactions: [manual, refund], range });
+  assert.equal(withRefund.transactionIncome, 0);
+  assert.equal(withRefund.transactionExpense, 30_000);
+  assert.equal(withRefund.unclassifiedPurpose, 1);
 });

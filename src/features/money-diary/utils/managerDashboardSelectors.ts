@@ -1,5 +1,5 @@
 import type { DailyEntry, ExpenseEntry } from "../../../types.ts";
-import type { AccountTransaction } from "../../account-ledger/accountLedgerModel.ts";
+import { isExpenseReversal, type AccountTransaction } from "../../account-ledger/accountLedgerModel.ts";
 import { buildDailyFinancialSummaries, getDailyFinancialSummary } from "../../photo-finance/services/photoFinanceModel.ts";
 import { getExpenseTotal, getTotalEntryMoney } from "../../../utils/entries.ts";
 
@@ -86,7 +86,7 @@ export type ManagerRecentTransaction = {
   date: string;
   description: string;
   id: string;
-  kind: "expense" | "income";
+  kind: "expense" | "income" | "refund";
   source: string;
 };
 
@@ -107,7 +107,8 @@ export function buildManagerRecentTransactions(
     ...transactions.filter((item) => (item.source === "photo_finance" || item.source === "spending_jar") && item.type !== "transfer")
       .map((item) => ({
         amount: item.amount, date: item.date, description: item.note.trim() || item.category,
-        id: `ledger-${item.id}`, kind: item.type as "income" | "expense", source: "Nhật ký tài chính",
+        id: `ledger-${item.id}`, kind: isExpenseReversal(item) ? "refund" as const :
+          item.type as "income" | "expense", source: "Nhật ký tài chính",
       })),
   ].filter((item) => item.amount > 0)
     .sort((a, b) => b.date.localeCompare(a.date) || a.kind.localeCompare(b.kind))

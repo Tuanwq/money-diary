@@ -53,21 +53,21 @@ export function RecentTransactions({
 }
 
 function TransactionRow({ transaction }: { transaction: ManagerRecentTransaction }) {
-  const income = transaction.kind === "income";
-  const Icon = income ? ArrowDownLeft : ArrowUpRight;
+  const inflow = transaction.kind !== "expense";
+  const Icon = inflow ? ArrowDownLeft : ArrowUpRight;
 
   return (
     <article className="money-transaction-row">
-      <span className={`money-transaction-icon ${income ? "is-income" : "is-expense"}`} aria-hidden="true">
+      <span className={`money-transaction-icon ${inflow ? "is-income" : "is-expense"}`} aria-hidden="true">
         <Icon size={19} />
       </span>
       <div className="money-transaction-copy">
         <strong>{transaction.description}</strong>
         <span>{transaction.source} · {formatReportDate(transaction.date)}</span>
       </div>
-      <strong className={`money-transaction-amount ${income ? "is-income" : "is-expense"}`}>
-        <span className="money-visually-hidden">{income ? "Thu nhập" : "Chi tiêu"}</span>
-        {income ? "+" : "−"}{formatMoney(transaction.amount)}
+      <strong className={`money-transaction-amount ${inflow ? "is-income" : "is-expense"}`}>
+        <span className="money-visually-hidden">{transaction.kind === "refund" ? "Hoàn chi" : inflow ? "Thu nhập" : "Chi tiêu"}</span>
+        {inflow ? "+" : "−"}{formatMoney(transaction.amount)}
       </strong>
     </article>
   );

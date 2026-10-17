@@ -33,7 +33,8 @@ export function isPristineLedger(ledger: AccountLedgerData) {
   const defaults = createDefaultAccounts(ledger.updatedAt);
   return ledger.accounts.length === defaults.length && ledger.accounts.every((account, index) =>
     account.id === defaults[index].id && account.name === defaults[index].name &&
-    account.type === defaults[index].type && account.openingBalance === 0 && !account.archivedAt);
+    account.type === defaults[index].type && account.openingBalance === 0 && !account.archivedAt &&
+    !account.budgetEligibility);
 }
 
 export function nextLedgerTimestamp(previous: string, now = Date.now()) {

@@ -102,5 +102,13 @@ assert.equal(buildManagerOverview(dayEntries, [], day, moved).month.expense, 0);
 assert.equal(buildManagerOverview(dayEntries, [], "2026-10-01", moved).day.expense, 1_143_000);
 const photoIncome = { ...photoExpenses[0], id: "photo-income", type: "income", purpose: "income", amount: 80_000 };
 assert.equal(buildManagerOverview(dayEntries, [], day, [...photoExpenses, photoIncome]).day.income, 250_000);
+const refund = { ...photoExpenses[0], id: "jar-refund:r1", source: "spending_jar",
+  type: "income", purpose: "goal_allocation", reversesExpense: true, amount: 50_000 };
+const withRefund = buildManagerOverview(dayEntries, [], day, [...photoExpenses, refund]);
+assert.equal(withRefund.day.income, 170_000, "refunds are not earned income");
+assert.equal(withRefund.day.expense, 1_093_000, "refund reverses expense");
+assert.equal(withRefund.day.net, -923_000);
+assert.equal(buildManagerRecentTransactions(dayEntries, [], [...photoExpenses, refund])
+  .find((item) => item.id === "ledger-jar-refund:r1")?.kind, "refund");
 
 console.log("Dashboard selector tests passed.");

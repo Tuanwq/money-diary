@@ -1,8 +1,10 @@
 import { useBrowserRoute } from "./app/router/useBrowserRoute";
 import { HubSelectionPage } from "./features/hub/pages/HubSelectionPage";
 import { useAccountLedger } from "./features/account-ledger/useAccountLedger";
+import { selectTrustedLegacyBudgets } from "./features/account-ledger/ledgerStorageScope.ts";
 import { getLedgerSummary } from "./features/account-ledger/accountLedgerModel";
 import { calculateActualAvailableBalance } from "./features/account-ledger/accountExternalModel.ts";
+import { getFinancialPosition } from "./features/spending-jars/domain/financialPosition.ts";
 import { deleteAccountTransactionWithPhotos } from "./features/photo-finance/services/photoTransactionService.ts";
 import { useAccountReconciliations } from "./features/account-reconciliation/useAccountReconciliations";
 import { useAutomationRules } from "./features/automation/useAutomationRules";
@@ -666,6 +668,7 @@ export default function App() {
     isCloudRefreshing,
     retryCloudLoad,
     isMoneyCloudSyncEnabled,
+    remoteLegacyBudgets,
     syncStatus,
     setSyncStatus,
     markLocalChanged,
@@ -693,18 +696,21 @@ export default function App() {
     accounts: financialAccounts,
     archiveAccount,
     cloudStatus: accountLedgerCloudStatus,
+    claimLegacyLocalLedger,
     deleteTransaction: deleteAccountTransaction,
     dispatchJar,
     dispatchExternal,
     jars,
     jarActivities,
+    legacyLocalRecoveryCandidate,
     replaceLedger,
     retrySync: retryAccountLedgerSync,
     useCloudVersion: useCloudAccountLedger,
     saveAccount,
     saveTransaction: saveAccountTransaction,
     transactions: accountTransactions,
-  } = useAccountLedger(cloudDataUserId, goals.expenseBudgets);
+  } = useAccountLedger(cloudDataUserId, selectTrustedLegacyBudgets(cloudDataUserId,
+    isMoneyCloudSyncEnabled, remoteLegacyBudgets, goals.expenseBudgets));
   const accountAwareSyncStatus = /migration|chưa thể|lỗi|xung đột/i.test(accountLedgerCloudStatus)
     ? accountLedgerCloudStatus
     : /đang tải|đang lưu/i.test(accountLedgerCloudStatus)
@@ -1546,6 +1552,9 @@ const spendableMoney = calculateActualAvailableBalance({
   jarActivities,
   updatedAt: "",
 });
+const financialPosition = useMemo(() => getFinancialPosition({
+  accounts: financialAccounts, transactions: accountTransactions, jars, jarActivities,
+}), [financialAccounts, accountTransactions, jars, jarActivities]);
 
 const mainGoalProgress = useMemo(
   () => buildMainGoalProgress({
@@ -3427,6 +3436,8 @@ if (route.kind === "daymark") {
               onJarCommand={dispatchJar}
               archiveAccount={archiveAccount}
               cloudStatus={accountLedgerCloudStatus}
+              legacyLocalRecoveryCandidate={legacyLocalRecoveryCandidate}
+              onClaimLegacyLocalLedger={claimLegacyLocalLedger}
               onRetrySync={retryAccountLedgerSync}
               onUseCloudVersion={useCloudAccountLedger}
               deleteTransaction={(transactionId) => {
@@ -3473,6 +3484,7 @@ if (route.kind === "daymark") {
             <HomePage
               actualMoney={actualMoney}
               spendableMoney={spendableMoney}
+              financialPosition={financialPosition}
               balanceChecks={balanceChecks}
               cloudLoadError={cloudLoadError}
               dataWarnings={dataWarnings}

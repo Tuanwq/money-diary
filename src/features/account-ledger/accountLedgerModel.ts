@@ -6,6 +6,9 @@ export type FinancialAccountType =
   | "e_wallet"
   | "other";
 
+/** Existing accounts remain review-only until their owner chooses explicitly. */
+export type BudgetEligibility = "eligible" | "excluded" | "needs_review";
+
 export type AccountTransactionType = "income" | "expense" | "transfer";
 
 export type TransactionPurpose =
@@ -21,6 +24,7 @@ export type FinancialAccount = {
   name: string;
   openingBalance: number;
   type: FinancialAccountType;
+  budgetEligibility?: BudgetEligibility;
   updatedAt: string;
   /** Availability annotations; account balance is still derived only from transactions. */
   externalEntries?: import("./accountExternalModel.ts").AccountExternalEntry[];
@@ -44,8 +48,15 @@ export type AccountTransaction = {
   /** A jar expense/refund belongs to one activity; several rows may share its activity ID. */
   jarId?: string;
   jarActivityId?: string;
+  /** Money returned from a prior expense; increases balance but is not earned income. */
+  reversesExpense?: boolean;
   occurredAt?: string;
 };
+
+export function isExpenseReversal(transaction: AccountTransaction): boolean {
+  return transaction.type === "income" && transaction.source === "spending_jar" &&
+    (transaction.reversesExpense === true || transaction.id.startsWith("jar-refund:"));
+}
 
 export type AccountLedgerData = {
   accounts: FinancialAccount[];
@@ -200,11 +211,11 @@ export function getLedgerSummary(
   );
 
   return {
-    expense: monthTransactions
-      .filter((transaction) => transaction.type === "expense")
-      .reduce((sum, transaction) => sum + transaction.amount, 0),
+    expense: monthTransactions.reduce((sum, transaction) => sum +
+      (transaction.type === "expense" ? transaction.amount :
+        isExpenseReversal(transaction) ? -transaction.amount : 0), 0),
     income: monthTransactions
-      .filter((transaction) => transaction.type === "income")
+      .filter((transaction) => transaction.type === "income" && !isExpenseReversal(transaction))
       .reduce((sum, transaction) => sum + transaction.amount, 0),
     totalBalance: activeAccounts.reduce(
       (sum, account) => sum + calculateAccountBalance(account, transactions),

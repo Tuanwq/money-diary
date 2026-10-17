@@ -1,23 +1,27 @@
-import { useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 import { ArrowLeft, Plus, WalletCards } from "lucide-react";
 import type { JarActivity, JarLedger, SpendingJar } from "../domain/jarModel.ts";
-import { getAccountAvailableToAllocate, getJarRemainingPercent, getJarView } from "../domain/jarModel.ts";
+import { getAccountAvailableToAllocate, getJarBudgetView, getJarRemainingPercent, getJarView } from "../domain/jarModel.ts";
+import { getFinancialPosition } from "../domain/financialPosition.ts";
+import { getJarSpendingAnalysis } from "../domain/jarSpendingAnalysis.ts";
 import { smartAllocate, type JarCommand } from "../services/jarService.ts";
 import { JarActivityList } from "../components/JarActivityList.tsx";
 import { SpendingJarsOverview } from "../components/SpendingJarsOverview.tsx";
 import { AvailableAllocationSection } from "../components/AvailableAllocationSection.tsx";
+import { JarSpendingInsights } from "../components/JarSpendingInsights.tsx";
 import { getToday } from "../../../utils/date.ts";
 import { formatMoney, formatMoneyInput, parseMoneyInput } from "../../../utils/money.ts";
 import "./SpendingJarsPage.css";
 
 type Action = "allocate" | "release" | "transfer" | "spend" | "refund";
 type JarForm = { name: string; icon: string; color: string; limit: string;
-  startDate: string; endDate: string; labels: string };
+  startDate: string; endDate: string; labels: string; budgetPeriod: "monthly" | "custom" | "legacy_total" };
 
 function fieldsFrom(jar?: SpendingJar): JarForm {
   return { name: jar?.name ?? "", icon: jar?.icon ?? "🫙", color: jar?.color ?? "",
     limit: jar ? formatMoneyInput(String(jar.limitAmount)) : "", startDate: jar?.startDate ?? getToday(),
-    endDate: jar?.endDate ?? "", labels: jar?.linkedLabels.join(", ") ?? "" };
+    endDate: jar?.endDate ?? "", labels: jar?.linkedLabels.join(", ") ?? "",
+    budgetPeriod: jar?.budgetPeriod ?? (jar ? "legacy_total" : "monthly") };
 }
 
 export function SpendingJarsPage({ ledger, cloudStatus, onBack, onCommand, onDeleteSpend, onRetrySync, onUseCloudVersion }: {
@@ -38,12 +42,21 @@ export function SpendingJarsPage({ ledger, cloudStatus, onBack, onCommand, onDel
   const [purpose, setPurpose] = useState<"daily_expense" | "goal_allocation">("goal_allocation");
   const [editingActivity, setEditingActivity] = useState<JarActivity | null>(null);
   const [error, setError] = useState("");
+  const stableLedger = useMemo(() => ({ accounts: ledger.accounts, transactions: ledger.transactions,
+    jars: ledger.jars, jarActivities: ledger.jarActivities }),
+    [ledger.accounts, ledger.transactions, ledger.jars, ledger.jarActivities]);
   const selected = ledger.jars.find((jar) => jar.id === selectedId && jar.status !== "deleted") ?? null;
-  const views = ledger.jars.filter((jar) => jar.status !== "deleted").map((jar) => getJarView(ledger, jar));
+  const views = useMemo(() => stableLedger.jars.filter((jar) => jar.status !== "deleted")
+    .map((jar) => getJarView(stableLedger, jar)), [stableLedger]);
   const active = views.filter((view) => view.jar.status === "active");
   const closed = views.filter((view) => view.jar.status === "closed");
   const activeAccounts = ledger.accounts.filter((item) => !item.archivedAt);
   const accountNames = new Map(ledger.accounts.map((item) => [item.id, item.name]));
+  const position = useMemo(() => getFinancialPosition(stableLedger), [stableLedger]);
+  const spendingAnalysis = useMemo(() => {
+    const jar = stableLedger.jars.find((item) => item.id === selectedId && item.status !== "deleted");
+    return jar ? getJarSpendingAnalysis(stableLedger, jar, getToday()) : null;
+  }, [selectedId, stableLedger]);
 
   function openCreate() {
     setJarForm(fieldsFrom());
@@ -81,7 +94,8 @@ export function SpendingJarsPage({ ledger, cloudStatus, onBack, onCommand, onDel
     const now = new Date().toISOString();
     const fields = { name: jarForm.name, icon: jarForm.icon, color: jarForm.color || undefined,
       limitAmount: parseMoneyInput(jarForm.limit), startDate: jarForm.startDate,
-      endDate: jarForm.endDate || undefined, linkedLabels: jarForm.labels.split(",") };
+      endDate: jarForm.endDate || undefined, linkedLabels: jarForm.labels.split(","),
+      budgetPeriod: jarForm.budgetPeriod };
     const command: JarCommand = editor === "edit" && selected
       ? { kind: "edit", id: crypto.randomUUID(), jarId: selected.id, now, fields }
       : { kind: "create", id: crypto.randomUUID(), now, fields };
@@ -99,7 +113,7 @@ export function SpendingJarsPage({ ledger, cloudStatus, onBack, onCommand, onDel
         ? { kind: "spend", id, now, jarId: selected.id, amount: value, accountId: accountId || undefined,
           date, category, note, purpose, activityId: editingActivity?.id }
         : action === "refund"
-          ? { kind: "refund", id, now, jarId: selected.id, accountId, amount: value, date, note }
+          ? { kind: "refund", id, now, jarId: selected.id, accountId, amount: value, date, note, purpose }
           : { kind: action, id, now, jarId: selected.id, accountId, amount: value, note };
     if (run(command)) { setAction(null); setEditingActivity(null); }
   }
@@ -119,19 +133,27 @@ export function SpendingJarsPage({ ledger, cloudStatus, onBack, onCommand, onDel
     </div>}
     {error && <p className="jars-error" role="alert">{error}</p>}
     {!selected ? <>
-      <SpendingJarsOverview active={active} closed={closed} accountNames={accountNames} onCreate={openCreate} onOpen={setSelectedId} />
-      <AvailableAllocationSection ledger={ledger} accounts={activeAccounts} />
+      <SpendingJarsOverview active={active} closed={closed} accountNames={accountNames}
+        ledger={ledger} position={position} onCreate={openCreate} onOpen={setSelectedId} />
+      <AvailableAllocationSection position={position} accounts={activeAccounts} />
     </> : (() => {
       const view = getJarView(ledger, selected);
+      const budget = getJarBudgetView(ledger, selected, getToday());
       return <>
         <section className="jar-detail-hero" aria-label="Tổng quan hũ">
           <div className="jar-detail-hero-top"><span>{selected.status === "closed" ? "Hũ đã đóng" : "Còn trong hũ"}</span>
             <strong>{formatMoney(view.remainingAmount)}</strong></div>
-          <div className="jar-detail-progress-label"><span>Còn {getJarRemainingPercent(view)}%</span><span>Đã tiêu {formatMoney(view.spentAmount)} · Hạn mức {formatMoney(selected.limitAmount)}</span></div>
+          <p>Tiền đã dành ròng {formatMoney(Math.max(0, view.remainingAmount + view.spentAmount))} · đã dùng từ phần này {formatMoney(view.spentAmount)}.</p>
+          <div className="jar-detail-progress-label"><span>Còn {getJarRemainingPercent(view)}% tiền đã dành</span><span>Đã chi trong {budget.periodLabel.toLowerCase()} {formatMoney(budget.spent)} · Hạn mức {formatMoney(selected.limitAmount)}</span></div>
           <div className="jar-progress" role="progressbar" aria-label={`Tiền còn lại trong hũ ${selected.name}`} aria-valuenow={getJarRemainingPercent(view)} aria-valuemin={0} aria-valuemax={100}><span style={{ width: `${getJarRemainingPercent(view)}%` }} /></div>
+          <p>Ngân sách {budget.periodLabel}: còn {formatMoney(budget.remaining)}{budget.overage > 0 ? ` · vượt ${formatMoney(budget.overage)}` : ""}.</p>
+          {budget.usedPercent >= 80 && <p>{budget.overage > 0
+            ? "Khoản chi trong kỳ đã vượt ngân sách dự kiến." : "Ngân sách kỳ này gần hết. Tiền thực giữ trong hũ được hiển thị riêng ở trên."}</p>}
+          {budget.needsPeriodReview && <p>Hũ cũ đang dùng hạn mức toàn kỳ. Chọn kỳ ngân sách khi chỉnh sửa để xem đúng theo tháng.</p>}
           <p>{selected.status === "closed" ? "Đã gỡ nhãn liên kết khi đóng hũ" : `Nhãn liên kết: ${selected.linkedLabels.join(", ") || "Chưa liên kết"}`}</p>
           {selected.status === "closed" && view.remainingAmount === 0 && <p>Tiền chưa tiêu đã trở lại phần khả dụng của tài khoản; tổng số dư không đổi.</p>}
         </section>
+        {spendingAnalysis && <JarSpendingInsights analysis={spendingAnalysis} />}
         {view.deficitAmount > 0 && <p className="jars-warning">Tài khoản nguồn hiện thấp hơn phần đã dành {formatMoney(view.deficitAmount)}. Hãy nạp thêm hoặc giải phóng tiền.</p>}
         <section className="jar-sources"><h2>Nguồn tiền hiện tại</h2>{view.sources.filter((item) => item.amount > 0).map((item) => <div key={item.accountId}>
           <span><WalletCards size={16} /> {accountNames.get(item.accountId) ?? "Tài khoản đã xóa"}</span><strong>{formatMoney(item.amount)}</strong>
@@ -171,6 +193,10 @@ export function SpendingJarsPage({ ledger, cloudStatus, onBack, onCommand, onDel
       <div className="jars-form-row"><label>Biểu tượng<input value={jarForm.icon} onChange={(event) => setJarForm({ ...jarForm, icon: event.target.value })} /></label>
         <label>Màu<input type="color" value={jarForm.color || "#477962"} onChange={(event) => setJarForm({ ...jarForm, color: event.target.value })} /></label></div>
       <label>Hạn mức<input inputMode="numeric" required value={jarForm.limit} onChange={(event) => setJarForm({ ...jarForm, limit: formatMoneyInput(event.target.value) })} /></label>
+      <label>Kỳ ngân sách<select value={jarForm.budgetPeriod} onChange={(event) => setJarForm({ ...jarForm, budgetPeriod: event.target.value as JarForm["budgetPeriod"] })}>
+        <option value="monthly">Hàng tháng</option><option value="custom">Từ ngày bắt đầu đến kết thúc</option>
+        {editor === "edit" && jarForm.budgetPeriod === "legacy_total" && <option value="legacy_total">Hũ cũ · toàn kỳ (cần xem lại)</option>}
+      </select></label>
       <div className="jars-form-row"><label>Bắt đầu<input type="date" required value={jarForm.startDate} onChange={(event) => setJarForm({ ...jarForm, startDate: event.target.value })} /></label>
         <label>Kết thúc (nếu có)<input type="date" value={jarForm.endDate} onChange={(event) => setJarForm({ ...jarForm, endDate: event.target.value })} /></label></div>
       <label>Nhãn liên kết, cách nhau bằng dấu phẩy<input value={jarForm.labels} onChange={(event) => setJarForm({ ...jarForm, labels: event.target.value })} placeholder="Ăn uống, Siêu thị" /></label>
@@ -193,9 +219,10 @@ export function SpendingJarsPage({ ledger, cloudStatus, onBack, onCommand, onDel
       {(action === "spend" || action === "refund") && <label>Ngày<input type="date" required value={date} onChange={(event) => setDate(event.target.value)} /></label>}
       {action === "spend" && <><label>Nhãn khoản chi<input list="jar-linked-labels" required value={category} onChange={(event) => setCategory(event.target.value)} /></label>
         <datalist id="jar-linked-labels">{selected.linkedLabels.map((label) => <option value={label} key={label} />)}</datalist>
-        <label>Ảnh hưởng mục tiêu<select value={purpose} onChange={(event) => setPurpose(event.target.value as typeof purpose)}>
+        </>}
+      {(action === "spend" || action === "refund") && <label>{action === "refund" ? "Khoản chi gốc ảnh hưởng mục tiêu?" : "Ảnh hưởng mục tiêu"}<select value={purpose} onChange={(event) => setPurpose(event.target.value as typeof purpose)}>
           <option value="daily_expense">Chi thường ngày · trừ tiến độ</option><option value="goal_allocation">Phân bổ mục tiêu · không trừ tiến độ</option>
-        </select></label></>}
+        </select></label>}
       <label>Ghi chú<input value={note} onChange={(event) => setNote(event.target.value)} placeholder="Nội dung" /></label>
       <div className="jars-form-actions"><button onClick={() => { setAction(null); setEditingActivity(null); }} type="button">Hủy</button>
         <button className="jars-primary" type="submit">{editingActivity ? "Lưu sửa" : "Xác nhận"}</button></div>

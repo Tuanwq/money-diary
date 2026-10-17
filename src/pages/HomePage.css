@@ -78,6 +78,56 @@
   background: var(--money-border);
 }
 
+.manager-allocation-card {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.manager-allocation-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.manager-allocation-grid > div {
+  display: grid;
+  gap: 0.35rem;
+  min-width: 0;
+  border-radius: 0.85rem;
+  background: var(--money-surface-soft, var(--money-surface));
+  padding: 0.75rem;
+}
+
+.manager-allocation-grid span,
+.manager-allocation-card > p {
+  color: var(--money-text-secondary);
+  font-size: 0.75rem;
+}
+
+.manager-allocation-grid strong {
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+}
+
+.manager-allocation-bar {
+  height: 0.55rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--money-border);
+}
+
+.manager-allocation-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--money-primary);
+}
+
+@media (max-width: 520px) {
+  .manager-allocation-grid { grid-template-columns: 1fr 1fr; }
+  .manager-allocation-grid > div:last-child { grid-column: 1 / -1; }
+}
+
 .manager-day-strip > div {
   display: grid;
   min-width: 0;

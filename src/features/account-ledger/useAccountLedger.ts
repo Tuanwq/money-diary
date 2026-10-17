@@ -6,7 +6,10 @@ import type { ExpenseBudget } from "../../types.ts";
 import { applyJarCommand, type JarCommand } from "../spending-jars/services/jarService.ts";
 import { repairClosedJars } from "../spending-jars/services/closedJarMigration.ts";
 import { getAccountAllocation, migrateExpenseBudgets } from "../spending-jars/domain/jarModel.ts";
-import { areLedgerContentsEqual, decideLedgerLoad, hasLocalOnlyRecords, nextLedgerTimestamp } from "./ledgerSync.ts";
+import { assertReservationCoverageAfterLedgerChange } from "../spending-jars/domain/financialPosition.ts";
+import { areLedgerContentsEqual, decideLedgerLoad, hasLocalOnlyRecords, isPristineLedger,
+  nextLedgerTimestamp } from "./ledgerSync.ts";
+import { PENDING_LEDGER_KEY, ledgerKey, pendingKey, selectLocalLedgerValue } from "./ledgerStorageScope.ts";
 import { describeLedgerCloudError } from "./ledgerCloudError.ts";
 import { applyAccountExternalCommand, assertExternalCoverageAfterLedgerChange,
   calculateAccountExternalAmount, type AccountExternalCommand } from "./accountExternalModel.ts";
@@ -19,22 +22,34 @@ import {
   type FinancialAccount,
 } from "./accountLedgerModel";
 
-const PENDING_LEDGER_KEY = `${ACCOUNT_LEDGER_STORAGE_KEY}:pending`;
 const RECOVERY_LEDGER_KEY = `${ACCOUNT_LEDGER_STORAGE_KEY}:recovery`;
 const EMPTY_LEGACY_BUDGETS: ExpenseBudget[] = [];
 type PendingLedger = { userId: string; baseUpdatedAt: string | null };
 
-function readPendingLedger(): PendingLedger | null {
+function readPendingLedger(userId?: string): PendingLedger | null {
   try {
-    const value = JSON.parse(localStorage.getItem(PENDING_LEDGER_KEY) ?? "null") as PendingLedger | null;
+    const value = JSON.parse(localStorage.getItem(pendingKey(userId)) ??
+      (userId ? localStorage.getItem(PENDING_LEDGER_KEY) : null) ?? "null") as PendingLedger | null;
     return value && typeof value.userId === "string" &&
+      (!userId || value.userId === userId) &&
       (typeof value.baseUpdatedAt === "string" || value.baseUpdatedAt === null) ? value : null;
   } catch { return null; }
 }
 
-function loadLocalLedger() {
+function clearPendingLedger(userId: string) {
+  localStorage.removeItem(pendingKey(userId));
   try {
-    const saved = localStorage.getItem(ACCOUNT_LEDGER_STORAGE_KEY);
+    const legacy = JSON.parse(localStorage.getItem(PENDING_LEDGER_KEY) ?? "null") as PendingLedger | null;
+    if (legacy?.userId === userId) localStorage.removeItem(PENDING_LEDGER_KEY);
+  } catch { /* An invalid legacy marker never authorizes an upload. */ }
+}
+
+function loadLocalLedger(userId?: string) {
+  try {
+    // The old unscoped cache is adopted only with a matching pending owner.
+    // Never infer ownership from the financial data itself.
+    const saved = selectLocalLedgerValue(userId, localStorage.getItem(ledgerKey(userId)),
+      localStorage.getItem(ACCOUNT_LEDGER_STORAGE_KEY), readPendingLedger(userId)?.userId ?? null);
     const parsed = saved ? (JSON.parse(saved) as unknown) : null;
 
     return isAccountLedgerData(parsed) ? {
@@ -47,22 +62,42 @@ function loadLocalLedger() {
 }
 
 export function useAccountLedger(userId?: string, legacyBudgets: ExpenseBudget[] = EMPTY_LEGACY_BUDGETS) {
-  const [ledger, setLedger] = useState<AccountLedgerData>(loadLocalLedger);
+  const [ledger, setLedger] = useState<AccountLedgerData>(() => loadLocalLedger(userId));
+  const [ledgerOwner, setLedgerOwner] = useState(userId ?? null);
   const [cloudStatus, setCloudStatus] = useState("Đang lưu trên thiết bị");
   const [cloudReady, setCloudReady] = useState(false);
   const [jarSchemaReady, setJarSchemaReady] = useState(true);
+  const [legacyRecovery, setLegacyRecovery] = useState<{
+    userId: string; accounts: number; transactions: number; jars: number;
+  } | null>(null);
   const [retryIndex, setRetryIndex] = useState(0);
   const dirtyRef = useRef(false);
-  const pendingRef = useRef<PendingLedger | null>(readPendingLedger());
+  const pendingRef = useRef<PendingLedger | null>(readPendingLedger(userId));
   const baseUpdatedAtRef = useRef<string | null>(null);
   const loadedUserRef = useRef<string | null>(null);
   const latestLedgerRef = useRef(ledger);
+  const ownerRef = useRef(userId ?? null);
   const saveChainRef = useRef<Promise<void>>(Promise.resolve());
 
   useEffect(() => {
+    if (ownerRef.current === (userId ?? null)) return;
+    const next = loadLocalLedger(userId);
+    ownerRef.current = userId ?? null;
+    latestLedgerRef.current = next;
+    pendingRef.current = readPendingLedger(userId);
+    dirtyRef.current = Boolean(pendingRef.current);
+    baseUpdatedAtRef.current = null;
+    loadedUserRef.current = null;
+    setCloudReady(false);
+    setLedgerOwner(userId ?? null);
+    setLedger(next);
+  }, [userId]);
+
+  useEffect(() => {
+    if (ledgerOwner !== (userId ?? null)) return;
     latestLedgerRef.current = ledger;
-    safeSetStorageJson(ACCOUNT_LEDGER_STORAGE_KEY, ledger);
-  }, [ledger]);
+    safeSetStorageJson(ledgerKey(userId), ledger);
+  }, [ledger, ledgerOwner, userId]);
 
   useEffect(() => {
     if (!userId) {
@@ -153,11 +188,11 @@ export function useAccountLedger(userId?: string, legacyBudgets: ExpenseBudget[]
       const decision = decideLedgerLoad(localLedger, cloudLedger, pending?.baseUpdatedAt);
       if (decision === "conflict") {
         if (cloudLedger && areLedgerContentsEqual(localLedger, cloudLedger)) {
-          if (!safeSetStorageJson(ACCOUNT_LEDGER_STORAGE_KEY, cloudLedger)) {
+          if (!safeSetStorageJson(ledgerKey(userId), cloudLedger)) {
             setCloudStatus("Chưa thể lưu bản cloud trên thiết bị · hãy kiểm tra dung lượng");
             return;
           }
-          localStorage.removeItem(PENDING_LEDGER_KEY);
+          clearPendingLedger(userId);
           pendingRef.current = null;
           dirtyRef.current = false;
           latestLedgerRef.current = cloudLedger;
@@ -200,7 +235,7 @@ export function useAccountLedger(userId?: string, legacyBudgets: ExpenseBudget[]
       }
       // Existing local-only ledgers can be uploaded when this user has no row.
       const initialPending = { userId, baseUpdatedAt: null };
-      if (!safeSetStorageJson(PENDING_LEDGER_KEY, initialPending)) {
+      if (!safeSetStorageJson(pendingKey(userId), initialPending)) {
         setCloudStatus("Chưa thể lưu trạng thái đồng bộ trên thiết bị");
         return;
       }
@@ -244,7 +279,7 @@ export function useAccountLedger(userId?: string, legacyBudgets: ExpenseBudget[]
     if (!userId) return;
     if (!safeSetStorageJson(`${RECOVERY_LEDGER_KEY}:${userId}`, latestLedgerRef.current))
       throw new Error("Chưa lưu được bản sao trên thiết bị.");
-    localStorage.removeItem(PENDING_LEDGER_KEY);
+    clearPendingLedger(userId);
     pendingRef.current = null;
     dirtyRef.current = false;
     loadedUserRef.current = null;
@@ -276,6 +311,7 @@ export function useAccountLedger(userId?: string, legacyBudgets: ExpenseBudget[]
           : await supabase.from("money_diary_account_ledgers")
               .update(payload).eq("user_id", userId).eq("updated_at", expected)
               .select("updated_at").maybeSingle();
+        if (ownerRef.current !== userId) return;
         if (error) {
           console.error(error);
           const record = captureAppError({ category: "sync", message: "Không thể lưu sổ tài khoản lên cloud",
@@ -294,12 +330,12 @@ export function useAccountLedger(userId?: string, legacyBudgets: ExpenseBudget[]
         if (latestLedgerRef.current === current) {
           dirtyRef.current = false;
           pendingRef.current = null;
-          localStorage.removeItem(PENDING_LEDGER_KEY);
+          clearPendingLedger(userId);
           setCloudStatus("Sổ tài khoản đã đồng bộ");
         } else {
           const nextPending = { userId, baseUpdatedAt: data.updated_at };
           pendingRef.current = nextPending;
-          safeSetStorageJson(PENDING_LEDGER_KEY, nextPending);
+          safeSetStorageJson(pendingKey(userId), nextPending);
         }
       });
     }, 300);
@@ -316,18 +352,23 @@ export function useAccountLedger(userId?: string, legacyBudgets: ExpenseBudget[]
       allowExternalShortfall = false
     ) => {
       const current = latestLedgerRef.current;
+      if (ownerRef.current !== (userId ?? null))
+        throw new Error("Đang chuyển tài khoản. Hãy thử lại sau khi sổ được tải.");
       const next = { ...current, ...updater(current), updatedAt: nextLedgerTimestamp(current.updatedAt) };
-      if (!allowExternalShortfall) assertExternalCoverageAfterLedgerChange(current, next);
+      if (!allowExternalShortfall) {
+        assertExternalCoverageAfterLedgerChange(current, next);
+        assertReservationCoverageAfterLedgerChange(current, next);
+      }
       // Persist the pending marker first. A local write that succeeds without
       // this marker could otherwise be replaced by an older cloud revision.
       let pending: PendingLedger | null = null;
       if (userId) {
         pending = pendingRef.current?.userId === userId
           ? pendingRef.current : { userId, baseUpdatedAt: baseUpdatedAtRef.current };
-        if (!safeSetStorageJson(PENDING_LEDGER_KEY, pending))
+        if (!safeSetStorageJson(pendingKey(userId), pending))
           throw new Error("Thiết bị chưa lưu được trạng thái đồng bộ.");
       }
-      if (!safeSetStorageJson(ACCOUNT_LEDGER_STORAGE_KEY, next))
+      if (!safeSetStorageJson(ledgerKey(userId), next))
         throw new Error("Thiết bị chưa lưu được sổ tài khoản. Hãy giải phóng bộ nhớ hoặc bật đồng bộ trước khi thử lại.");
       if (pending) pendingRef.current = pending;
       dirtyRef.current = true;
@@ -435,20 +476,48 @@ export function useAccountLedger(userId?: string, legacyBudgets: ExpenseBudget[]
     [updateLedger]
   );
 
+  useEffect(() => {
+    if (!userId || !cloudReady || loadedUserRef.current !== userId ||
+      baseUpdatedAtRef.current !== null || pendingRef.current ||
+      localStorage.getItem(PENDING_LEDGER_KEY) !== null || !isPristineLedger(ledger)) {
+      setLegacyRecovery(null);
+      return;
+    }
+    const legacy = loadLocalLedger();
+    setLegacyRecovery(isPristineLedger(legacy) ? null : {
+      userId, accounts: legacy.accounts.length, transactions: legacy.transactions.length, jars: legacy.jars.length,
+    });
+  }, [cloudReady, ledger, userId]);
+
+  const claimLegacyLocalLedger = useCallback(() => {
+    if (!userId || !cloudReady || loadedUserRef.current !== userId ||
+      baseUpdatedAtRef.current !== null || pendingRef.current ||
+      localStorage.getItem(PENDING_LEDGER_KEY) !== null ||
+      !isPristineLedger(latestLedgerRef.current))
+      throw new Error("Sổ hiện tại đã có dữ liệu hoặc chưa tải xong cloud; không thể nhập sổ cũ tự động.");
+    const legacy = loadLocalLedger();
+    if (isPristineLedger(legacy)) throw new Error("Không có sổ cũ cần khôi phục.");
+    if (!safeSetStorageJson(`${RECOVERY_LEDGER_KEY}:${userId}:before-legacy-claim`, latestLedgerRef.current))
+      throw new Error("Chưa lưu được bản sao trước khi khôi phục.");
+    updateLedger(() => legacy, true);
+  }, [cloudReady, updateLedger, userId]);
+
   return {
-    accounts: ledger.accounts,
+    accounts: ledgerOwner === (userId ?? null) ? ledger.accounts : [],
     archiveAccount,
     cloudStatus,
+    claimLegacyLocalLedger,
     deleteTransaction,
     dispatchExternal,
     dispatchJar,
-    jars: ledger.jars,
-    jarActivities: ledger.jarActivities,
+    jars: ledgerOwner === (userId ?? null) ? ledger.jars : [],
+    jarActivities: ledgerOwner === (userId ?? null) ? ledger.jarActivities : [],
+    legacyLocalRecoveryCandidate: legacyRecovery?.userId === userId ? legacyRecovery : null,
     replaceLedger,
     retrySync,
     useCloudVersion,
     saveAccount,
     saveTransaction,
-    transactions: ledger.transactions,
+    transactions: ledgerOwner === (userId ?? null) ? ledger.transactions : [],
   };
 }

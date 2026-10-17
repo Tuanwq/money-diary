@@ -1,4 +1,5 @@
 import type { AccountTransaction } from "../../account-ledger/accountLedgerModel.ts";
+import { isExpenseReversal } from "../../account-ledger/accountLedgerModel.ts";
 import type { BalanceSnapshot, DailyEntry, ExpenseEntry, Goals } from "../../../types.ts";
 
 export type MainGoalProgressSummary = {
@@ -80,8 +81,9 @@ export function buildMainGoalProgress({
     .filter((item) => item.type === "income" && item.purpose === "income")
     .reduce((sum, item) => sum + item.amount, 0);
   const transactionExpenses = goalTransactions
-    .filter((item) => item.type === "expense" && item.purpose === "daily_expense")
-    .reduce((sum, item) => sum + item.amount, 0);
+    .filter((item) => item.purpose === "daily_expense")
+    .reduce((sum, item) => sum + (item.type === "expense" ? item.amount :
+      isExpenseReversal(item) ? -item.amount : 0), 0);
   const unclassifiedTransactions = goalTransactions.filter(
     (item) => item.type !== "transfer" && !item.purpose
   ).length;

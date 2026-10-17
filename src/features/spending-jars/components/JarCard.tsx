@@ -1,9 +1,10 @@
 import { ChevronRight, WalletCards } from "lucide-react";
-import { getJarRemainingPercent, type JarView } from "../domain/jarModel.ts";
+import { getJarRemainingPercent, type JarBudgetView, type JarView } from "../domain/jarModel.ts";
 import { formatMoney } from "../../../utils/money.ts";
 
-export function JarCard({ view, accountNames, onOpen }: {
+export function JarCard({ view, budget, accountNames, onOpen }: {
   view: JarView;
+  budget: JarBudgetView;
   accountNames: Map<string, string>;
   onOpen: () => void;
 }) {
@@ -20,9 +21,13 @@ export function JarCard({ view, accountNames, onOpen }: {
       <ChevronRight aria-hidden="true" size={18} />
     </span>
     <span className="jar-card-balance"><span>Còn khả dụng</span><strong>{formatMoney(view.remainingAmount)}</strong></span>
-    <span className="jar-card-progress-copy"><span className={`jar-status ${tone}`}>{status}</span><span>Còn {percent}% hạn mức</span></span>
+    <span className="jar-card-source-empty">Tiền đã dành ròng: {formatMoney(Math.max(0, view.remainingAmount + view.spentAmount))}</span>
+    <span className="jar-card-progress-copy"><span className={`jar-status ${tone}`}>{status}</span><span>Còn {percent}% tiền đã dành</span></span>
     <span className="jar-progress" role="progressbar" aria-label={`Tiền còn lại trong hũ ${view.jar.name}`} aria-valuenow={percent} aria-valuemin={0} aria-valuemax={100}><span style={{ width: `${percent}%` }} /></span>
-    <span className="jar-card-metrics"><span><small>Đã tiêu</small><strong>{formatMoney(view.spentAmount)}</strong></span><span><small>Hạn mức</small><strong>{formatMoney(view.jar.limitAmount)}</strong></span></span>
+    <span className="jar-card-metrics"><span><small>Đã chi · {budget.periodLabel}</small><strong>{formatMoney(budget.spent)}</strong></span><span><small>Còn ngân sách</small><strong>{formatMoney(budget.remaining)}</strong></span></span>
+    {budget.usedPercent >= 80 && <span className="jar-card-deficit">{budget.overage > 0
+      ? `Vượt ngân sách ${formatMoney(budget.overage)}` : "Ngân sách kỳ này gần hết"}</span>}
+    {budget.needsPeriodReview && <span className="jar-card-deficit">Hũ cũ cần chọn kỳ ngân sách</span>}
     <span className="jar-card-source-block"><span className="jar-card-source-title">Nguồn tiền</span>
       {sources.length === 0 ? <span className="jar-card-source-empty">Chưa có tiền trong hũ</span> : <>
         {sources.slice(0, 2).map((item) => <span className="jar-card-source-row" key={item.accountId}>

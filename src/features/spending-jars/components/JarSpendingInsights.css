@@ -1,0 +1,62 @@
+.jar-insights {
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+  border: 1px solid var(--money-border);
+  border-radius: 18px;
+  background: var(--money-surface);
+  padding: 1.15rem;
+}
+
+.jar-insights-heading { display: flex; align-items: start; justify-content: space-between; gap: 0.8rem; min-width: 0; }
+.jar-insights-heading h2,
+.jar-insights h3 { margin: 0; font-size: 1rem; }
+.jar-insights-heading p { margin: 0.2rem 0 0; color: var(--money-text-secondary); font-size: 0.75rem; }
+.jar-insights-heading > strong { color: var(--money-expense); font-size: 1.12rem; font-variant-numeric: tabular-nums; text-align: right; overflow-wrap: anywhere; }
+.jar-insights-empty,
+.jar-insights-refund { margin: 0; color: var(--money-text-secondary); font-size: 0.78rem; line-height: 1.5; }
+.jar-insights-refund { border-top: 1px solid var(--money-border); padding-top: 0.8rem; }
+.jar-insights-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.6rem; }
+.jar-insights-metrics > span { display: grid; gap: 0.2rem; min-width: 0; border-radius: 12px; background: var(--money-surface-muted); padding: 0.75rem; }
+.jar-insights-metrics small,
+.jar-insights-event small { color: var(--money-text-secondary); font-size: 0.72rem; }
+.jar-insights-metrics strong { font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.jar-insights-breakdown,
+.jar-insights-recent { display: grid; gap: 0.75rem; border-top: 1px solid var(--money-border); padding-top: 0.85rem; }
+.jar-insights-breakdown-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.65rem; }
+.jar-insights-view-toggle { display: inline-flex; flex-wrap: wrap; gap: 0.2rem; border: 1px solid var(--money-border); border-radius: 11px; background: var(--money-surface-muted); padding: 0.2rem; }
+.jar-insights-view-toggle button { min-height: 36px; border: 0; border-radius: 8px; background: transparent; padding: 0.3rem 0.55rem; color: var(--money-text-secondary); font-size: 0.75rem; font-weight: 700; cursor: pointer; }
+.jar-insights-view-toggle button[aria-pressed="true"] { background: var(--money-primary); color: var(--money-background); }
+.jar-insights-category { display: grid; gap: 0.3rem; }
+.jar-insights-category > div:first-child { display: flex; align-items: baseline; justify-content: space-between; gap: 0.65rem; font-size: 0.78rem; }
+.jar-insights-category > div:first-child span { min-width: 0; overflow-wrap: anywhere; }
+.jar-insights-category strong,
+.jar-insights-event > strong { flex: none; font-variant-numeric: tabular-nums; }
+.jar-insights-bar { height: 6px; overflow: hidden; border-radius: 999px; background: var(--money-surface-muted); }
+.jar-insights-bar > span { display: block; height: 100%; border-radius: inherit; background: var(--money-primary); }
+.jar-category-chart { display: grid; justify-items: center; gap: 1rem; min-width: 0; }
+.jar-category-donut { display: grid; place-items: center; width: min(190px, 64vw); aspect-ratio: 1; border-radius: 50%; }
+.jar-category-donut > div { display: grid; place-content: center; gap: 0.15rem; width: 68%; height: 68%; border-radius: 50%; background: var(--money-surface); text-align: center; }
+.jar-category-donut small { color: var(--money-text-secondary); font-size: 0.72rem; }
+.jar-category-donut strong { font-size: 0.9rem; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.jar-category-columns { display: grid; align-items: end; gap: 0.45rem; width: 100%; min-width: 0; height: 180px; }
+.jar-category-column { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; justify-items: center; gap: 0.35rem; min-width: 0; height: 100%; }
+.jar-category-column > strong { font-size: 0.72rem; font-variant-numeric: tabular-nums; }
+.jar-category-column-track { display: flex; align-items: end; width: min(100%, 48px); height: 100%; border-bottom: 1px solid var(--money-border-strong); }
+.jar-category-column-track > span { display: block; width: 100%; min-height: 3px; border-radius: 6px 6px 0 0; }
+.jar-category-column > small { width: 100%; overflow: hidden; color: var(--money-text-secondary); font-size: 0.66rem; text-align: center; text-overflow: ellipsis; white-space: nowrap; }
+.jar-category-legend { display: grid; gap: 0.55rem; width: 100%; }
+.jar-category-legend > div { display: flex; align-items: baseline; justify-content: space-between; gap: 0.7rem; font-size: 0.76rem; }
+.jar-category-legend-name { display: inline-flex; align-items: baseline; gap: 0.4rem; min-width: 0; overflow-wrap: anywhere; }
+.jar-category-legend-name i { display: inline-block; flex: none; width: 9px; height: 9px; border-radius: 3px; }
+.jar-category-legend strong { flex: none; font-variant-numeric: tabular-nums; }
+.jar-insights-event { display: flex; align-items: start; justify-content: space-between; gap: 0.7rem; font-size: 0.78rem; }
+.jar-insights-event > div { display: grid; gap: 0.18rem; min-width: 0; }
+.jar-insights-event > div strong,
+.jar-insights-event small { overflow-wrap: anywhere; }
+.jar-insights-event > strong { color: var(--money-expense); text-align: right; }
+
+@media (max-width: 380px) {
+  .jar-insights-heading { display: grid; }
+  .jar-insights-heading > strong { text-align: left; }
+}

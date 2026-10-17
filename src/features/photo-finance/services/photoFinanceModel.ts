@@ -1,4 +1,5 @@
 import type { AccountTransaction } from "../../account-ledger/accountLedgerModel.ts";
+import { isExpenseReversal } from "../../account-ledger/accountLedgerModel.ts";
 import type { DailyEntry, ExpenseEntry } from "../../../types.ts";
 import { getExpenseTotal, getTotalEntryMoney } from "../../../utils/entries.ts";
 import type { DailyFinancialSummary, PhotoAttachment } from "../types/photoFinance.ts";
@@ -21,7 +22,8 @@ export function buildDailyFinancialSummaries(
   for (const expense of expenses) add(expense.date, 0, getExpenseTotal(expense));
   for (const transaction of transactions) {
     if (!isIndependentReportingTransaction(transaction)) continue;
-    if (transaction.type === "income") add(transaction.date, transaction.amount, 0);
+    if (isExpenseReversal(transaction)) add(transaction.date, 0, -transaction.amount);
+    else if (transaction.type === "income") add(transaction.date, transaction.amount, 0);
     if (transaction.type === "expense") add(transaction.date, 0, transaction.amount);
     // All transfers are excluded, regardless of account or provenance.
   }

@@ -1,5 +1,6 @@
 import type { AccountTransaction, FinancialAccount } from "../../account-ledger/accountLedgerModel.ts";
-import { calculateAccountBalance } from "../../account-ledger/accountLedgerModel.ts";
+import { calculateAccountBalance, isExpenseReversal } from "../../account-ledger/accountLedgerModel.ts";
+import { calculateAccountExternalAmount } from "../../account-ledger/accountExternalModel.ts";
 import type { ExpenseBudget } from "../../../types.ts";
 
 export type SpendingJar = {
@@ -8,6 +9,8 @@ export type SpendingJar = {
   icon: string;
   color?: string;
   limitAmount: number;
+  /** Undefined on old hand-created jars: their previous total cap stays a legacy rule. */
+  budgetPeriod?: "monthly" | "custom" | "legacy_total";
   startDate: string;
   endDate?: string;
   linkedLabels: string[];
@@ -47,10 +50,54 @@ export type JarView = {
   deficitAmount: number;
 };
 
+export type JarBudgetView = {
+  spent: number;
+  remaining: number;
+  overage: number;
+  usedPercent: number;
+  periodLabel: string;
+  needsPeriodReview: boolean;
+};
+
+/** Budget is a spending plan, independent of cash still reserved in the jar. */
+export function getJarBudgetRange(jar: SpendingJar, asOfDate: string) {
+  const period = jar.budgetPeriod ?? "legacy_total";
+  const start = period === "monthly" ? `${asOfDate.slice(0, 7)}-01` : jar.startDate;
+  const [year, month] = asOfDate.slice(0, 7).split("-").map(Number);
+  const end = period === "monthly"
+    ? `${asOfDate.slice(0, 7)}-${String(new Date(Date.UTC(year, month, 0)).getUTCDate()).padStart(2, "0")}`
+    : jar.endDate ?? asOfDate;
+  const fromDate = start < jar.startDate ? jar.startDate : start;
+  const toDate = jar.endDate && end > jar.endDate ? jar.endDate : end;
+  return { fromDate, toDate };
+}
+
+export function getJarBudgetView(ledger: JarLedger, jar: SpendingJar, asOfDate: string): JarBudgetView {
+  const period = jar.budgetPeriod ?? "legacy_total";
+  const { fromDate, toDate } = getJarBudgetRange(jar, asOfDate);
+  const spent = ledger.transactions.reduce((sum, transaction) =>
+    transaction.jarId === jar.id && transaction.type === "expense" &&
+    transaction.date >= fromDate && transaction.date <= toDate ? sum + transaction.amount : sum, 0);
+  const refunds = ledger.transactions.reduce((sum, transaction) =>
+    transaction.jarId === jar.id && isExpenseReversal(transaction) &&
+    transaction.date >= fromDate && transaction.date <= toDate ? sum + transaction.amount : sum, 0);
+  const netSpent = Math.max(0, spent - refunds);
+  return {
+    spent: netSpent,
+    remaining: Math.max(0, jar.limitAmount - netSpent),
+    overage: Math.max(0, netSpent - jar.limitAmount),
+    usedPercent: jar.limitAmount > 0 ? Math.round(netSpent / jar.limitAmount * 100) : 0,
+    periodLabel: period === "monthly" ? `Tháng ${asOfDate.slice(5, 7)}/${asOfDate.slice(0, 4)}`
+      : period === "custom" ? "Kỳ đã chọn" : "Hạn mức cũ · toàn kỳ",
+    needsPeriodReview: period === "legacy_total" && !jar.legacyBudgetId,
+  };
+}
+
 /** The progress bar represents money still available in the jar, not money spent. */
 export function getJarRemainingPercent(view: JarView): number {
-  if (view.jar.limitAmount <= 0) return 0;
-  return Math.min(100, Math.max(0, Math.round(view.remainingAmount / view.jar.limitAmount * 100)));
+  const everHeldForSpending = Math.max(0, view.remainingAmount) + Math.max(0, view.spentAmount);
+  if (everHeldForSpending <= 0) return 0;
+  return Math.min(100, Math.max(0, Math.round(view.remainingAmount / everHeldForSpending * 100)));
 }
 
 export function getJarView(ledger: JarLedger, jar: SpendingJar): JarView {
@@ -86,7 +133,7 @@ export function getJarView(ledger: JarLedger, jar: SpendingJar): JarView {
   const remainingAmount = sources.reduce((sum, source) => sum + source.amount, 0);
   const deficitAmount = sources.reduce((sum, source) => {
     const account = ledger.accounts.find((item) => item.id === source.accountId);
-    const balance = account ? calculateAccountBalance(account, ledger.transactions) : 0;
+    const balance = account ? calculateAccountBalance(account, ledger.transactions) - calculateAccountExternalAmount(account) : 0;
     return sum + Math.max(0, source.amount - Math.max(balance, 0));
   }, 0);
   return { jar, sources, remainingAmount, spentAmount, fundedAmount, deficitAmount };
@@ -101,7 +148,9 @@ export function getAccountAllocation(ledger: JarLedger, accountId: string) {
 export function getAccountAvailableToAllocate(ledger: JarLedger, accountId: string) {
   const account = ledger.accounts.find((item) => item.id === accountId && !item.archivedAt);
   if (!account) return 0;
-  return Math.max(0, calculateAccountBalance(account, ledger.transactions) - getAccountAllocation(ledger, accountId));
+  if (account.budgetEligibility !== "eligible") return 0;
+  return Math.max(0, calculateAccountBalance(account, ledger.transactions) -
+    calculateAccountExternalAmount(account) - getAccountAllocation(ledger, accountId));
 }
 
 /** Deterministic, additive migration: legacy budgets stay untouched for recovery. */
@@ -110,7 +159,7 @@ export function migrateExpenseBudgets(ledger: JarLedger, budgets: ExpenseBudget[
   const added = budgets.filter((budget) => !ids.has(`legacy-budget:${budget.id}`))
     .map((budget): SpendingJar => ({
       id: `legacy-budget:${budget.id}`, name: budget.label, icon: "🏷️",
-      limitAmount: budget.monthlyLimit, startDate: now.slice(0, 7) + "-01",
+      limitAmount: budget.monthlyLimit, budgetPeriod: "monthly", startDate: now.slice(0, 7) + "-01",
       linkedLabels: [budget.label], status: "active", legacyBudgetId: budget.id,
       createdAt: budget.createdAt, updatedAt: budget.updatedAt ?? budget.createdAt,
     }));

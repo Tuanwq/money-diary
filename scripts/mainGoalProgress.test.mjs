@@ -131,6 +131,16 @@ assert.equal(paced.goalNetAmount, 450_000);
 assert.equal(paced.remainingAmount, 1_550_000);
 assert.equal(paced.remainingDays, 2);
 assert.equal(paced.requiredPerDay, 775_000);
+const withRefund = buildMainGoalProgress({
+  asOfDate: "2026-09-03", entries: [], expenses: [], goals,
+  transactions: [
+    { ...transactions[0], id: "jar-spend:one:0", type: "expense", source: "spending_jar",
+      date: "2026-09-03", amount: 100_000, purpose: "daily_expense" },
+    { ...transactions[0], id: "jar-refund:one", type: "income", source: "spending_jar",
+      date: "2026-09-03", amount: 40_000, purpose: "daily_expense", reversesExpense: true },
+  ],
+});
+assert.equal(withRefund.goalExpenses, 60_000, "refund of an ordinary expense restores goal progress");
 
 const timeline = buildMainGoalProgressTimeline({
   asOfDate: "2026-09-05",
