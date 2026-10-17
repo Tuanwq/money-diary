@@ -1,3 +1,4 @@
+import { PopupNotice } from "../../components/feedback/PopupNotice.tsx";
 import {
   Bell,
   Bug,
@@ -265,7 +266,7 @@ export function AppUpdateCenter({ syncStatus }: { syncStatus?: string }) {
         <div className="app-update-center__summary-copy">
           <strong>{statusContent.label}</strong>
           <span>{statusContent.description}</span>
-          {error && <span className="is-error">{error}</span>}
+          <PopupNotice message={error} />
         </div>
         <div className="app-update-center__actions">
           <button

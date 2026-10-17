@@ -1,3 +1,4 @@
+import { showAppToast, showSuccessToast } from "../../components/feedback/appToast.ts";
 import {
   ArrowDownRight,
   ArrowRight,
@@ -269,7 +270,7 @@ export function AccountReconciliationPage({
       type: "e_wallet",
       updatedAt: now,
     });
-    alert("Đã thêm Ví Driver vào Sổ tài khoản.");
+    showSuccessToast("Đã thêm Ví Driver vào Sổ tài khoản.");
   }
 
   function submitCheck(event: React.FormEvent) {
@@ -306,7 +307,7 @@ export function AccountReconciliationPage({
     });
 
     if (lines.length === 0) {
-      alert("Hãy nhập số dư thực tế của ít nhất một tài khoản.");
+      showAppToast("Hãy nhập số dư thực tế của ít nhất một tài khoản.");
       return;
     }
 
@@ -322,7 +323,7 @@ export function AccountReconciliationPage({
 
     saveCheck(check);
     setEditingCheckId(check.id);
-    alert("Đã lưu kiểm kê tài khoản.");
+    showSuccessToast("Đã lưu kiểm kê tài khoản.");
   }
 
   function applyAdjustment(
@@ -333,14 +334,14 @@ export function AccountReconciliationPage({
 
     if (!line) return;
     if (line.reason === "internal_transfer") {
-      alert(
+      showAppToast(
         "Khoản chuyển nội bộ cần ghi đủ tài khoản gửi và nhận trong Sổ tài khoản."
       );
       onOpenLedger();
       return;
     }
     if (line.reason === "unknown") {
-      alert(
+      showAppToast(
         "Hãy chỉnh lần kiểm kê và chọn nguyên nhân trước khi tạo điều chỉnh."
       );
       return;
@@ -373,7 +374,7 @@ export function AccountReconciliationPage({
       checkId: check.id,
       transactionId: transaction.id,
     });
-    alert("Đã tạo giao dịch điều chỉnh trong Sổ tài khoản.");
+    showSuccessToast("Đã tạo giao dịch điều chỉnh trong Sổ tài khoản.");
   }
 
   function removeCheck(check: AccountReconciliation) {

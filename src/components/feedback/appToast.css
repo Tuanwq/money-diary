@@ -1,0 +1,50 @@
+.app-toast-viewport {
+  position: fixed;
+  z-index: 100000;
+  top: calc(env(safe-area-inset-top, 0px) + 12px);
+  right: 16px;
+  display: grid;
+  gap: 10px;
+  width: min(420px, calc(100vw - 32px));
+  pointer-events: none;
+}
+
+.app-toast {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) 28px;
+  gap: 12px;
+  align-items: start;
+  padding: 14px;
+  border: 1px solid var(--app-toast-border);
+  border-left: 4px solid var(--app-toast-accent);
+  border-radius: 18px;
+  background: var(--app-toast-bg);
+  color: var(--app-toast-text);
+  box-shadow: 0 14px 40px rgb(0 0 0 / 18%);
+  pointer-events: auto;
+  overflow-wrap: anywhere;
+}
+
+.app-toast.is-error { --app-toast-border: #e9bdb8; --app-toast-accent: #bc4e48; --app-toast-bg: #fff7f5; --app-toast-text: #56211e; }
+.app-toast.is-warning { --app-toast-border: #ebd7ac; --app-toast-accent: #ac751a; --app-toast-bg: #fffaf0; --app-toast-text: #513a16; }
+.app-toast.is-success { --app-toast-border: #b7d5c4; --app-toast-accent: #367d58; --app-toast-bg: #f3faf5; --app-toast-text: #173f2b; }
+.app-toast.is-info { --app-toast-border: #bfd2de; --app-toast-accent: #417690; --app-toast-bg: #f4f9fb; --app-toast-text: #1a3e50; }
+.app-toast__icon { color: var(--app-toast-accent); margin-top: 2px; }
+.app-toast__body { min-width: 0; }
+.app-toast__body strong { display: block; font-size: .9rem; line-height: 1.35; }
+.app-toast__body p { margin: 3px 0 0; font-size: .88rem; line-height: 1.45; white-space: pre-line; }
+.app-toast__close, .app-toast__action { cursor: pointer; }
+.app-toast__close { display: grid; place-items: center; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: inherit; }
+.app-toast__close:hover { background: rgb(0 0 0 / 8%); }
+.app-toast__action { margin-top: 9px; padding: 0; border: 0; background: transparent; color: var(--app-toast-accent); font: inherit; font-weight: 700; text-decoration: underline; }
+.app-toast__action--secondary { margin-left: 14px; }
+
+@media (max-width: 600px) {
+  .app-toast-viewport { right: 12px; left: 12px; width: auto; }
+  .app-toast { border-radius: 15px; }
+}
+
+.dark .app-toast.is-error { --app-toast-border: #74443f; --app-toast-bg: #311c1b; --app-toast-text: #ffe5df; }
+.dark .app-toast.is-warning { --app-toast-border: #725a35; --app-toast-bg: #30271c; --app-toast-text: #fff0d0; }
+.dark .app-toast.is-success { --app-toast-border: #3f7258; --app-toast-bg: #192d23; --app-toast-text: #dbf4e4; }
+.dark .app-toast.is-info { --app-toast-border: #3b6478; --app-toast-bg: #1b2d38; --app-toast-text: #e1f0f6; }

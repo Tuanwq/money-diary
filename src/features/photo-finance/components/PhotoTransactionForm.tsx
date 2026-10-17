@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { PopupNotice } from "../../../components/feedback/PopupNotice.tsx";
 import { ArrowDownLeft, ArrowUpRight, ArrowLeftRight, CalendarDays, Camera, Check, ChevronDown,
   Image as ImageIcon, Pencil, RotateCcw, WalletCards, X } from "lucide-react";
 import type { AccountTransaction, AccountTransactionType, FinancialAccount } from "../../account-ledger/accountLedgerModel.ts";
@@ -305,7 +306,7 @@ export function PhotoTransactionForm({ accounts, jars, jarActivities, transactio
 
     {savedId && <p className="photo-finance-retry" role="status">Giao dịch đã lưu một lần. Nút bên dưới chỉ tải lại ảnh.
       <button onClick={onStartNew} type="button">Tạo khoảnh khắc khác</button></p>}
-    {error && <p className="photo-finance-error photo-finance-form-error" role="alert">{error}</p>}
+    <PopupNotice message={error} />
 
     {(selectedPhoto || existing) && <div className="photo-finance-form-actions">
       <button aria-label="Bỏ ảnh đã chọn" className="photo-finance-cancel" disabled={working}

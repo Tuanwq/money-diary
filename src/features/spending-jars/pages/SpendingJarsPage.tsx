@@ -1,4 +1,5 @@
 import { useMemo, useState, type FormEvent } from "react";
+import { PopupNotice } from "../../../components/feedback/PopupNotice.tsx";
 import { ArrowLeft, Plus, WalletCards } from "lucide-react";
 import type { JarActivity, JarLedger, SpendingJar } from "../domain/jarModel.ts";
 import { getAccountAvailableToAllocate, getJarBudgetView, getJarRemainingPercent, getJarView } from "../domain/jarModel.ts";
@@ -123,15 +124,15 @@ export function SpendingJarsPage({ ledger, cloudStatus, onBack, onCommand, onDel
       <div className="jars-header-copy"><span>Money Diary</span><h1>{selected ? <><span className="jars-header-icon" aria-hidden="true">{selected.icon}</span>{selected.name}</> : "Hũ chi tiêu"}</h1>{!selected && <p>Phân bổ tiền theo mục đích mà không tách khỏi tài khoản.</p>}</div>
       {!selected && <button className="jars-primary" onClick={openCreate} type="button"><Plus size={17} /> Tạo hũ</button>}
     </header>
-    {/migration|chưa thể|lỗi|xung đột/i.test(cloudStatus) && <div className="jars-warning" role="status">
-      <p>{cloudStatus}. Dữ liệu trên thiết bị chưa được đồng bộ.</p>
-      <button type="button" onClick={onRetrySync}>Thử đồng bộ lại</button>
-      {/xung đột/i.test(cloudStatus) && <button type="button" onClick={() => {
+    <PopupNotice message={/migration|chưa thể|lỗi|xung đột/i.test(cloudStatus)
+      ? `${cloudStatus}. Dữ liệu trên thiết bị chưa được đồng bộ.` : ""}
+      actionLabel="Thử đồng bộ lại" onAction={onRetrySync}
+      secondaryActionLabel={/xung đột/i.test(cloudStatus) ? "Dùng bản cloud" : undefined}
+      onSecondaryAction={() => {
         try { onUseCloudVersion(); setError(""); }
         catch (cause) { setError(cause instanceof Error ? cause.message : "Chưa thể tải bản cloud."); }
-      }}>Dùng bản cloud (giữ bản sao trên máy)</button>}
-    </div>}
-    {error && <p className="jars-error" role="alert">{error}</p>}
+      }} />
+    <PopupNotice message={error} />
     {!selected ? <>
       <SpendingJarsOverview active={active} closed={closed} accountNames={accountNames}
         ledger={ledger} position={position} onCreate={openCreate} onOpen={setSelectedId} />
@@ -154,7 +155,8 @@ export function SpendingJarsPage({ ledger, cloudStatus, onBack, onCommand, onDel
           {selected.status === "closed" && view.remainingAmount === 0 && <p>Tiền chưa tiêu đã trở lại phần khả dụng của tài khoản; tổng số dư không đổi.</p>}
         </section>
         {spendingAnalysis && <JarSpendingInsights analysis={spendingAnalysis} />}
-        {view.deficitAmount > 0 && <p className="jars-warning">Tài khoản nguồn hiện thấp hơn phần đã dành {formatMoney(view.deficitAmount)}. Hãy nạp thêm hoặc giải phóng tiền.</p>}
+        <PopupNotice tone="warning" message={view.deficitAmount > 0
+          ? `Tài khoản nguồn hiện thấp hơn phần đã dành ${formatMoney(view.deficitAmount)}. Hãy nạp thêm hoặc giải phóng tiền.` : ""} />
         <section className="jar-sources"><h2>Nguồn tiền hiện tại</h2>{view.sources.filter((item) => item.amount > 0).map((item) => <div key={item.accountId}>
           <span><WalletCards size={16} /> {accountNames.get(item.accountId) ?? "Tài khoản đã xóa"}</span><strong>{formatMoney(item.amount)}</strong>
         </div>)}{view.remainingAmount === 0 && <p>Hũ chưa có tiền khả dụng.</p>}</section>

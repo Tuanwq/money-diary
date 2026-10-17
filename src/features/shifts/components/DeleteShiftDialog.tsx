@@ -1,4 +1,5 @@
 import { AlertTriangle, X } from "lucide-react";
+import { PopupNotice } from "../../../components/feedback/PopupNotice.tsx";
 import { useEffect, useId, useRef } from "react";
 import { HUB_TYPE_LABEL } from "../../../constants/hanoiHub";
 import type { HubEntry } from "../../../types/hub";
@@ -74,11 +75,7 @@ export function DeleteShiftDialog({
         <p id={descriptionId}>
           Bạn sắp xóa ca ngày <strong>{formatReportDate(entry.date)}</strong>, {HUB_TYPE_LABEL[entry.hubType]}, khung giờ <strong>{entry.shiftName || "chưa nhập"}</strong>. Thao tác này sẽ cập nhật lại tiền trong nhật ký.
         </p>
-        {error && (
-          <p className="delete-shift-dialog__error" role="alert">
-            {error}
-          </p>
-        )}
+        <PopupNotice message={error ?? ""} />
         <div className="delete-shift-dialog__actions">
           <button ref={cancelButtonRef} type="button" disabled={isDeleting} onClick={onCancel}>
             Hủy

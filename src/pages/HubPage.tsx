@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { showAppToast, showSuccessToast } from "../components/feedback/appToast.ts";
 import {
   HUB_INITIAL_EDIT_ENTRY_SESSION_KEY,
   HUB_INITIAL_TAB_SESSION_KEY,
@@ -1091,18 +1092,18 @@ export function HubPage({
     const joins = toHubJoins(form.joins);
 
     if (!form.date) {
-      alert("Bạn chưa chọn ngày.");
+      showAppToast("Bạn chưa chọn ngày.");
       return;
     }
 
     if (order <= 0 && joins.length === 0) {
-      alert("Bạn cần nhập tổng số đơn hoặc ít nhất một lượt ghép.");
+      showAppToast("Bạn cần nhập tổng số đơn hoặc ít nhất một lượt ghép.");
       return;
     }
 
     const joinedOrderCount = getJoinChildOrderCount(joins);
     if (joinedOrderCount > order) {
-      alert(
+      showAppToast(
         `Đơn đã dùng cho đơn ghép (${joinedOrderCount}) đang lớn hơn tổng số đơn trong ca (${order}).`
       );
       return;
@@ -1177,7 +1178,7 @@ export function HubPage({
     setEditingHubEntryId(null);
     setShowIncomeDetails(false);
     setTab("list");
-    alert(
+    showSuccessToast(
       editingHubEntryId
         ? "Đã cập nhật ca hub thành công."
         : "Đã thêm ca hub và nhật kí thành công."
@@ -1308,7 +1309,7 @@ export function HubPage({
   function restoreDeletedHubEntry(entry: HubEntry) {
     const exists = entries.some((item) => item.id === entry.id);
     if (exists) {
-      alert("Ca hub này đang tồn tại, không cần khôi phục.");
+      showAppToast("Ca hub này đang tồn tại, không cần khôi phục.");
       return;
     }
 
@@ -1329,7 +1330,7 @@ export function HubPage({
       null,
       getHubDiaryContribution(restoredEntry, settings)
     );
-    alert("Đã khôi phục ca hub.");
+    showSuccessToast("Đã khôi phục ca hub.");
   }
 
   function undoHubChange(log: HubChangeLog) {
@@ -1339,7 +1340,7 @@ export function HubPage({
         getHubDiaryContribution(log.nextEntry, settings),
         null
       );
-      alert("Đã hoàn tác ca vừa thêm.");
+      showSuccessToast("Đã hoàn tác ca vừa thêm.");
       return;
     }
 
@@ -1369,11 +1370,11 @@ export function HubPage({
         getHubDiaryContribution(log.nextEntry, settings),
         getHubDiaryContribution(revertedEntry, settings)
       );
-      alert("Đã hoàn tác lần cập nhật ca hub.");
+      showSuccessToast("Đã hoàn tác lần cập nhật ca hub.");
       return;
     }
 
-    alert("Thay đổi này không thể hoàn tác tự động.");
+    showAppToast("Thay đổi này không thể hoàn tác tự động.");
   }
 
   function selectListTimeFilter(nextFilter: HubTimeFilter) {

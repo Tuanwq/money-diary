@@ -1,4 +1,5 @@
 import { useBrowserRoute } from "./app/router/useBrowserRoute";
+import { showAppToast, showSuccessToast } from "./components/feedback/appToast.ts";
 import { HubSelectionPage } from "./features/hub/pages/HubSelectionPage";
 import { useAccountLedger } from "./features/account-ledger/useAccountLedger";
 import { selectTrustedLegacyBudgets } from "./features/account-ledger/ledgerStorageScope.ts";
@@ -990,7 +991,7 @@ function restoreChangeLog(id: string) {
   if (!log || log.restoredAt) return;
 
   if (log.canRestore === false) {
-    alert(
+    showAppToast(
       "Bản lịch sử này quá lớn nên chỉ được lưu để đối chiếu, không thể khôi phục tự động."
     );
     return;
@@ -1823,7 +1824,7 @@ function handleExpenseSubmit(event: React.FormEvent) {
   event.preventDefault();
 
   if (!expenseForm.date) {
-    alert("Bạn chưa chọn ngày chi tiêu.");
+    showAppToast("Bạn chưa chọn ngày chi tiêu.");
     return;
   }
 
@@ -1834,7 +1835,7 @@ function handleExpenseSubmit(event: React.FormEvent) {
   const other = otherItems.reduce((sum, item) => sum + item.amount, 0);
 
   if (breakfast < 0 || lunch < 0 || dinner < 0 || other < 0) {
-    alert("Chi tiêu không được âm.");
+    showAppToast("Chi tiêu không được âm.");
     return;
   }
 
@@ -1900,7 +1901,7 @@ function handleCloseDaySubmit(event: React.FormEvent) {
   event.preventDefault();
 
   if (!closeDayForm.date) {
-    alert("Bạn chưa chọn ngày chốt.");
+    showAppToast("Bạn chưa chọn ngày chốt.");
     return;
   }
 
@@ -1931,7 +1932,7 @@ function handleCloseDaySubmit(event: React.FormEvent) {
   const note = closeDayForm.note.trim();
 
   if (!income && !bonusMoney && !receivedMoney && !expenseTotal && !note) {
-    alert("Bạn chưa nhập dữ liệu nào để chốt ngày.");
+    showAppToast("Bạn chưa nhập dữ liệu nào để chốt ngày.");
     return;
   }
 
@@ -2048,7 +2049,7 @@ function handleBalanceCheckSubmit(event: React.FormEvent) {
   if (isBalanceCheckSubmitting) return;
 
   if (!balanceCheckForm.date) {
-    alert("Bạn chưa chọn ngày kiểm kê.");
+    showAppToast("Bạn chưa chọn ngày kiểm kê.");
     return;
   }
 
@@ -2056,7 +2057,7 @@ function handleBalanceCheckSubmit(event: React.FormEvent) {
   const bank = parseMoneyInput(balanceCheckForm.bank);
 
   if (cash < 0 || bank < 0) {
-    alert("Tiền mặt và tiền tài khoản không được âm.");
+    showAppToast("Tiền mặt và tiền tài khoản không được âm.");
     return;
   }
 
@@ -2110,7 +2111,7 @@ function handleBalanceCheckSubmit(event: React.FormEvent) {
   window.requestAnimationFrame(() => {
     setBalanceCheckOverlay((current) => ({ ...current, isOpen: false }));
     setIsBalanceCheckSubmitting(false);
-    alert("Đã thêm kiểm kê thành công.");
+    showSuccessToast("Đã thêm kiểm kê thành công.");
   });
 }
 
@@ -2154,7 +2155,7 @@ function editBalanceCheck(item: BalanceCheckEntry) {
     const workHours = roundWorkHours(Number(form.workHours));
 
     if (!form.date) {
-      alert("Bạn chưa chọn ngày.");
+      showAppToast("Bạn chưa chọn ngày.");
       return;
     }
 
@@ -2165,7 +2166,7 @@ function editBalanceCheck(item: BalanceCheckEntry) {
       orderCount < 0 ||
       workHours < 0
     ) {
-      alert("Số tiền, số lượng đơn và giờ làm không được âm.");
+      showAppToast("Số tiền, số lượng đơn và giờ làm không được âm.");
       return;
     }
 
@@ -2487,17 +2488,17 @@ function validateSubGoalForm() {
   const saved = parseMoneyInput(subGoalForm.saved);
 
   if (!name) {
-    alert("Bạn chưa nhập tên mục tiêu phụ.");
+    showAppToast("Bạn chưa nhập tên mục tiêu phụ.");
     return;
   }
 
   if (target <= 0) {
-    alert("Số tiền cần đạt phải lớn hơn 0.");
+    showAppToast("Số tiền cần đạt phải lớn hơn 0.");
     return;
   }
 
   if (!subGoalForm.startDate || !subGoalForm.deadline) {
-    alert("Bạn cần nhập ngày bắt đầu và hạn mục tiêu.");
+    showAppToast("Bạn cần nhập ngày bắt đầu và hạn mục tiêu.");
     return null;
   }
 
@@ -2666,7 +2667,7 @@ function addContributionToSubGoal(goalId: string) {
   const note = form.note.trim();
 
   if (amount <= 0) {
-    alert("Số tiền góp phải lớn hơn 0.");
+    showAppToast("Số tiền góp phải lớn hơn 0.");
     return;
   }
 
@@ -2742,12 +2743,12 @@ function updateSubGoalContribution(
   const note = payload.note.trim();
 
   if (!date) {
-    alert("Bạn chưa chọn ngày góp.");
+    showAppToast("Bạn chưa chọn ngày góp.");
     return;
   }
 
   if (amount <= 0) {
-    alert("Số tiền góp phải lớn hơn 0.");
+    showAppToast("Số tiền góp phải lớn hơn 0.");
     return;
   }
 
@@ -2876,7 +2877,7 @@ function applySubGoalAllocation({
   date: string;
 }) {
   if (!date) {
-    alert("Bạn chưa chọn ngày để chia tiền.");
+    showAppToast("Bạn chưa chọn ngày để chia tiền.");
     return false;
   }
 
@@ -2889,14 +2890,14 @@ function applySubGoalAllocation({
   );
 
   if (validAllocations.length === 0 || totalAllocation <= 0) {
-    alert("Bạn chưa nhập số tiền cần chia vào mục tiêu phụ.");
+    showAppToast("Bạn chưa nhập số tiền cần chia vào mục tiêu phụ.");
     return false;
   }
 
   const availableMoney = getSubGoalAllocationAvailable(date);
 
   if (totalAllocation > availableMoney) {
-    alert(
+    showAppToast(
       `Số tiền chia đang vượt tiền dư của ngày ${date}: ${formatMoney(
         availableMoney
       )}.`
@@ -3134,17 +3135,17 @@ function saveMainGoal() {
   const saved = parseMoneyInput(mainGoalForm.bigGoalSaved);
 
   if (!name) {
-    alert("Bạn chưa nhập tên mục tiêu lớn.");
+    showAppToast("Bạn chưa nhập tên mục tiêu lớn.");
     return;
   }
 
   if (target < 0 || saved < 0) {
-    alert("Số tiền không được âm.");
+    showAppToast("Số tiền không được âm.");
     return;
   }
 
   if (!mainGoalForm.bigGoalStartDate || !mainGoalForm.bigGoalDeadline) {
-    alert("Bạn cần nhập ngày bắt đầu và hạn mục tiêu.");
+    showAppToast("Bạn cần nhập ngày bắt đầu và hạn mục tiêu.");
     return;
   }
   const nextGoals = {
@@ -3175,7 +3176,7 @@ function saveMainGoal() {
     ],
   });
 
-  alert("Đã lưu mục tiêu lớn.");
+  showSuccessToast("Đã lưu mục tiêu lớn.");
 }
 
 function resetExpenseBudgetForm() {
@@ -3203,12 +3204,12 @@ function saveExpenseBudget() {
   const monthlyLimit = parseMoneyInput(expenseBudgetForm.monthlyLimit);
 
   if (!label) {
-    alert("Bạn chưa chọn hoặc nhập nhãn ngân sách.");
+    showAppToast("Bạn chưa chọn hoặc nhập nhãn ngân sách.");
     return;
   }
 
   if (monthlyLimit <= 0) {
-    alert("Ngân sách tháng phải lớn hơn 0.");
+    showAppToast("Ngân sách tháng phải lớn hơn 0.");
     return;
   }
 
@@ -3225,7 +3226,7 @@ function saveExpenseBudget() {
   });
 
   if (duplicatedBudget) {
-    alert("Nhãn này đã có ngân sách. Bạn hãy sửa ngân sách cũ thay vì thêm trùng.");
+    showAppToast("Nhãn này đã có ngân sách. Bạn hãy sửa ngân sách cũ thay vì thêm trùng.");
     return;
   }
 
@@ -3344,7 +3345,7 @@ async function exportToWord() {
     });
   } catch (error) {
     console.error(error);
-    alert("Không tải được chức năng xuất Word. Hãy tải lại ứng dụng và thử lại.");
+    showAppToast("Không tải được chức năng xuất Word. Hãy tải lại ứng dụng và thử lại.");
   }
 }
 
@@ -3444,7 +3445,7 @@ if (route.kind === "daymark") {
                 void deleteAccountTransactionWithPhotos(transactionId,
                   cloudDataUserId, deleteAccountTransaction).catch((cause) => {
                     console.error(cause);
-                    window.alert("Chưa xóa được giao dịch vì ảnh liên kết cần dọn trước. Hãy thử lại.");
+                    showAppToast("Chưa xóa được giao dịch vì ảnh liên kết cần dọn trước. Hãy thử lại.");
                   });
               }}
               saveAccount={saveAccount}

@@ -1,3 +1,4 @@
+import { PopupNotice } from "../../components/feedback/PopupNotice.tsx";
 import {
   ArchiveRestore,
   CalendarClock,
@@ -536,15 +537,8 @@ export function BackupCenter({
         </span>
       </header>
 
-      {(cloudError || syncWarning) && (
-        <div className="backup-warning" role="status">
-          <CloudOff aria-hidden="true" size={18} />
-          <span>
-            <strong>Cần kiểm tra đồng bộ</strong>
-            <small>{syncWarning || cloudError}</small>
-          </span>
-        </div>
-      )}
+      <PopupNotice message={syncWarning || cloudError} actionLabel="Thử lại"
+        onAction={() => void refresh()} />
 
       <div className="backup-actions">
         <button
@@ -583,11 +577,7 @@ export function BackupCenter({
         />
       </div>
 
-      {feedback && (
-        <p className="backup-feedback" role="status">
-          {feedback}
-        </p>
-      )}
+      <PopupNotice message={feedback} tone={/không thể|lỗi|chưa thể/i.test(feedback) ? "error" : "success"} />
 
       <div className="backup-list-heading">
         <div>

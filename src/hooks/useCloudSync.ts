@@ -1,4 +1,5 @@
 import type { Session } from "@supabase/supabase-js";
+import { showAppToast, showSuccessToast } from "../components/feedback/appToast.ts";
 import type { Dispatch, SetStateAction } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -742,14 +743,14 @@ export function useCloudSync({
 
   async function handleSignUp() {
     if (supabaseEnvError) {
-      alert(supabaseEnvError);
+      showAppToast(supabaseEnvError);
       return;
     }
 
     const email = authEmail.trim();
     const password = authPassword.trim();
     if (!email || !password) {
-      alert("Bạn chưa nhập email hoặc mật khẩu.");
+      showAppToast("Bạn chưa nhập email hoặc mật khẩu.");
       return;
     }
 
@@ -759,24 +760,24 @@ export function useCloudSync({
       options: { emailRedirectTo: getAuthEmailRedirectUrl() },
     });
     if (error) {
-      alert(error.message);
+      showAppToast(error.message);
       return;
     }
 
-    alert(
+    showSuccessToast(
       "Đăng ký thành công. Nếu Supabase yêu cầu xác nhận email, hãy mở email để xác nhận."
     );
   }
 
   async function handleResendConfirmation() {
     if (supabaseEnvError) {
-      alert(supabaseEnvError);
+      showAppToast(supabaseEnvError);
       return;
     }
 
     const email = authEmail.trim();
     if (!email) {
-      alert("Nhập email đã đăng ký để nhận lại link xác nhận.");
+      showAppToast("Nhập email đã đăng ký để nhận lại link xác nhận.");
       return;
     }
 
@@ -786,28 +787,28 @@ export function useCloudSync({
       options: { emailRedirectTo: getAuthEmailRedirectUrl() },
     });
     if (error) {
-      alert(error.message);
+      showAppToast(error.message);
       return;
     }
 
-    alert("Nếu email này đang chờ xác nhận, chúng tôi đã gửi một link mới. Hãy mở email mới nhất.");
+    showSuccessToast("Nếu email này đang chờ xác nhận, chúng tôi đã gửi một link mới. Hãy mở email mới nhất.");
   }
 
   async function handleLogin() {
     if (supabaseEnvError) {
-      alert(supabaseEnvError);
+      showAppToast(supabaseEnvError);
       return;
     }
 
     const email = authEmail.trim();
     const password = authPassword.trim();
     if (!email || !password) {
-      alert("Bạn chưa nhập email hoặc mật khẩu.");
+      showAppToast("Bạn chưa nhập email hoặc mật khẩu.");
       return;
     }
 
     const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) alert(error.message);
+    if (error) showAppToast(error.message);
   }
 
   async function handleLogout() {

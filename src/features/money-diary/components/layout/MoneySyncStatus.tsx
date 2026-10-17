@@ -1,4 +1,5 @@
 import { Cloud, CloudOff, RefreshCw } from "lucide-react";
+import { PopupNotice } from "../../../../components/feedback/PopupNotice.tsx";
 
 type MoneySyncStatusProps = {
   isRefreshing: boolean;
@@ -57,6 +58,9 @@ export function MoneySyncStatus({
 
   if (hasError) {
     return (
+      <>
+      <PopupNotice message={syncStatus} actionLabel={isConflict && onResolveConflict ? "Xem cách xử lý" : "Thử lại"}
+        onAction={isConflict && onResolveConflict ? onResolveConflict : onRetry} />
       <button
         type="button"
         className={`${className} money-sync-status-button`}
@@ -69,6 +73,7 @@ export function MoneySyncStatus({
         <SyncIcon aria-hidden="true" size={16} />
         <span>{label}<small className="money-sync-status-detail">{syncStatus}</small></span>
       </button>
+      </>
     );
   }
 

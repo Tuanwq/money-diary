@@ -1,3 +1,5 @@
+import { PopupNotice } from "../../../components/feedback/PopupNotice.tsx";
+
 type HistoryErrorStateProps = {
   message: string;
   onRetry?: () => void;
@@ -15,10 +17,12 @@ export function HistoryLoadingState() {
 
 export function HistoryErrorState({ message, onRetry }: HistoryErrorStateProps) {
   return (
-    <div className="history-error-state" role="alert">
-      <h3>{message}</h3>
+    <><PopupNotice message={message} actionLabel={onRetry ? "Thử lại" : undefined} onAction={onRetry} />
+    <div className="history-error-state">
+      <h3>Lịch sử tạm thời chưa tải được</h3>
       <p>Dữ liệu cũ vẫn được giữ nguyên nếu có.</p>
       {onRetry && <button type="button" onClick={onRetry}>Thử lại</button>}
     </div>
+    </>
   );
 }

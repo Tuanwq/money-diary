@@ -1,3 +1,4 @@
+import { showAppToast } from "../../components/feedback/appToast.ts";
 import {
   AlertTriangle,
   BellRing,
@@ -140,12 +141,12 @@ function RuleForm({
         : parseMoneyInput(amountValue);
 
     if (!trimmedName) {
-      alert("Bạn chưa nhập tên quy tắc.");
+      showAppToast("Bạn chưa nhập tên quy tắc.");
       return;
     }
 
     if (action !== "alert" && !targetId) {
-      alert("Hãy chọn nơi nhận kết quả tự động.");
+      showAppToast("Hãy chọn nơi nhận kết quả tự động.");
       return;
     }
 
@@ -154,7 +155,7 @@ function RuleForm({
       amountMode !== "full" &&
       (parsedValue <= 0 || (amountMode === "percent" && parsedValue > 100))
     ) {
-      alert(
+      showAppToast(
         amountMode === "percent"
           ? "Phần trăm phải từ 1 đến 100."
           : "Số tiền tự động phải lớn hơn 0."

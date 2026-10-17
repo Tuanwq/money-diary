@@ -1,3 +1,5 @@
+import { showAppToast } from "../../components/feedback/appToast.ts";
+import { PopupNotice } from "../../components/feedback/PopupNotice.tsx";
 import {
   ArrowDownLeft,
   ArrowLeftRight,
@@ -94,7 +96,7 @@ function AccountForm({
     const trimmedName = name.trim();
 
     if (!trimmedName) {
-      alert("Bạn chưa nhập tên tài khoản.");
+      showAppToast("Bạn chưa nhập tên tài khoản.");
       return;
     }
 
@@ -110,7 +112,7 @@ function AccountForm({
       budgetEligibility,
       updatedAt: now,
     }); onClose(); }
-    catch (cause) { alert(cause instanceof Error ? cause.message : "Không thể lưu tài khoản."); }
+    catch (cause) { showAppToast(cause instanceof Error ? cause.message : "Không thể lưu tài khoản."); }
   }
 
   return (
@@ -283,17 +285,17 @@ function TransactionForm({
     const parsedAmount = parseMoneyInput(amount);
 
     if ((!selectedJar && !accountId) || parsedAmount <= 0) {
-      alert("Hãy chọn tài khoản và nhập số tiền lớn hơn 0.");
+      showAppToast("Hãy chọn tài khoản và nhập số tiền lớn hơn 0.");
       return;
     }
 
     if (type === "transfer" && (!toAccountId || toAccountId === accountId)) {
-      alert("Tài khoản nhận phải khác tài khoản chuyển.");
+      showAppToast("Tài khoản nhận phải khác tài khoản chuyển.");
       return;
     }
 
     if (!effectivePurpose) {
-      alert("Hãy chọn giao dịch này ảnh hưởng đến mục tiêu như thế nào.");
+      showAppToast("Hãy chọn giao dịch này ảnh hưởng đến mục tiêu như thế nào.");
       return;
     }
 
@@ -325,7 +327,7 @@ function TransactionForm({
       });
       onClose();
     } catch (cause) {
-      alert(cause instanceof Error ? cause.message : "Không thể lưu giao dịch.");
+      showAppToast(cause instanceof Error ? cause.message : "Không thể lưu giao dịch.");
     }
   }
 
@@ -633,7 +635,7 @@ export function AccountLedgerPage({
 
   function openNewTransaction() {
     if (activeAccounts.length === 0) {
-      alert("Hãy tạo ít nhất một tài khoản trước.");
+      showAppToast("Hãy tạo ít nhất một tài khoản trước.");
       return;
     }
 
@@ -653,7 +655,7 @@ export function AccountLedgerPage({
 
     if (confirm(message)) {
       try { archiveAccount(account.id); }
-      catch (cause) { alert(cause instanceof Error ? cause.message : "Không thể ẩn tài khoản."); }
+      catch (cause) { showAppToast(cause instanceof Error ? cause.message : "Không thể ẩn tài khoản."); }
     }
   }
 
@@ -701,25 +703,22 @@ export function AccountLedgerPage({
         </div>
       </header>
 
-      {/xung đột|chưa thể|lỗi/i.test(cloudStatus) && <div className="account-external-sync-notice" role="status">
-        <span>{cloudStatus}. Thay đổi trên thiết bị này có thể chưa được đồng bộ.</span>
-        <button type="button" onClick={onRetrySync}>Thử đồng bộ lại</button>
-        {/xung đột/i.test(cloudStatus) && <button type="button" onClick={() => {
+      <PopupNotice message={/xung đột|chưa thể|lỗi/i.test(cloudStatus)
+        ? `${cloudStatus}. Thay đổi trên thiết bị này có thể chưa được đồng bộ.` : ""}
+        actionLabel="Thử đồng bộ lại" onAction={onRetrySync}
+        secondaryActionLabel={/xung đột/i.test(cloudStatus) ? "Dùng bản cloud" : undefined}
+        onSecondaryAction={() => {
           if (!confirm("Dùng dữ liệu cloud mới nhất? Bản trên thiết bị sẽ được sao lưu để có thể khôi phục.")) return;
           try { onUseCloudVersion(); }
-          catch (cause) { alert(cause instanceof Error ? cause.message : "Chưa thể tải dữ liệu cloud."); }
-        }}>Dùng bản cloud (giữ bản sao)</button>}
-      </div>}
-      {legacyLocalRecoveryCandidate && <div className="account-external-sync-notice" role="status">
-        <span>Thiết bị còn sổ cũ chưa rõ tài khoản sở hữu ({legacyLocalRecoveryCandidate.accounts} tài khoản,
-          {" "}{legacyLocalRecoveryCandidate.transactions} giao dịch, {legacyLocalRecoveryCandidate.jars} hũ).
-          Dữ liệu này chưa được tự đồng bộ để tránh trộn hai người dùng.</span>
-        <button type="button" onClick={() => {
+          catch (cause) { showAppToast(cause instanceof Error ? cause.message : "Chưa thể tải dữ liệu cloud."); }
+        }} />
+      <PopupNotice tone="warning" message={legacyLocalRecoveryCandidate
+        ? `Thiết bị còn sổ cũ chưa rõ tài khoản sở hữu (${legacyLocalRecoveryCandidate.accounts} tài khoản, ${legacyLocalRecoveryCandidate.transactions} giao dịch, ${legacyLocalRecoveryCandidate.jars} hũ). Dữ liệu này chưa được tự đồng bộ để tránh trộn hai người dùng.`
+        : ""} actionLabel="Khôi phục sổ cũ" onAction={() => {
           if (!window.confirm("Chỉ khôi phục nếu sổ cũ này thuộc chính tài khoản đang đăng nhập. Bản gốc trên thiết bị sẽ được giữ. Tiếp tục?")) return;
           try { onClaimLegacyLocalLedger(); }
-          catch (cause) { window.alert(cause instanceof Error ? cause.message : "Chưa thể khôi phục sổ cũ."); }
-        }}>Khôi phục sổ cũ của tôi</button>
-      </div>}
+          catch (cause) { showAppToast(cause instanceof Error ? cause.message : "Chưa thể khôi phục sổ cũ."); }
+        }} />
 
       <section className="account-ledger-summary has-availability" aria-label="Tóm tắt sổ tài khoản">
         <div className="is-balance">
@@ -852,7 +851,7 @@ export function AccountLedgerPage({
         onDelete={(entry: AccountExternalEntry) => {
           if (!confirm("Xóa khoản tiền đang ở ngoài này? Tổng số dư sẽ không thay đổi.")) return;
           try { onExternalCommand({ kind: "delete", accountId: entry.accountId, id: entry.id, now: new Date().toISOString() }); }
-          catch (cause) { alert(cause instanceof Error ? cause.message : "Không thể xóa khoản tiền."); }
+          catch (cause) { showAppToast(cause instanceof Error ? cause.message : "Không thể xóa khoản tiền."); }
         }} />
 
       <section className="account-ledger-transactions">

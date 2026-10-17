@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { showSuccessToast } from "../../../components/feedback/appToast.ts";
 import { CalendarPlus, ChevronLeft, ChevronRight } from "lucide-react";
 import {
   addDaysToDateString,
@@ -169,7 +170,7 @@ export function TodayPage({
     });
     setFormError("");
     setIsScheduleModalOpen(true);
-    alert(`Đã mở chế độ sửa nhiệm vụ "${task.title}".`);
+    showSuccessToast(`Đã mở chế độ sửa nhiệm vụ "${task.title}".`);
   }
 
   function cancelEdit() {
@@ -212,7 +213,7 @@ export function TodayPage({
     cancelEdit();
 
     if (wasEditing) {
-      alert(`Đã lưu sửa nhiệm vụ "${savedTitle}".`);
+      showSuccessToast(`Đã lưu sửa nhiệm vụ "${savedTitle}".`);
     }
   }
 
@@ -223,7 +224,7 @@ export function TodayPage({
     });
 
     if (success) {
-      alert(`Đã chuyển nhiệm vụ "${task.title}" sang ngày mai.`);
+      showSuccessToast(`Đã chuyển nhiệm vụ "${task.title}" sang ngày mai.`);
     }
   }
 
@@ -237,7 +238,7 @@ export function TodayPage({
     const success = await deleteTask(task.id);
 
     if (success) {
-      alert(`Đã xóa nhiệm vụ "${task.title}".`);
+      showSuccessToast(`Đã xóa nhiệm vụ "${task.title}".`);
     }
   }
 
@@ -318,7 +319,7 @@ export function TodayPage({
     setImportDrafts([]);
     setImportErrors([]);
     setIsScheduleModalOpen(false);
-    alert(`Đã nhập ${validDrafts.length} nhiệm vụ từ văn bản.`);
+    showSuccessToast(`Đã nhập ${validDrafts.length} nhiệm vụ từ văn bản.`);
   }
 
   return (

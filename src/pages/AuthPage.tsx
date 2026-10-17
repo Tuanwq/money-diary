@@ -1,4 +1,5 @@
 import { ThemeToggle } from "../components/ThemeToggle";
+import { PopupNotice } from "../components/feedback/PopupNotice.tsx";
 import type { ThemeMode } from "../hooks/useThemeMode";
 
 function hasExpiredConfirmationLink(): boolean {
@@ -52,17 +53,9 @@ export function AuthPage({
           bộ.
         </p>
 
-        {supabaseEnvError && (
-          <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 p-3 text-sm font-medium text-red-700">
-            {supabaseEnvError}
-          </div>
-        )}
-
-        {expiredLink && (
-          <div role="alert" className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-            Link xác nhận đã hết hạn hoặc đã được sử dụng. Nhập email đã đăng ký bên dưới rồi gửi lại link mới.
-          </div>
-        )}
+        <PopupNotice message={supabaseEnvError} />
+        <PopupNotice tone="warning" message={expiredLink
+          ? "Link xác nhận đã hết hạn hoặc đã được sử dụng. Nhập email đã đăng ký bên dưới rồi gửi lại link mới." : ""} />
 
         <form
           className="mt-5 grid gap-3"

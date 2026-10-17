@@ -1,5 +1,4 @@
 import {
-  AlertTriangle,
   Bot,
   CalendarClock,
   CalendarRange,
@@ -19,6 +18,7 @@ import {
   WandSparkles,
   X,
 } from "lucide-react";
+import { PopupNotice } from "./feedback/PopupNotice.tsx";
 import type { LucideIcon } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type {
@@ -534,12 +534,7 @@ export function AiFinanceInsight({
                     </p>
                   )}
 
-                  {realAiError && (
-                    <p className="ai-finance-ai-error">
-                      <AlertTriangle aria-hidden="true" size={17} />
-                      {realAiError}
-                    </p>
-                  )}
+                  <PopupNotice message={realAiError} />
 
                   {realAiText && (
                     <div className="ai-finance-ai-answer">

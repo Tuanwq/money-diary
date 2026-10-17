@@ -1,4 +1,5 @@
 import { Pencil, Plus, Settings2, Trash2 } from "lucide-react";
+import { showAppToast } from "./feedback/appToast.ts";
 import { useEffect, useId, useMemo, useState } from "react";
 import {
   DEFAULT_OTHER_EXPENSE_LABELS,
@@ -79,7 +80,7 @@ export function OtherExpenseLabelManager({
   function addLabel() {
     const nextLabel = normalizeLabel(draftLabel);
     if (!nextLabel) {
-      alert("Bạn chưa nhập tên nhãn.");
+      showAppToast("Bạn chưa nhập tên nhãn.");
       return;
     }
 
@@ -90,13 +91,13 @@ export function OtherExpenseLabelManager({
 
   function renameSelectedLabel() {
     if (!selectValue) {
-      alert("Bạn chưa chọn nhãn để đổi tên.");
+      showAppToast("Bạn chưa chọn nhãn để đổi tên.");
       return;
     }
 
     const nextLabel = normalizeLabel(draftLabel);
     if (!nextLabel) {
-      alert("Bạn chưa nhập tên nhãn mới.");
+      showAppToast("Bạn chưa nhập tên nhãn mới.");
       return;
     }
 
@@ -107,7 +108,7 @@ export function OtherExpenseLabelManager({
 
   function deleteSelectedLabel() {
     if (!selectValue) {
-      alert("Bạn chưa chọn nhãn để xóa.");
+      showAppToast("Bạn chưa chọn nhãn để xóa.");
       return;
     }
 

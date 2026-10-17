@@ -142,6 +142,30 @@ test("mobile photo upload retries a failed request and sends display then thumbn
   ]);
 });
 
+test("small photo files upload together and a retry waits for both requests to settle", async () => {
+  const image = { display: new Blob(["display"]), thumbnail: new Blob(["thumb"]), width: 100, height: 80 };
+  const callbacks = new Map();
+  let bothStarted;
+  const started = new Promise((resolve) => { bothStarted = resolve; });
+  const upload = (path, bytes) => new Promise((resolve) => {
+    callbacks.set(path, { resolve, size: bytes.byteLength });
+    if (callbacks.size === 2) bothStarted();
+  });
+  const request = uploadProcessedPhotoImages(image, "owner/photo/display.jpg",
+    "owner/photo/thumbnail.jpg", upload, "parallel");
+  await started;
+  assert.equal(callbacks.get("owner/photo/display.jpg").size, 7);
+  assert.equal(callbacks.get("owner/photo/thumbnail.jpg").size, 5);
+  let settled = false;
+  void request.finally(() => { settled = true; }).catch(() => undefined);
+  callbacks.get("owner/photo/display.jpg").resolve({ error: new Error("Invalid image") });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(settled, false, "a failed request must wait for the other upload before retrying");
+  callbacks.get("owner/photo/thumbnail.jpg").resolve({ error: null });
+  await assert.rejects(request, /Invalid image/);
+  assert.equal(settled, true);
+});
+
 test("iOS photo profile avoids a large upload while preserving a readable display image", () => {
   assert.equal(isIosPhotoEnvironment("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)", 5), true);
   assert.equal(isIosPhotoEnvironment("Mozilla/5.0 (Macintosh; Intel Mac OS X)", 5), true);

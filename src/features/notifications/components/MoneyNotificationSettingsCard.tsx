@@ -1,3 +1,4 @@
+import { PopupNotice } from "../../../components/feedback/PopupNotice.tsx";
 import {
   Bell,
   BellOff,
@@ -348,11 +349,8 @@ export function MoneyNotificationSettingsCard({
         </div>
       </div>
 
-      {(actionMessage || error) && (
-        <p className="notification-settings-message" role="status">
-          {error || actionMessage}
-        </p>
-      )}
+      <PopupNotice message={error || actionMessage}
+        tone={error || /không thể|lỗi|chưa thể/i.test(actionMessage) ? "error" : "success"} />
 
       <footer className="notification-settings-footer">
         <button

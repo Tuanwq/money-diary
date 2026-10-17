@@ -1,3 +1,4 @@
+import { showAppToast } from "../../components/feedback/appToast.ts";
 import {
   AlertTriangle,
   ArrowRight,
@@ -130,15 +131,15 @@ function CashFlowPlanForm({
     const trimmedLabel = label.trim();
 
     if (!trimmedLabel) {
-      alert("Bạn chưa nhập tên khoản thu hoặc chi.");
+      showAppToast("Bạn chưa nhập tên khoản thu hoặc chi.");
       return;
     }
     if (parsedAmount <= 0) {
-      alert("Số tiền phải lớn hơn 0.");
+      showAppToast("Số tiền phải lớn hơn 0.");
       return;
     }
     if (!startDate) {
-      alert("Bạn chưa chọn ngày bắt đầu.");
+      showAppToast("Bạn chưa chọn ngày bắt đầu.");
       return;
     }
 
@@ -581,7 +582,7 @@ export function CashFlowForecastPage({
                   nextDays < 1 ||
                   nextDays > MAX_HORIZON_DAYS
                 ) {
-                  alert(
+                  showAppToast(
                     `Khoảng dự báo phải từ 1 đến ${MAX_HORIZON_DAYS} ngày.`
                   );
                   return;

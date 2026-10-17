@@ -1,4 +1,4 @@
-import { AlertCircle } from "lucide-react";
+import { PopupNotice } from "../../../../components/feedback/PopupNotice.tsx";
 
 type DashboardSectionStateProps = {
   error?: string | null;
@@ -35,18 +35,6 @@ export function DashboardSectionState({
 
   if (!error) return null;
 
-  return (
-    <div className="money-dashboard-section-error" role="alert">
-      <AlertCircle aria-hidden="true" size={21} />
-      <div>
-        <strong>Không tải được dữ liệu tài chính</strong>
-        <p>Vui lòng thử tải lại. Dữ liệu đã nhập không bị thay đổi.</p>
-      </div>
-      {onRetry && (
-        <button type="button" className="money-secondary-action" onClick={onRetry}>
-          Thử lại
-        </button>
-      )}
-    </div>
-  );
+  return <PopupNotice message={`Không tải được dữ liệu tài chính: ${error}. Dữ liệu đã nhập không bị thay đổi.`}
+    actionLabel={onRetry ? "Thử lại" : undefined} onAction={onRetry} />;
 }

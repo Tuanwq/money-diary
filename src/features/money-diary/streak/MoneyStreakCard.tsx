@@ -7,6 +7,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { useRef, useState } from "react";
+import { PopupNotice } from "../../../components/feedback/PopupNotice.tsx";
 import { formatDateShort } from "../../../utils/date";
 import { MoneyStreakDetails } from "./MoneyStreakDetails";
 import type { MoneyStreakSummary } from "./moneyStreak";
@@ -39,7 +40,7 @@ export function MoneyStreakCard({
   const canRestore = Boolean(summary.eligibleRestoreDate);
   const displayError = actionError || restoreError;
   const statusText = displayError
-    ? displayError
+    ? "Chưa thể cập nhật streak"
     : canRestore
       ? `Đã bỏ lỡ ngày ${formatDateShort(summary.eligibleRestoreDate!)}`
       : hasCompletedToday
@@ -73,6 +74,7 @@ export function MoneyStreakCard({
 
   return (
     <>
+      <PopupNotice message={displayError} />
       <section
         ref={cardRef}
         className={`money-card money-streak-card${

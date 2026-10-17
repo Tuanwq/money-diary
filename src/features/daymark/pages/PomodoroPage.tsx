@@ -1,4 +1,5 @@
 import { Settings2 } from "lucide-react";
+import { showAppToast } from "../../../components/feedback/appToast.ts";
 import { useEffect, useRef, useState } from "react";
 import {
   loadDayMarkNotificationSettings,
@@ -316,7 +317,7 @@ export function PomodoroPage({ onNavigate, userId }: PomodoroPageProps) {
         await updateDayMarkTask(timer.state.taskId, { status: "in_progress" });
         await loadTasks();
       } catch (error) {
-        alert(
+        showAppToast(
           error instanceof Error
             ? error.message
             : "Không thể cập nhật trạng thái đang làm."

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { PopupNotice } from "../../../components/feedback/PopupNotice.tsx";
 import type { AccountTransaction, FinancialAccount } from "../../account-ledger/accountLedgerModel.ts";
 import type { DailyEntry, ExpenseEntry } from "../../../types.ts";
 import type { JarActivity, SpendingJar } from "../../spending-jars/domain/jarModel.ts";
@@ -136,14 +137,14 @@ export function PhotoFinanceExperience({ accounts, jars, jarActivities, entries,
         }} />}
     {photoView === "calendar" && photos.status === "loading" &&
       <p className="photo-finance-status" role="status">Đang tải ảnh riêng tư...</p>}
-    {photos.status === "needs-login" && <p className="photo-finance-status" role="status">
-      Để lưu ảnh riêng tư cùng tài khoản, hãy đăng nhập và bật đồng bộ Supabase cho môi trường local.</p>}
-    {(photos.error || actionError || (photoView === "calendar" ? thumbnails.error : galleryThumbnails.error)) && <p className="photo-finance-error" role="alert">
-      {actionError || photos.error || (photoView === "calendar" ? thumbnails.error : galleryThumbnails.error)} <button onClick={() => {
+    <PopupNotice tone="warning" message={photos.status === "needs-login"
+      ? "Để lưu ảnh riêng tư cùng tài khoản, hãy đăng nhập và bật đồng bộ Supabase cho môi trường local." : ""} />
+    <PopupNotice message={actionError || photos.error || (photoView === "calendar" ? thumbnails.error : galleryThumbnails.error)}
+      actionLabel="Thử lại" onAction={() => {
         thumbnails.retry();
         galleryThumbnails.retry();
         void photos.refresh();
-      }} type="button">Thử lại</button></p>}
+      }} />
     <DayStory key={`${storyDate ?? "closed"}:${storyPhotoId ?? "cover"}`} accounts={accounts} attachments={storyDate ? attachmentsByDay.get(storyDate) ?? [] : []}
       date={storyDate ?? ""} entries={entries} expenses={expenses} isOpen={Boolean(storyDate) && !captureOpen}
       initialPhotoId={storyPhotoId ?? undefined}

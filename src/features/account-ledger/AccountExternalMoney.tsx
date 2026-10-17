@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from "react";
+import { PopupNotice } from "../../components/feedback/PopupNotice.tsx";
 import { ArrowDownLeft, Clock3, Plus, RotateCcw, Trash2, X } from "lucide-react";
 import { formatMoney, formatMoneyInput, parseMoneyInput } from "../../utils/money.ts";
 import { getToday } from "../../utils/date.ts";
@@ -81,7 +82,7 @@ export function AccountExternalForm({ accounts, transactions, dialog, onClose, o
       <input type="date" value={dueDate} min={date} onChange={(event) => setDueDate(event.target.value)} /></label>
       <label className="ledger-field"><span>Ghi chú</span><textarea rows={2} maxLength={300} value={note}
         onChange={(event) => setNote(event.target.value)} placeholder="Khoản này đang ở đâu?" /></label></>}
-    {error && <p className="external-money-error" role="alert">{error}</p>}
+    <PopupNotice message={error} />
     <footer className="ledger-modal-actions"><button className="notification-secondary-button" type="button" onClick={onClose}>Hủy</button>
       <button className="notification-primary-button" type="submit">{dialog.kind === "recover" ? "Xác nhận thu hồi" : "Lưu khoản tiền"}</button></footer>
   </form></div>;

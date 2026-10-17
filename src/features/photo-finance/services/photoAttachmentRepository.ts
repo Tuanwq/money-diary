@@ -104,13 +104,14 @@ export function createPhotoAttachmentRepository(client: SupabaseClient = supabas
       const thumbnailPath = `${ownerId}/${id}/thumbnail.jpg`;
       const storage = client.storage.from(PHOTO_FINANCE_BUCKET);
       try {
-        // Safari on unstable mobile networks may reject a Blob upload with
-        // "Load failed" after the request starts. Small ArrayBuffers avoid the
-        // multipart Blob path; sequential requests also reduce memory/network
-        // pressure. Stable paths make every retry safe to repeat.
+        // Safari may reject a multipart Blob upload with "Load failed".
+        // Small ArrayBuffers avoid that path. Upload two small JPEGs together
+        // to overlap network latency; keep larger payloads sequential to
+        // limit memory and connection pressure on mobile devices.
         await uploadProcessedPhotoImages(image, storagePath, thumbnailPath,
           (path, bytes) => storage.upload(path, bytes,
-            { contentType: "image/jpeg", upsert: true }));
+            { contentType: "image/jpeg", upsert: true }),
+          image.display.size + image.thumbnail.size <= 1_000_000 ? "parallel" : "sequential");
         const data = await unwrap(() => client.from("money_diary_financial_attachments")
           .upsert({ id, owner_id: ownerId, source_type: PHOTO_FINANCE_SOURCE_TYPE,
             source_id: transactionId, storage_path: storagePath,

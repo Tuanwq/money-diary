@@ -1,4 +1,5 @@
 import { Bell, BellOff, Check, Send, Smartphone } from "lucide-react";
+import { PopupNotice } from "../../../components/feedback/PopupNotice.tsx";
 import { useState } from "react";
 import {
   disableNotificationsForDevice,
@@ -202,11 +203,8 @@ export function DayMarkNotificationSettingsCard({
         </div>
       </div>
 
-      {(message || error) && (
-        <p className="notification-settings-message" role="status">
-          {error || message}
-        </p>
-      )}
+      <PopupNotice message={error || message}
+        tone={error || /không thể|lỗi|chưa thể/i.test(message) ? "error" : "success"} />
 
       <footer className="notification-settings-footer">
         <button
