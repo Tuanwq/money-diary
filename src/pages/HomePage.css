@@ -78,14 +78,167 @@
   background: var(--money-border);
 }
 
-.manager-allocation-card {
+.manager-allocation-panel {
   display: grid;
-  gap: 0.85rem;
+  gap: 0.8rem;
+  margin-top: 1rem;
+}
+
+.manager-dashboard-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.25rem;
+  margin-top: 1.1rem;
+  border-radius: 0.85rem;
+  background: var(--money-surface-soft, var(--money-surface));
+  padding: 0.25rem;
+}
+
+.manager-dashboard-tabs button {
+  min-width: 0;
+  border-radius: 0.65rem;
+  color: var(--money-text-secondary);
+  font-size: 0.82rem;
+  font-weight: 750;
+  padding: 0.7rem 0.45rem;
+}
+
+.manager-dashboard-tabs button.is-active {
+  background: var(--money-primary);
+  color: #fff;
+}
+
+.manager-dashboard-tabs button:focus-visible,
+.manager-allocation-more summary:focus-visible {
+  outline: 2px solid var(--money-primary);
+  outline-offset: 2px;
+}
+
+.manager-allocation-progress-copy,
+.manager-allocation-flow > div,
+.manager-allocation-more > div {
+  align-items: baseline;
+  display: flex;
+  gap: 0.5rem;
+  justify-content: space-between;
+}
+
+.manager-allocation-progress-copy {
+  color: var(--money-text-secondary);
+  font-size: 0.76rem;
+}
+
+.manager-allocation-progress-copy strong {
+  color: var(--money-primary);
+}
+
+.manager-allocation-note,
+.manager-allocation-warning,
+.manager-allocation-more p {
+  color: var(--money-text-secondary);
+  font-size: 0.74rem;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.manager-allocation-warning {
+  color: var(--money-danger, #b65c52);
+}
+
+.manager-allocation-flow {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.manager-allocation-flow > div {
+  align-items: flex-start;
+  background: var(--money-surface-soft, var(--money-surface));
+  border-radius: 0.75rem;
+  flex-direction: column;
+  font-size: 0.74rem;
+  min-width: 0;
+  padding: 0.7rem;
+}
+
+.manager-allocation-flow > .manager-flow-stat {
+  --flow-tone: var(--money-primary);
+  background: color-mix(in srgb, var(--flow-tone) 9%, var(--money-surface));
+  border: 1px solid color-mix(in srgb, var(--flow-tone) 19%, var(--money-border));
+  gap: 0.5rem;
+  min-height: 5.25rem;
+  padding: 0.8rem;
+}
+
+.manager-flow-stat.is-expense { --flow-tone: #b65c52; }
+.manager-flow-stat.is-jar-spend { --flow-tone: #ad7148; }
+.manager-flow-stat.is-jar-move { --flow-tone: #537996; }
+
+.manager-flow-stat > span {
+  align-items: center;
+  display: inline-flex;
+  gap: 0.4rem;
+  line-height: 1.3;
+}
+
+.manager-flow-stat > span svg {
+  color: var(--flow-tone);
+  flex: 0 0 auto;
+}
+
+.manager-flow-stat > strong {
+  font-size: clamp(0.85rem, 2.8vw, 1rem);
+}
+
+.manager-flow-stat.is-jar-move > strong {
+  color: var(--flow-tone);
+}
+
+.manager-allocation-flow span,
+.manager-allocation-more span {
+  color: var(--money-text-secondary);
+}
+
+.manager-allocation-flow strong,
+.manager-allocation-more strong {
+  color: var(--money-text);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.manager-allocation-flow strong.is-positive {
+  color: var(--money-primary);
+}
+
+.manager-allocation-flow strong.is-negative {
+  color: #b65c52;
+}
+
+.manager-allocation-more {
+  border-top: 1px solid var(--money-border);
+  padding-top: 0.7rem;
+}
+
+.manager-allocation-more summary {
+  color: var(--money-primary);
+  cursor: pointer;
+  font-size: 0.77rem;
+  font-weight: 750;
+}
+
+.manager-allocation-more > div {
+  border-bottom: 1px solid var(--money-border);
+  font-size: 0.75rem;
+  padding: 0.6rem 0;
+}
+
+.manager-allocation-more p {
+  margin-top: 0.65rem;
 }
 
 .manager-allocation-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.55rem;
 }
 
@@ -98,8 +251,37 @@
   padding: 0.75rem;
 }
 
-.manager-allocation-grid span,
-.manager-allocation-card > p {
+.manager-allocation-grid > .manager-allocation-stat {
+  --stat-tone: var(--money-primary);
+  background: color-mix(in srgb, var(--stat-tone) 11%, var(--money-surface));
+  border: 1px solid color-mix(in srgb, var(--stat-tone) 24%, var(--money-border));
+  min-height: 5.5rem;
+  padding: 0.9rem;
+}
+
+.manager-allocation-stat.is-unallocated { --stat-tone: #537996; }
+
+.manager-allocation-stat > span {
+  align-items: center;
+  display: inline-flex;
+  gap: 0.4rem;
+}
+
+.manager-allocation-stat > span svg {
+  color: var(--stat-tone);
+  flex: 0 0 auto;
+}
+
+.manager-allocation-stat > strong {
+  color: var(--money-text);
+  font-size: clamp(1.05rem, 3.8vw, 1.45rem);
+}
+
+.manager-allocation-stat > strong.is-negative {
+  color: #b65c52;
+}
+
+.manager-allocation-grid span {
   color: var(--money-text-secondary);
   font-size: 0.75rem;
 }
@@ -123,10 +305,57 @@
   background: var(--money-primary);
 }
 
-@media (max-width: 520px) {
-  .manager-allocation-grid { grid-template-columns: 1fr 1fr; }
-  .manager-allocation-grid > div:last-child { grid-column: 1 / -1; }
+.manager-jars-shortcut {
+  align-items: center;
+  background: color-mix(in srgb, var(--money-primary) 5%, var(--money-surface));
+  border: 1px solid var(--money-border);
+  border-radius: 0.9rem;
+  color: var(--money-text);
+  display: flex;
+  gap: 0.75rem;
+  min-width: 0;
+  padding: 0.85rem;
+  text-align: left;
+  width: 100%;
 }
+
+.manager-jars-shortcut:hover {
+  border-color: color-mix(in srgb, var(--money-primary) 42%, var(--money-border));
+  background: color-mix(in srgb, var(--money-primary) 9%, var(--money-surface));
+}
+
+.manager-jars-shortcut:focus-visible {
+  outline: 2px solid var(--money-primary);
+  outline-offset: 2px;
+}
+
+.manager-jars-shortcut-icon {
+  align-items: center;
+  background: var(--money-primary-soft);
+  border-radius: 0.65rem;
+  color: var(--money-primary);
+  display: inline-flex;
+  flex: 0 0 auto;
+  height: 2.5rem;
+  justify-content: center;
+  width: 2.5rem;
+}
+
+.manager-jars-shortcut-copy {
+  display: grid;
+  flex: 1;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.manager-jars-shortcut-copy strong { font-size: 0.86rem; }
+.manager-jars-shortcut-copy small {
+  color: var(--money-text-secondary);
+  font-size: 0.7rem;
+  line-height: 1.35;
+}
+
+.manager-jars-shortcut-arrow { color: var(--money-primary); flex: 0 0 auto; }
 
 .manager-day-strip > div {
   display: grid;
@@ -262,5 +491,12 @@
     display: none;
   }
 }
-.manager-jars-shortcut{display:flex;align-items:center;gap:11px;text-align:left;width:100%;color:var(--money-text)}
-.manager-jars-shortcut span{display:grid;gap:3px;flex:1}.manager-jars-shortcut small{color:var(--money-text-secondary)}
+@media (max-width: 380px) {
+  .manager-allocation-flow { grid-template-columns: 1fr; }
+  .manager-flow-stat { min-height: 0; }
+}
+
+.dark .manager-flow-stat.is-expense { --flow-tone: #e89a91; }
+.dark .manager-flow-stat.is-jar-spend { --flow-tone: #e3aa7e; }
+.dark .manager-flow-stat.is-jar-move,
+.dark .manager-allocation-stat.is-unallocated { --flow-tone: #91b6d3; --stat-tone: #91b6d3; }

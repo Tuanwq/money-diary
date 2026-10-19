@@ -11,6 +11,7 @@
     "test:cloud-sync": "node --experimental-strip-types scripts/cloudSyncState.test.mjs",
     "test:account-ledger": "node --experimental-strip-types scripts/accountLedger.test.mjs",
     "test:reporting-history": "node --experimental-strip-types scripts/reportingHistory.test.mjs",
+    "test:transaction-categories": "node --experimental-strip-types scripts/transactionCategories.test.mjs",
     "test:account-external": "node --experimental-strip-types scripts/accountExternal.test.mjs",
     "test:spending-jars": "node --experimental-strip-types scripts/spendingJars.test.mjs",
     "test:photo-finance": "node --experimental-strip-types scripts/photoFinance.test.mjs",

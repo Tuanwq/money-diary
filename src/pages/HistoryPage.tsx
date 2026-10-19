@@ -8,9 +8,12 @@ import { HistoryLayout } from "../features/history/components/HistoryLayout";
 import { HistoryPagination } from "../features/history/components/HistoryPagination";
 import { HistorySummaryStrip } from "../features/history/components/HistorySummaryStrip";
 import { JournalDayCard, JournalDetails } from "../features/history/components/journal/JournalDayCard";
-import { LedgerHistoryDetails, LedgerHistoryRow } from "../features/history/components/LedgerHistoryRow";
-import { filterHistoryLedgerTransactions } from "../features/history/historyLedgerModel";
-import type { AccountTransaction, FinancialAccount } from "../features/account-ledger/accountLedgerModel";
+import { LedgerHistoryDetails } from "../features/history/components/LedgerHistoryRow";
+import { LedgerDayGroups } from "../features/history/components/LedgerDayGroups.tsx";
+import { LedgerHistoryPhotos } from "../features/history/components/LedgerHistoryPhotos.tsx";
+import type { SpendingJar } from "../features/spending-jars/domain/jarModel.ts";
+import { filterHistoryLedgerTransactions, groupLedgerTransactionsByDay } from "../features/history/historyLedgerModel";
+import { isExpenseReversal, type AccountTransaction, type FinancialAccount } from "../features/account-ledger/accountLedgerModel.ts";
 import type { DailyEntry, GoalScreen, Page } from "../types";
 import { formatReportDate } from "../utils/date";
 import { formatMoney } from "../utils/money";
@@ -18,8 +21,13 @@ import { formatMoney } from "../utils/money";
 type HistoryQuickFilter = "today" | "7days" | "30days" | "month" | "lastMonth" | "all";
 
 type HistoryPageProps = {
+  showLegacyHistory?: boolean;
   accountTransactions: AccountTransaction[];
   financialAccounts: FinancialAccount[];
+  jars?: SpendingJar[];
+  ownerId?: string;
+  onEditLedger?: (transaction: AccountTransaction) => void;
+  onDeleteLedger?: (transaction: AccountTransaction) => void;
   cloudLoadError?: string | null;
   deleteEntry: (id: string) => void;
   editEntry: (entry: DailyEntry) => void;
@@ -53,8 +61,13 @@ const quickFilters = [
 ];
 
 export function HistoryPage({
+  showLegacyHistory = false,
   accountTransactions,
   financialAccounts,
+  jars = [],
+  ownerId,
+  onEditLedger,
+  onDeleteLedger,
   cloudLoadError,
   deleteEntry,
   editEntry,
@@ -81,14 +94,18 @@ export function HistoryPage({
   const [selectedEntry, setSelectedEntry] = useState<DailyEntry | null>(null);
   const [pendingDelete, setPendingDelete] = useState<DailyEntry | null>(null);
   const [selectedLedgerTransaction, setSelectedLedgerTransaction] = useState<AccountTransaction | null>(null);
+  const [pendingLedgerDelete, setPendingLedgerDelete] = useState<AccountTransaction | null>(null);
   const [ledgerPage, setLedgerPage] = useState(1);
   const ledgerTransactions = filterHistoryLedgerTransactions(accountTransactions, {
     fromDate: historyFromDate, toDate: historyToDate, search: historySearch,
   });
-  const ledgerIncome = ledgerTransactions.reduce((sum, transaction) => sum + (transaction.type === "income" ? transaction.amount : 0), 0);
-  const datesWithData = new Set([...filteredEntries.map((entry) => entry.date), ...ledgerTransactions.map((transaction) => transaction.date)]).size;
-  const ledgerPageCount = Math.max(1, Math.ceil(ledgerTransactions.length / 20));
-  const visibleLedgerTransactions = ledgerTransactions.slice((Math.min(ledgerPage, ledgerPageCount) - 1) * 20, Math.min(ledgerPage, ledgerPageCount) * 20);
+  const ledgerIncome = ledgerTransactions.reduce((sum, transaction) => sum +
+    (transaction.type === "income" && !isExpenseReversal(transaction) ? transaction.amount : 0), 0);
+  const datesWithData = new Set([...(showLegacyHistory ? filteredEntries.map((entry) => entry.date) : []), ...ledgerTransactions.map((transaction) => transaction.date)]).size;
+  const ledgerGroups = groupLedgerTransactionsByDay(ledgerTransactions);
+  const ledgerPageCount = Math.max(1, Math.ceil(ledgerGroups.length / 20));
+  const visibleLedgerTransactions = ledgerGroups.slice((Math.min(ledgerPage, ledgerPageCount) - 1) * 20,
+    Math.min(ledgerPage, ledgerPageCount) * 20).flatMap((group) => group.transactions);
   const activeFilters: ActiveHistoryFilter[] = [];
   const isInitialLoading = Boolean(isCloudLoading && sortedEntries.length === 0 && accountTransactions.length === 0);
   const hasInitialError = Boolean(cloudLoadError && sortedEntries.length === 0 && accountTransactions.length === 0);
@@ -126,14 +143,17 @@ export function HistoryPage({
           isLoading={isInitialLoading}
           items={[
             { label: "Số ngày có dữ liệu", value: String(datesWithData) },
-            { label: "Tổng thu nhập", value: formatMoney(filteredEntriesTotalMoney + ledgerIncome) },
-            { label: "Giờ trong nhật ký", value: `${filteredEntriesHours} giờ` },
-            { label: "Đơn trong nhật ký", value: `${filteredEntriesOrders} đơn` },
+            { label: "Tổng thu nhập", value: formatMoney(ledgerTransactions.length > 0
+              ? ledgerIncome : showLegacyHistory ? filteredEntriesTotalMoney : 0) },
+            ...(showLegacyHistory ? [
+              { label: "Giờ trong nhật ký", value: `${filteredEntriesHours} giờ` },
+              { label: "Đơn trong nhật ký", value: `${filteredEntriesOrders} đơn` },
+            ] : []),
           ]}
         />
       )}
 
-      {(filteredEntries.length > 0 || ledgerTransactions.length === 0 || isInitialLoading || hasInitialError) && <section className="history-record-section" aria-labelledby="journal-history-title">
+      {showLegacyHistory && (filteredEntries.length > 0 || ledgerTransactions.length === 0 || isInitialLoading || hasInitialError) && <section className="history-record-section" aria-labelledby="journal-history-title">
         <div className="history-section-heading">
           <div>
             <h2 id="journal-history-title">Lịch sử nhật ký</h2>
@@ -172,11 +192,9 @@ export function HistoryPage({
         />
       </section>}
 
-      {!hasInitialError && ledgerTransactions.length > 0 && <section className="history-record-section" aria-labelledby="journal-ledger-title">
+      {!hasInitialError && <section className="history-record-section" aria-labelledby="journal-ledger-title">
         <div className="history-section-heading"><div><h2 id="journal-ledger-title">Giao dịch trong nhật ký tài chính</h2><p>{ledgerTransactions.length} giao dịch từ ảnh, hũ hoặc nhập trực tiếp. Chuyển nội bộ không tính vào tổng thu nhập.</p></div></div>
-        {ledgerTransactions.length > 0 && <div className="expense-transaction-list">
-          {visibleLedgerTransactions.map((transaction) => <LedgerHistoryRow key={transaction.id} transaction={transaction} accounts={financialAccounts} onView={() => setSelectedLedgerTransaction(transaction)} />)}
-        </div>}
+        <LedgerDayGroups transactions={visibleLedgerTransactions} accounts={financialAccounts} jars={jars} onView={setSelectedLedgerTransaction} />
         <HistoryPagination currentPage={Math.min(ledgerPage, ledgerPageCount)} totalPages={ledgerPageCount} onPageChange={setLedgerPage} />
       </section>}
 
@@ -190,8 +208,20 @@ export function HistoryPage({
         {selectedEntry && <JournalDetails entry={selectedEntry} />}
       </HistoryDetailDrawer>
       <HistoryDetailDrawer isOpen={Boolean(selectedLedgerTransaction)} title="Chi tiết giao dịch" subtitle={selectedLedgerTransaction ? formatReportDate(selectedLedgerTransaction.date) : undefined} onClose={() => setSelectedLedgerTransaction(null)}>
-        {selectedLedgerTransaction && <><LedgerHistoryDetails transaction={selectedLedgerTransaction} accounts={financialAccounts} /><button type="button" className="history-view-action" onClick={() => { setSelectedLedgerTransaction(null); navigateTo("accounts"); }}>Mở Sổ tài khoản</button></>}
+        {selectedLedgerTransaction && <><LedgerHistoryDetails transaction={selectedLedgerTransaction} accounts={financialAccounts} jars={jars} />
+          <LedgerHistoryPhotos ownerId={ownerId} transactionId={selectedLedgerTransaction.id} />
+          {onEditLedger && <button type="button" className="history-view-action" onClick={() => {
+            onEditLedger(selectedLedgerTransaction); setSelectedLedgerTransaction(null);
+          }}>Sửa giao dịch</button>}
+          {onDeleteLedger && <button type="button" className="history-view-action" onClick={() => setPendingLedgerDelete(selectedLedgerTransaction)}>Xóa giao dịch</button>}</>}
       </HistoryDetailDrawer>
+      <DeleteHistoryRecordDialog isOpen={Boolean(pendingLedgerDelete)} title="Xóa giao dịch?"
+        description="Số dư tài khoản và hũ liên quan sẽ được tính lại. Ảnh liên kết sẽ được dọn theo luồng hiện tại."
+        onCancel={() => setPendingLedgerDelete(null)} onConfirm={() => {
+          if (!pendingLedgerDelete) return;
+          onDeleteLedger?.(pendingLedgerDelete);
+          setPendingLedgerDelete(null); setSelectedLedgerTransaction(null);
+        }} />
 
       <DeleteHistoryRecordDialog
         isOpen={Boolean(pendingDelete)}

@@ -13,6 +13,7 @@ type MoneyPageShellProps = {
   currentPage: Page;
   email?: string;
   isCloudRefreshing: boolean;
+  legacyMoneyToolsVisible: boolean;
   navigateTo: (page: Page, goalScreen?: GoalScreen) => void;
   onBackFromPhotoJournal: () => void;
   onExportReport: () => void;
@@ -37,6 +38,7 @@ export function MoneyPageShell({
   currentPage,
   email,
   isCloudRefreshing,
+  legacyMoneyToolsVisible,
   navigateTo,
   onBackFromPhotoJournal,
   onExportReport,
@@ -86,6 +88,7 @@ export function MoneyPageShell({
           currentPage={currentPage}
           email={email}
           isCloudRefreshing={isCloudRefreshing}
+          legacyMoneyToolsVisible={legacyMoneyToolsVisible}
           navigateTo={navigateTo}
           onLogout={onLogout}
           onOpenAccount={() => {
@@ -151,9 +154,11 @@ export function MoneyPageShell({
 
       <AddDataSheet
         isOpen={isAddSheetOpen}
+        legacyMoneyToolsVisible={legacyMoneyToolsVisible}
         onAddExpense={onOpenExpense}
         onAddIncome={onOpenIncome}
         onCapturePhoto={onOpenPhotoCapture}
+        onOpenAccountLedger={onOpenAccountLedger}
         onClose={() => setIsAddSheetOpen(false)}
         returnFocusRef={addReturnFocusRef}
       />
@@ -161,6 +166,7 @@ export function MoneyPageShell({
       <MoneyMoreSheet
         email={email}
         isOpen={isMoreSheetOpen}
+        legacyMoneyToolsVisible={legacyMoneyToolsVisible}
         mode={
           moreReturnTarget === "navigation" ? "more" : "account"
         }

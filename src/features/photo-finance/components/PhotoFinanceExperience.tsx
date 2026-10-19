@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { PopupNotice } from "../../../components/feedback/PopupNotice.tsx";
-import type { AccountTransaction, FinancialAccount } from "../../account-ledger/accountLedgerModel.ts";
+import type { AccountTransaction, FinancialAccount, TransactionCategory } from "../../account-ledger/accountLedgerModel.ts";
+import type { CategoryCommand } from "../../account-ledger/transactionCategories.ts";
 import type { DailyEntry, ExpenseEntry } from "../../../types.ts";
 import type { JarActivity, SpendingJar } from "../../spending-jars/domain/jarModel.ts";
 import type { JarCommand } from "../../spending-jars/services/jarService.ts";
@@ -18,11 +19,12 @@ import { PhotoFinanceCalendar } from "./PhotoFinanceCalendar.tsx";
 import { PhotoGalleryGrid } from "./PhotoGalleryGrid.tsx";
 import "./photoFinance.css";
 
-export function PhotoFinanceExperience({ accounts, jars, jarActivities, entries, expenses, ownerId,
+export function PhotoFinanceExperience({ accounts, categories, onCategoryCommand, jars, jarActivities, entries, expenses, ownerId,
   captureIntent, onCaptureIntentConsumed, onDeleteTransaction, onSaveTransaction, onJarCommand, transactions }: {
   captureIntent: string | null;
   onCaptureIntentConsumed: () => void;
   accounts: FinancialAccount[];
+  categories: TransactionCategory[]; onCategoryCommand: (command: CategoryCommand) => void;
   jars: SpendingJar[]; jarActivities: JarActivity[];
   entries: DailyEntry[]; expenses: ExpenseEntry[]; ownerId?: string;
   onDeleteTransaction: (transactionId: string) => void;
@@ -156,7 +158,7 @@ export function PhotoFinanceExperience({ accounts, jars, jarActivities, entries,
       onMakeCover={(attachment) => void makeCover(attachment)}
       repository={photos.repository} summary={getDailyFinancialSummary(summaries, storyDate ?? "")}
       transactions={transactions} />
-    <PhotoCaptureSheet accounts={accounts} jars={jars} jarActivities={jarActivities}
+    <PhotoCaptureSheet accounts={accounts} categories={categories} onCategoryCommand={onCategoryCommand} jars={jars} jarActivities={jarActivities}
       transactions={transactions} onJarCommand={onJarCommand} existing={editing} formKey={formKey}
       initialDate={captureDate} isOpen={captureOpen} ownerId={ownerId}
       repository={photos.repository} dayHasPhotos={dayHasPhotos}

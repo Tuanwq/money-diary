@@ -1,5 +1,4 @@
 import {
-  Bell,
   BookCheck,
   ChartColumnBig,
   ClipboardCheck,
@@ -8,6 +7,7 @@ import {
   LogOut,
   RefreshCcw,
   Scale,
+  Settings,
   UserRound,
   WalletCards,
 } from "lucide-react";
@@ -19,6 +19,7 @@ import { MoneyBottomSheet } from "./MoneyBottomSheet";
 type MoneyMoreSheetProps = {
   email?: string;
   isOpen: boolean;
+  legacyMoneyToolsVisible: boolean;
   mode?: "account" | "more";
   onClose: () => void;
   onExportReport: () => void;
@@ -39,6 +40,7 @@ type MoneyMoreSheetProps = {
 export function MoneyMoreSheet({
   email,
   isOpen,
+  legacyMoneyToolsVisible,
   mode = "more",
   onClose,
   onExportReport,
@@ -61,7 +63,9 @@ export function MoneyMoreSheet({
       label: "Thống kê tổng hợp",
       onClick: onOpenAnalytics,
     },
-    { icon: BookCheck, label: "Chốt ngày", onClick: onOpenCloseDay },
+    ...(legacyMoneyToolsVisible
+      ? [{ icon: BookCheck, label: "Chốt ngày", onClick: onOpenCloseDay }]
+      : []),
     {
       icon: WalletCards,
       label: "Sổ tài khoản",
@@ -75,8 +79,8 @@ export function MoneyMoreSheet({
     ...(mode === "more"
       ? [
           {
-            icon: Bell,
-            label: "Thông báo tài chính",
+            icon: Settings,
+            label: "Cài đặt",
             onClick: onOpenNotificationSettings,
           },
         ]

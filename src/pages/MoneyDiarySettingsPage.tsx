@@ -7,10 +7,13 @@ import type {
   BackupSourceData,
 } from "../features/backup/backupModel";
 import { MoneyNotificationSettingsCard } from "../features/notifications/components/MoneyNotificationSettingsCard";
+import "./MoneyDiarySettingsPage.css";
 
 export function MoneyDiarySettingsPage({
   backupSource,
   onRestoreBackup,
+  legacyMoneyToolsVisible,
+  onLegacyMoneyToolsVisibilityChange,
   syncStatus,
   userId,
 }: {
@@ -19,6 +22,8 @@ export function MoneyDiarySettingsPage({
     snapshot: BackupSnapshot,
     sections: BackupSection[]
   ) => Promise<void> | void;
+  legacyMoneyToolsVisible: boolean;
+  onLegacyMoneyToolsVisibilityChange: (visible: boolean) => void;
   syncStatus: string;
   userId: string;
 }) {
@@ -36,6 +41,23 @@ export function MoneyDiarySettingsPage({
           </small>
         </div>
       </header>
+      <section className="money-legacy-tools-setting" aria-labelledby="money-legacy-tools-title">
+        <div>
+          <h2 id="money-legacy-tools-title">Công cụ ghi chép cũ</h2>
+          <p>
+            Hiện lại lối tắt thu nhập, chi tiêu, ghi chép và HUB cũ trong Money Diary.
+            Tắt công tắc chỉ ẩn các lối tắt trên thiết bị này; dữ liệu và lịch sử không bị xóa.
+          </p>
+        </div>
+        <label className="money-legacy-tools-switch">
+          <input
+            type="checkbox"
+            checked={legacyMoneyToolsVisible}
+            onChange={(event) => onLegacyMoneyToolsVisibilityChange(event.target.checked)}
+          />
+          <span>{legacyMoneyToolsVisible ? "Đang hiện" : "Đang ẩn"}</span>
+        </label>
+      </section>
       <AppUpdateCenter syncStatus={syncStatus} />
       <BackupCenter
         onRestore={onRestoreBackup}

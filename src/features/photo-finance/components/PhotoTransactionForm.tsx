@@ -2,9 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import { PopupNotice } from "../../../components/feedback/PopupNotice.tsx";
 import { ArrowDownLeft, ArrowUpRight, ArrowLeftRight, CalendarDays, Camera, Check, ChevronDown,
   Image as ImageIcon, Pencil, RotateCcw, WalletCards, X } from "lucide-react";
-import type { AccountTransaction, AccountTransactionType, FinancialAccount } from "../../account-ledger/accountLedgerModel.ts";
-import { getDefaultTransactionPurpose, TRANSACTION_CATEGORIES,
+import type { AccountTransaction, AccountTransactionType, FinancialAccount, TransactionCategory } from "../../account-ledger/accountLedgerModel.ts";
+import { getDefaultTransactionPurpose,
   type TransactionPurpose } from "../../account-ledger/accountLedgerModel.ts";
+import { categoriesForType, type CategoryCommand } from "../../account-ledger/transactionCategories.ts";
+import { TransactionCategoryManager } from "../../account-ledger/TransactionCategoryManager.tsx";
 import { formatMoneyInput, parseMoneyInput } from "../../../utils/money.ts";
 import { vietnamFinancialDate, vietnamFinancialTime } from "../services/photoFinanceModel.ts";
 import { buildPhotoTransaction } from "../services/photoTransactionDraft.ts";
@@ -17,10 +19,12 @@ import { planJarSpend, type JarCommand } from "../../spending-jars/services/jarS
 
 type Repository = ReturnType<typeof createPhotoAttachmentRepository>;
 
-export function PhotoTransactionForm({ accounts, jars, jarActivities, transactions, onJarCommand,
+export function PhotoTransactionForm({ accounts, categories, onCategoryCommand, jars, jarActivities, transactions, onJarCommand,
   existing, initialDate, ownerId,
   repository, dayHasPhotos, onSaved, onSaveTransaction, onStartNew }: {
   accounts: FinancialAccount[];
+  categories: TransactionCategory[];
+  onCategoryCommand: (command: CategoryCommand) => void;
   jars: SpendingJar[]; jarActivities: JarActivity[]; transactions: AccountTransaction[];
   onJarCommand: (command: JarCommand) => void;
   existing?: AccountTransaction;
@@ -36,7 +40,14 @@ export function PhotoTransactionForm({ accounts, jars, jarActivities, transactio
   const activeAccounts = accounts.filter((account) => !account.archivedAt);
   const [kind, setKind] = useState<AccountTransactionType>(existing?.type ?? "income");
   const [amount, setAmount] = useState(existing ? formatMoneyInput(String(existing.amount)) : "");
-  const [category, setCategory] = useState(existing?.category ?? "Thu nhập");
+  const [categoryId, setCategoryId] = useState(existing?.categoryId ??
+    categoriesForType(categories, existing?.type ?? "income").find((item) => item.name === existing?.category)?.id ??
+    categoriesForType(categories, existing?.type ?? "income")[0]?.id ?? "");
+  const [showCategoryManager, setShowCategoryManager] = useState(false);
+  const activeCategoryId = categoriesForType(categories, kind).some((item) => item.id === categoryId)
+    ? categoryId : "";
+  const category = kind === "transfer" ? "Chuyển nội bộ" :
+    categories.find((item) => item.id === activeCategoryId)?.name ?? "";
   const [purpose, setPurpose] = useState<TransactionPurpose>(
     existing?.purpose ?? getDefaultTransactionPurpose(existing?.type ?? "income")
   );
@@ -108,7 +119,7 @@ export function PhotoTransactionForm({ accounts, jars, jarActivities, transactio
   function changeKind(next: AccountTransactionType) {
     if (!canEdit) return;
     setKind(next);
-    setCategory(TRANSACTION_CATEGORIES[next][0]);
+    setCategoryId(categoriesForType(categories, next)[0]?.id ?? "");
     setPurpose(getDefaultTransactionPurpose(next));
     setPurposeTouched(false);
   }
@@ -135,7 +146,8 @@ export function PhotoTransactionForm({ accounts, jars, jarActivities, transactio
         ? `jar-spend:${activityId}:0` : existing?.id ?? crypto.randomUUID());
       const transaction = savedId || selectedJar ? null : buildPhotoTransaction({
         id: transactionId, accounts, existing, type: kind, amount: value,
-        accountId, toAccountId, category, purpose: effectivePurpose, date, time, note,
+        accountId, toAccountId, category, categoryId: activeCategoryId || undefined,
+        purpose: effectivePurpose, date, time, note,
         now: new Date().toISOString(),
       });
 
@@ -268,10 +280,12 @@ export function PhotoTransactionForm({ accounts, jars, jarActivities, transactio
         </div>}
       <div className="photo-finance-chips">
         <label><span className="sr-only">Danh mục</span><Pencil size={16} aria-hidden="true" />
-          <select aria-label="Danh mục" disabled={!canEdit} onChange={(event) => setCategory(event.target.value)} value={category}>
-            {[...new Set([...TRANSACTION_CATEGORIES[kind], ...(kind === "expense"
-              ? jars.filter((jar) => jar.status === "active").flatMap((jar) => jar.linkedLabels) : [])])].map((item) => <option key={item}>{item}</option>)}
+          <select aria-label="Danh mục" disabled={!canEdit} onChange={(event) => setCategoryId(event.target.value)} value={activeCategoryId}>
+            {kind === "transfer" && <option value="">Chuyển nội bộ</option>}
+            {kind !== "transfer" && !activeCategoryId && <option value="">Chọn nhãn</option>}
+            {categoriesForType(categories, kind).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
           </select><ChevronDown size={15} aria-hidden="true" /></label>
+        {kind !== "transfer" && <button className="photo-finance-manage-labels" onClick={() => setShowCategoryManager(true)} type="button">Quản lý nhãn</button>}
         {!selectedJar && <label><span className="sr-only">Tài khoản</span><WalletCards size={17} aria-hidden="true" />
           <select aria-label={kind === "transfer" ? "Tài khoản chuyển" : "Tài khoản"} disabled={!canEdit}
             onChange={(event) => {
@@ -317,6 +331,8 @@ export function PhotoTransactionForm({ accounts, jars, jarActivities, transactio
       <button aria-label="Lưu khoảnh khắc" className="photo-finance-confirm" disabled={working || preparingPhoto}
         type="submit"><Check size={32} /></button>
     </div>}
+    {showCategoryManager && <TransactionCategoryManager categories={categories} transactions={transactions}
+      onCommand={onCategoryCommand} onClose={() => setShowCategoryManager(false)} />}
     {(working || preparingPhoto) && <p className="photo-finance-working" role="status">
       {preparingPhoto ? "Đang tối ưu ảnh..." : savedId ? "Đang tải ảnh lại..." : "Đang tải ảnh riêng tư..."}
     </p>}

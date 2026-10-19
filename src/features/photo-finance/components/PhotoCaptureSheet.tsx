@@ -1,17 +1,19 @@
 import { usePhotoDialog } from "../hooks/usePhotoDialog.ts";
 import { createPortal } from "react-dom";
 import { Camera, X } from "lucide-react";
-import type { AccountTransaction, FinancialAccount } from "../../account-ledger/accountLedgerModel.ts";
+import type { AccountTransaction, FinancialAccount, TransactionCategory } from "../../account-ledger/accountLedgerModel.ts";
+import type { CategoryCommand } from "../../account-ledger/transactionCategories.ts";
 import type { createPhotoAttachmentRepository } from "../services/photoAttachmentRepository.ts";
 import { PhotoTransactionForm } from "./PhotoTransactionForm.tsx";
 import type { PhotoAttachment } from "../types/photoFinance.ts";
 import type { JarActivity, SpendingJar } from "../../spending-jars/domain/jarModel.ts";
 import type { JarCommand } from "../../spending-jars/services/jarService.ts";
 
-export function PhotoCaptureSheet({ accounts, jars, jarActivities, transactions, onJarCommand,
+export function PhotoCaptureSheet({ accounts, categories, onCategoryCommand, jars, jarActivities, transactions, onJarCommand,
   existing, initialDate, isOpen, ownerId,
   repository, dayHasPhotos, onClose, onSaved, onSaveTransaction, onStartNew, formKey }: {
   accounts: FinancialAccount[]; existing?: AccountTransaction;
+  categories: TransactionCategory[]; onCategoryCommand: (command: CategoryCommand) => void;
   jars: SpendingJar[]; jarActivities: JarActivity[]; transactions: AccountTransaction[];
   onJarCommand: (command: JarCommand) => void;
   initialDate?: string; isOpen: boolean; ownerId?: string;
@@ -32,7 +34,7 @@ export function PhotoCaptureSheet({ accounts, jars, jarActivities, transactions,
         <span>{existing ? "Sửa khoảnh khắc" : "Khoảnh khắc mới"}</span>
         <Camera aria-hidden="true" size={20} />
       </header>
-      <PhotoTransactionForm accounts={accounts} jars={jars} jarActivities={jarActivities}
+      <PhotoTransactionForm accounts={accounts} categories={categories} onCategoryCommand={onCategoryCommand} jars={jars} jarActivities={jarActivities}
         transactions={transactions} onJarCommand={onJarCommand} existing={existing} initialDate={initialDate}
         key={`${existing?.id ?? "new"}-${formKey}`} ownerId={ownerId} repository={repository}
         dayHasPhotos={dayHasPhotos}

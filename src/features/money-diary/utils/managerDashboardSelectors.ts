@@ -1,6 +1,9 @@
 import type { DailyEntry, ExpenseEntry } from "../../../types.ts";
 import { isExpenseReversal, type AccountTransaction } from "../../account-ledger/accountLedgerModel.ts";
-import { buildDailyFinancialSummaries, getDailyFinancialSummary } from "../../photo-finance/services/photoFinanceModel.ts";
+import { buildDailyFinancialSummaries, getDailyFinancialSummary, vietnamFinancialDate } from "../../photo-finance/services/photoFinanceModel.ts";
+import type { DailyFinancialSummary } from "../../photo-finance/types/photoFinance.ts";
+import type { JarActivity } from "../../spending-jars/domain/jarModel.ts";
+import { isIndependentReportingTransaction } from "../../analytics/reportingTransactions.ts";
 import { getExpenseTotal, getTotalEntryMoney } from "../../../utils/entries.ts";
 
 export type ManagerMonthlyOverview = {
@@ -12,6 +15,47 @@ export type ManagerMonthlyOverview = {
 };
 
 const unlabeledExpense = "Khác chưa gắn nhãn";
+
+/** Jar movements are reservations, never income or expense. Cash flow stays
+ * aligned with the same daily summary used by the overview and journal. */
+export function buildDashboardJarFlow(
+  day: DailyFinancialSummary,
+  transactions: AccountTransaction[],
+  activities: JarActivity[],
+) {
+  const activityById = new Map(activities.map((activity) => [activity.id, activity]));
+  const journalTransactions = transactions.filter((transaction) =>
+    transaction.date === day.date && isIndependentReportingTransaction(transaction));
+  const jarSpending = journalTransactions.reduce((sum, transaction) => {
+    const activity = transaction.jarActivityId && activityById.get(transaction.jarActivityId);
+    if (!activity || activity.jarId !== transaction.jarId ||
+      !activity.transactionIds?.includes(transaction.id)) return sum;
+    if (activity.kind === "spend" && transaction.type === "expense") return sum + transaction.amount;
+    if (activity.kind === "refund" && isExpenseReversal(transaction)) return sum - transaction.amount;
+    return sum;
+  }, 0);
+  // A normal income may be directly tagged to a jar in future data. Existing
+  // allocation events cannot identify which earlier income funded them.
+  const incomeLinkedToJar = journalTransactions.reduce((sum, transaction) =>
+    sum + (transaction.type === "income" && !isExpenseReversal(transaction) &&
+      transaction.jarId ? transaction.amount : 0), 0);
+  const movements = activities.filter((activity) => {
+    const createdAt = new Date(activity.createdAt);
+    return !Number.isNaN(createdAt.getTime()) && vietnamFinancialDate(createdAt) === day.date;
+  });
+  const sumMovement = (kind: JarActivity["kind"]) => movements.reduce((sum, activity) =>
+    sum + (activity.kind === kind ? activity.amount ?? 0 : 0), 0);
+
+  return {
+    incomeNotLinkedToJar: day.income - incomeLinkedToJar,
+    incomeLinkedToJar,
+    expenseOutsideJar: day.expense - jarSpending,
+    expenseFromJar: jarSpending,
+    allocatedToJar: sumMovement("allocate"),
+    releasedFromJar: sumMovement("release"),
+    transferredBetweenJars: sumMovement("transfer_out"),
+  };
+}
 
 function otherExpenses(expense: ExpenseEntry) {
   const savedItems = (expense.otherItems ?? [])

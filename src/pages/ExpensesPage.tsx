@@ -9,8 +9,11 @@ import { HistoryPagination } from "../features/history/components/HistoryPaginat
 import { HistorySummaryStrip } from "../features/history/components/HistorySummaryStrip";
 import { ExpenseAnalysis } from "../features/history/components/expenses/ExpenseAnalysis";
 import { ExpenseDetails, ExpenseTransactionRow } from "../features/history/components/expenses/ExpenseTransactionRow";
-import { LedgerHistoryDetails, LedgerHistoryRow } from "../features/history/components/LedgerHistoryRow";
-import { buildCombinedExpenseReport, filterHistoryLedgerTransactions } from "../features/history/historyLedgerModel";
+import { LedgerHistoryDetails } from "../features/history/components/LedgerHistoryRow";
+import { LedgerDayGroups } from "../features/history/components/LedgerDayGroups.tsx";
+import { LedgerHistoryPhotos } from "../features/history/components/LedgerHistoryPhotos.tsx";
+import type { SpendingJar } from "../features/spending-jars/domain/jarModel.ts";
+import { buildCombinedExpenseReport, filterHistoryLedgerTransactions, groupLedgerTransactionsByDay } from "../features/history/historyLedgerModel";
 import type { AccountTransaction, FinancialAccount } from "../features/account-ledger/accountLedgerModel";
 import type { ExpenseBudget, ExpenseEntry, GoalScreen, Page } from "../types";
 import { formatReportDate } from "../utils/date";
@@ -21,8 +24,13 @@ type ExpenseQuickFilter = "today" | "7days" | "30days" | "month" | "lastMonth" |
 type ExpenseBudgetForm = { label: string; monthlyLimit: string };
 
 type ExpensesPageProps = {
+  showLegacyHistory?: boolean;
   accountTransactions: AccountTransaction[];
   financialAccounts: FinancialAccount[];
+  jars?: SpendingJar[];
+  ownerId?: string;
+  onEditLedger?: (transaction: AccountTransaction) => void;
+  onDeleteLedger?: (transaction: AccountTransaction) => void;
   cancelEditExpenseBudget: () => void;
   cloudLoadError?: string | null;
   deleteExpense: (id: string) => void;
@@ -66,7 +74,12 @@ const quickFilters = [
 export function ExpensesPage(props: ExpensesPageProps) {
   const {
     accountTransactions,
+    showLegacyHistory = false,
     financialAccounts,
+    jars = [],
+    ownerId,
+    onEditLedger,
+    onDeleteLedger,
     cloudLoadError,
     deleteExpense,
     editExpense,
@@ -93,16 +106,19 @@ export function ExpensesPage(props: ExpensesPageProps) {
   const [selectedExpense, setSelectedExpense] = useState<ExpenseEntry | null>(null);
   const [pendingDelete, setPendingDelete] = useState<ExpenseEntry | null>(null);
   const [selectedLedgerTransaction, setSelectedLedgerTransaction] = useState<AccountTransaction | null>(null);
+  const [pendingLedgerDelete, setPendingLedgerDelete] = useState<AccountTransaction | null>(null);
   const [ledgerPage, setLedgerPage] = useState(1);
   const ledgerExpenses = filterHistoryLedgerTransactions(accountTransactions, {
     fromDate: expenseFromDate, toDate: expenseToDate, search: expenseSearch,
     category: expenseLabelFilter, type: "expense",
   });
-  const report = buildCombinedExpenseReport(filteredExpenses, ledgerExpenses);
-  const ledgerPageCount = Math.max(1, Math.ceil(ledgerExpenses.length / 20));
-  const visibleLedgerExpenses = ledgerExpenses.slice((Math.min(ledgerPage, ledgerPageCount) - 1) * 20, Math.min(ledgerPage, ledgerPageCount) * 20);
+  const report = buildCombinedExpenseReport(showLegacyHistory && ledgerExpenses.length === 0 ? filteredExpenses : [], ledgerExpenses);
+  const ledgerGroups = groupLedgerTransactionsByDay(ledgerExpenses);
+  const ledgerPageCount = Math.max(1, Math.ceil(ledgerGroups.length / 20));
+  const visibleLedgerExpenses = ledgerGroups.slice((Math.min(ledgerPage, ledgerPageCount) - 1) * 20,
+    Math.min(ledgerPage, ledgerPageCount) * 20).flatMap((group) => group.transactions);
   const averagePerDay = report.dayCount > 0 ? Math.round(report.total / report.dayCount) : 0;
-  const allLabels = [...new Set([...expenseLabelOptions, ...accountTransactions
+  const allLabels = [...new Set([...(showLegacyHistory ? expenseLabelOptions : []), ...accountTransactions
     .filter((transaction) => transaction.type === "expense" && transaction.source)
     .map((transaction) => transaction.category.trim()).filter(Boolean)])]
     .sort((a, b) => a.localeCompare(b, "vi"));
@@ -148,14 +164,14 @@ export function ExpensesPage(props: ExpensesPageProps) {
 
       {!hasInitialError && <HistorySummaryStrip isLoading={isInitialLoading} items={[
         { label: "Tổng chi tiêu", value: formatMoney(report.total) },
-        { label: "Số giao dịch", value: String(filteredExpenses.length + ledgerExpenses.length), detail: `${report.dayCount} ngày có dữ liệu` },
+        { label: "Số giao dịch", value: String(ledgerExpenses.length > 0 ? ledgerExpenses.length : showLegacyHistory ? filteredExpenses.length : 0), detail: `${report.dayCount} ngày có dữ liệu` },
         { label: "Trung bình mỗi ngày", value: formatMoney(averagePerDay) },
         { label: "Ngày chi cao nhất", value: report.topDay ? formatMoney(report.topDay[1]) : "0 đ", detail: report.topDay ? formatReportDate(report.topDay[0]) : "Chưa có" },
       ]} />}
 
-      {!isInitialLoading && !hasInitialError && <ExpenseAnalysis categories={report.categories} labels={report.labels} labelsTotal={report.labelsTotal} otherDetails={buildOtherExpenseBreakdown(filteredExpenses)} />}
+      {!isInitialLoading && !hasInitialError && <ExpenseAnalysis categories={report.categories} labels={report.labels} labelsTotal={report.labelsTotal} otherDetails={buildOtherExpenseBreakdown(showLegacyHistory && ledgerExpenses.length === 0 ? filteredExpenses : [])} />}
 
-      {(filteredExpenses.length > 0 || ledgerExpenses.length === 0 || isInitialLoading || hasInitialError) && <section className="history-record-section" aria-labelledby="expense-list-title">
+      {showLegacyHistory && (filteredExpenses.length > 0 || ledgerExpenses.length === 0 || isInitialLoading || hasInitialError) && <section className="history-record-section" aria-labelledby="expense-list-title">
         <div className="history-section-heading"><div><h2 id="expense-list-title">Các khoản chi</h2><p>{isInitialLoading ? "Đang tải dữ liệu..." : `Đang xem ${filteredExpenses.length} trên ${expenses.length} bản ghi.`}</p></div></div>
         {isInitialLoading ? <HistoryLoadingState /> : hasInitialError ? <HistoryErrorState message="Không tải được lịch sử chi tiêu" onRetry={onRetry} /> : filteredExpenses.length === 0 ? (
           <div className="history-empty-state"><ReceiptText aria-hidden="true" size={24} /><h3>Chưa có khoản chi từ nhật ký cũ</h3><p>Các giao dịch chi từ tài khoản được hiển thị bên dưới.</p></div>
@@ -169,11 +185,9 @@ export function ExpensesPage(props: ExpensesPageProps) {
         <HistoryPagination currentPage={expenseCurrentPage} totalPages={expenseTotalPages} onPageChange={setExpenseCurrentPage} />
       </section>}
 
-      {!hasInitialError && ledgerExpenses.length > 0 && <section className="history-record-section" aria-labelledby="ledger-expenses-title">
+      {!hasInitialError && <section className="history-record-section" aria-labelledby="ledger-expenses-title">
         <div className="history-section-heading"><div><h2 id="ledger-expenses-title">Chi tiêu đã ghi vào tài khoản</h2><p>{ledgerExpenses.length} giao dịch từ ảnh, hũ hoặc nhập trực tiếp.</p></div></div>
-        {ledgerExpenses.length > 0 && <div className="expense-transaction-list">
-          {visibleLedgerExpenses.map((transaction) => <LedgerHistoryRow key={transaction.id} transaction={transaction} accounts={financialAccounts} onView={() => setSelectedLedgerTransaction(transaction)} />)}
-        </div>}
+        <LedgerDayGroups transactions={visibleLedgerExpenses} accounts={financialAccounts} jars={jars} onView={setSelectedLedgerTransaction} />
         <HistoryPagination currentPage={Math.min(ledgerPage, ledgerPageCount)} totalPages={ledgerPageCount} onPageChange={setLedgerPage} />
       </section>}
 
@@ -187,8 +201,20 @@ export function ExpensesPage(props: ExpensesPageProps) {
         {selectedExpense && <ExpenseDetails expense={selectedExpense} />}
       </HistoryDetailDrawer>
       <HistoryDetailDrawer isOpen={Boolean(selectedLedgerTransaction)} title="Chi tiết giao dịch" subtitle={selectedLedgerTransaction ? formatReportDate(selectedLedgerTransaction.date) : undefined} onClose={() => setSelectedLedgerTransaction(null)}>
-        {selectedLedgerTransaction && <><LedgerHistoryDetails transaction={selectedLedgerTransaction} accounts={financialAccounts} /><button type="button" className="history-view-action" onClick={() => { setSelectedLedgerTransaction(null); navigateTo("accounts"); }}>Mở Sổ tài khoản</button></>}
+        {selectedLedgerTransaction && <><LedgerHistoryDetails transaction={selectedLedgerTransaction} accounts={financialAccounts} jars={jars} />
+          <LedgerHistoryPhotos ownerId={ownerId} transactionId={selectedLedgerTransaction.id} />
+          {onEditLedger && <button type="button" className="history-view-action" onClick={() => {
+            onEditLedger(selectedLedgerTransaction); setSelectedLedgerTransaction(null);
+          }}>Sửa giao dịch</button>}
+          {onDeleteLedger && <button type="button" className="history-view-action" onClick={() => setPendingLedgerDelete(selectedLedgerTransaction)}>Xóa giao dịch</button>}</>}
       </HistoryDetailDrawer>
+      <DeleteHistoryRecordDialog isOpen={Boolean(pendingLedgerDelete)} title="Xóa giao dịch?"
+        description="Số dư tài khoản và hũ liên quan sẽ được tính lại. Ảnh liên kết sẽ được dọn theo luồng hiện tại."
+        onCancel={() => setPendingLedgerDelete(null)} onConfirm={() => {
+          if (!pendingLedgerDelete) return;
+          onDeleteLedger?.(pendingLedgerDelete);
+          setPendingLedgerDelete(null); setSelectedLedgerTransaction(null);
+        }} />
 
       <DeleteHistoryRecordDialog isOpen={Boolean(pendingDelete)} title="Xóa khoản chi?" description={`Bạn sắp xóa khoản chi ngày ${pendingDelete ? formatReportDate(pendingDelete.date) : ""}. Thao tác này có thể được xem lại trong lịch sử thay đổi dữ liệu.`} onCancel={() => setPendingDelete(null)} onConfirm={() => {
         if (!pendingDelete) return;

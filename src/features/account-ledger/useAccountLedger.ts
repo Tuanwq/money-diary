@@ -11,6 +11,7 @@ import { areLedgerContentsEqual, decideLedgerLoad, hasLocalOnlyRecords, isPristi
   nextLedgerTimestamp } from "./ledgerSync.ts";
 import { PENDING_LEDGER_KEY, ledgerKey, pendingKey, selectLocalLedgerValue } from "./ledgerStorageScope.ts";
 import { describeLedgerCloudError } from "./ledgerCloudError.ts";
+import { applyCategoryCommand, linkTransactionCategory, migrateTransactionCategories, type CategoryCommand } from "./transactionCategories.ts";
 import { applyAccountExternalCommand, assertExternalCoverageAfterLedgerChange,
   calculateAccountExternalAmount, type AccountExternalCommand } from "./accountExternalModel.ts";
 import {
@@ -67,6 +68,7 @@ export function useAccountLedger(userId?: string, legacyBudgets: ExpenseBudget[]
   const [cloudStatus, setCloudStatus] = useState("Đang lưu trên thiết bị");
   const [cloudReady, setCloudReady] = useState(false);
   const [jarSchemaReady, setJarSchemaReady] = useState(true);
+  const [categorySchemaReady, setCategorySchemaReady] = useState(true);
   const [legacyRecovery, setLegacyRecovery] = useState<{
     userId: string; accounts: number; transactions: number; jars: number;
   } | null>(null);
@@ -138,13 +140,20 @@ export function useAccountLedger(userId?: string, legacyBudgets: ExpenseBudget[]
 
       let { data, error } = await supabase
         .from("money_diary_account_ledgers")
-        .select("accounts, transactions, jars, jar_activities, updated_at")
+        .select("accounts, transactions, jars, jar_activities, categories, updated_at")
         .eq("user_id", userId)
         .maybeSingle();
 
       if (!active) return;
 
       let schemaAvailable = true;
+      if (error && /categories/i.test(error.message)) {
+        setCategorySchemaReady(false);
+        setCloudReady(false);
+        setCloudStatus("Nhãn chưa đồng bộ · cần áp dụng migration Supabase");
+        return;
+      }
+      setCategorySchemaReady(true);
       if (error && /jars|jar_activities/i.test(error.message)) {
         const fallback = await supabase.from("money_diary_account_ledgers")
           .select("accounts, transactions, updated_at")
@@ -173,6 +182,7 @@ export function useAccountLedger(userId?: string, legacyBudgets: ExpenseBudget[]
               []) as unknown as AccountTransaction[],
             jars: (data.jars ?? []) as AccountLedgerData["jars"],
             jarActivities: (data.jar_activities ?? []) as AccountLedgerData["jarActivities"],
+            categories: (data.categories ?? []) as AccountLedgerData["categories"],
             updatedAt: data.updated_at,
           }
         : null;
@@ -287,7 +297,7 @@ export function useAccountLedger(userId?: string, legacyBudgets: ExpenseBudget[]
   }, [retrySync, userId]);
 
   useEffect(() => {
-    if (!userId || !cloudReady || !jarSchemaReady || !dirtyRef.current) return;
+    if (!userId || !cloudReady || !jarSchemaReady || !categorySchemaReady || !dirtyRef.current) return;
 
     const timeout = window.setTimeout(() => {
       // Serialize writes and compare the remote revision. A stale device must
@@ -302,6 +312,7 @@ export function useAccountLedger(userId?: string, legacyBudgets: ExpenseBudget[]
           transactions: current.transactions,
           jars: current.jars,
           jar_activities: current.jarActivities,
+          categories: current.categories ?? [],
           updated_at: current.updatedAt,
         };
         const expected = baseUpdatedAtRef.current;
@@ -341,7 +352,7 @@ export function useAccountLedger(userId?: string, legacyBudgets: ExpenseBudget[]
     }, 300);
 
     return () => window.clearTimeout(timeout);
-  }, [cloudReady, jarSchemaReady, ledger, userId]);
+  }, [cloudReady, jarSchemaReady, categorySchemaReady, ledger, userId]);
 
   const updateLedger = useCallback(
     (
@@ -382,14 +393,23 @@ export function useAccountLedger(userId?: string, legacyBudgets: ExpenseBudget[]
   useEffect(() => {
     if (userId && !cloudReady) return;
     const now = new Date().toISOString();
-    const repaired = repairClosedJars(latestLedgerRef.current, now);
+    const current = latestLedgerRef.current;
+    const repaired = repairClosedJars(current, now);
     const next = migrateExpenseBudgets(repaired, legacyBudgets, now);
-    if (next !== latestLedgerRef.current) updateLedger(() => next);
+    const withCategories = migrateTransactionCategories(next === current ? current : { ...current, ...next });
+    if (withCategories !== current) updateLedger(() => withCategories);
   }, [cloudReady, legacyBudgets, updateLedger, userId]);
 
+  const dispatchCategory = useCallback((command: CategoryCommand) => {
+    const next = applyCategoryCommand(latestLedgerRef.current, command);
+    updateLedger(() => next);
+  }, [updateLedger]);
+
   const dispatchJar = useCallback((command: JarCommand) => {
-    const next = applyJarCommand(latestLedgerRef.current, command);
-    if (next !== latestLedgerRef.current) updateLedger(() => next);
+    const current = latestLedgerRef.current;
+    const next = applyJarCommand(current, command);
+    if (next !== current) updateLedger(() => ({ ...current, ...next,
+      transactions: next.transactions.map((item) => linkTransactionCategory(item, current.categories ?? [])) }));
   }, [updateLedger]);
 
   const dispatchExternal = useCallback((command: AccountExternalCommand) => {
@@ -442,9 +462,9 @@ export function useAccountLedger(userId?: string, legacyBudgets: ExpenseBudget[]
           (item) => item.id === transaction.id
         )
           ? current.transactions.map((item) =>
-              item.id === transaction.id ? transaction : item
+              item.id === transaction.id ? linkTransactionCategory(transaction, current.categories ?? []) : item
             )
-          : [transaction, ...current.transactions],
+          : [linkTransactionCategory(transaction, current.categories ?? []), ...current.transactions],
       }));
     },
     [updateLedger]
@@ -470,8 +490,9 @@ export function useAccountLedger(userId?: string, legacyBudgets: ExpenseBudget[]
 
   const replaceLedger = useCallback(
     (accounts: FinancialAccount[], transactions: AccountTransaction[],
-      jars: AccountLedgerData["jars"] = [], jarActivities: AccountLedgerData["jarActivities"] = []) => {
-      updateLedger(() => ({ accounts, transactions, jars, jarActivities }), true);
+      jars: AccountLedgerData["jars"] = [], jarActivities: AccountLedgerData["jarActivities"] = [],
+      categories?: AccountLedgerData["categories"]) => {
+      updateLedger(() => ({ accounts, transactions, jars, jarActivities, categories }), true);
     },
     [updateLedger]
   );
@@ -508,10 +529,12 @@ export function useAccountLedger(userId?: string, legacyBudgets: ExpenseBudget[]
     cloudStatus,
     claimLegacyLocalLedger,
     deleteTransaction,
+    dispatchCategory,
     dispatchExternal,
     dispatchJar,
     jars: ledgerOwner === (userId ?? null) ? ledger.jars : [],
     jarActivities: ledgerOwner === (userId ?? null) ? ledger.jarActivities : [],
+    categories: ledgerOwner === (userId ?? null) ? ledger.categories ?? [] : [],
     legacyLocalRecoveryCandidate: legacyRecovery?.userId === userId ? legacyRecovery : null,
     replaceLedger,
     retrySync,

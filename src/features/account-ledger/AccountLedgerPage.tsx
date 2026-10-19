@@ -19,6 +19,7 @@ import {
   X,
 } from "lucide-react";
 import "./accountExternal.css";
+import "./transactionModal.css";
 import { useEffect, useMemo, useState } from "react";
 import { getToday } from "../../utils/date";
 import { getJarView, suggestJar, type JarActivity, type JarLedger, type SpendingJar } from
@@ -32,7 +33,6 @@ import {
 } from "../../utils/money";
 import {
   ACCOUNT_TYPE_LABELS,
-  TRANSACTION_CATEGORIES,
   TRANSACTION_PURPOSE_LABELS,
   TRANSACTION_TYPE_LABELS,
   calculateAccountBalance,
@@ -44,7 +44,10 @@ import {
   type FinancialAccount,
   type FinancialAccountType,
   type BudgetEligibility,
+  type TransactionCategory,
 } from "./accountLedgerModel";
+import { categoriesForType, resolveCategorySelection, type CategoryCommand } from "./transactionCategories.ts";
+import { TransactionCategoryManager } from "./TransactionCategoryManager.tsx";
 import { AccountExternalForm, AccountExternalSection, type ExternalDialog } from "./AccountExternalMoney.tsx";
 import { calculateAccountActualAvailable, calculateAccountExternalAmount,
   calculateActualAvailableBalance, calculateTotalExternalAmount,
@@ -218,6 +221,9 @@ function AccountForm({
 
 function TransactionForm({
   accounts,
+  categories,
+  transactions,
+  onCategoryCommand,
   jarLedger,
   onJarCommand,
   onClose,
@@ -225,6 +231,9 @@ function TransactionForm({
   transaction,
 }: {
   accounts: FinancialAccount[];
+  categories: TransactionCategory[];
+  transactions: AccountTransaction[];
+  onCategoryCommand: (command: CategoryCommand) => void;
   jarLedger: JarLedger;
   onJarCommand: (command: JarCommand) => void;
   onClose: () => void;
@@ -247,9 +256,14 @@ function TransactionForm({
   const [amount, setAmount] = useState(
     transaction ? formatMoneyInput(String(transaction.amount)) : ""
   );
-  const [category, setCategory] = useState(
-    transaction?.category ?? TRANSACTION_CATEGORIES[type][0]
-  );
+  const [categoryId, setCategoryId] = useState(transaction?.categoryId ??
+    categoriesForType(categories, type).find((item) => item.name === transaction?.category)?.id ??
+    categoriesForType(categories, type)[0]?.id ?? "");
+  const [showCategoryManager, setShowCategoryManager] = useState(false);
+  const activeCategoryId = categoriesForType(categories, type).some((item) => item.id === categoryId)
+    ? categoryId : "";
+  const category = type === "transfer" ? "Chuyển nội bộ" :
+    categories.find((item) => item.id === activeCategoryId)?.name ?? "";
   const [note, setNote] = useState(transaction?.note ?? "");
   const [purpose, setPurpose] = useState<TransactionPurpose | "">(
     transaction?.purpose ?? (transaction ? "" : getDefaultTransactionPurpose(type))
@@ -275,7 +289,7 @@ function TransactionForm({
 
   function changeType(nextType: AccountTransactionType) {
     setType(nextType);
-    setCategory(TRANSACTION_CATEGORIES[nextType][0]);
+    setCategoryId(categoriesForType(categories, nextType)[0]?.id ?? "");
     setPurpose(getDefaultTransactionPurpose(nextType));
     setPurposeTouched(false);
   }
@@ -309,11 +323,12 @@ function TransactionForm({
         onClose();
         return;
       }
+      const selectedCategory = resolveCategorySelection(categories, type, activeCategoryId);
       onSave({
         ...transaction,
         accountId,
         amount: parsedAmount,
-        category,
+        ...selectedCategory,
         createdAt: transaction?.createdAt ?? now,
         date,
         id: transaction?.id ?? crypto.randomUUID(),
@@ -386,26 +401,8 @@ function TransactionForm({
             </select>
           </label>}
 
-          {type === "transfer" && (
-            <label className="ledger-field">
-              <span>Đến tài khoản</span>
-              <select
-                onChange={(event) => setToAccountId(event.target.value)}
-                value={toAccountId}
-              >
-                {accounts
-                  .filter((account) => account.id !== accountId)
-                  .map((account) => (
-                    <option key={account.id} value={account.id}>
-                      {account.name}
-                    </option>
-                  ))}
-              </select>
-            </label>
-          )}
-
-          <label className="ledger-field">
-            <span>Ngày</span>
+          <label className={`ledger-field${selectedJar ? " ledger-field-wide" : ""}`}>
+            <span>Ngày giao dịch</span>
             <input
               max={getToday()}
               onChange={(event) => setDate(event.target.value)}
@@ -429,20 +426,43 @@ function TransactionForm({
             </div>
           </label>
 
-          <label className="ledger-field">
-            <span>Phân loại</span>
+          <div className="ledger-field ledger-transaction-category">
+            <div className="ledger-transaction-category-heading">
+              <label htmlFor="ledger-transaction-category">Phân loại</label>
+              {type !== "transfer" && <button className="history-view-action" onClick={() => setShowCategoryManager(true)} type="button">Quản lý nhãn</button>}
+            </div>
             <select
-              onChange={(event) => setCategory(event.target.value)}
-              value={category}
+              id="ledger-transaction-category"
+              onChange={(event) => setCategoryId(event.target.value)}
+              value={activeCategoryId}
             >
-              {[...new Set([...TRANSACTION_CATEGORIES[type], ...(type === "expense"
-                ? jarLedger.jars.filter((jar) => jar.status === "active").flatMap((jar) => jar.linkedLabels) : [])])].map((item) => (
-                <option key={item} value={item}>
-                  {item}
+              {type === "transfer" && <option value="">Chuyển nội bộ</option>}
+              {type !== "transfer" && !activeCategoryId && <option value="">Chọn nhãn</option>}
+              {categoriesForType(categories, type).map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.name}
                 </option>
               ))}
             </select>
-          </label>
+          </div>
+
+          {type === "transfer" && (
+            <label className="ledger-field">
+              <span>Đến tài khoản</span>
+              <select
+                onChange={(event) => setToAccountId(event.target.value)}
+                value={toAccountId}
+              >
+                {accounts
+                  .filter((account) => account.id !== accountId)
+                  .map((account) => (
+                    <option key={account.id} value={account.id}>
+                      {account.name}
+                    </option>
+                  ))}
+              </select>
+            </label>
+          )}
 
           {type === "expense" && !transaction && jarLedger.jars.some((jar) => jar.status === "active") && <>
             <label className="ledger-field">
@@ -455,20 +475,9 @@ function TransactionForm({
                   <option key={jar.id} value={jar.id}>{jar.icon} {jar.name} · còn {formatMoney(getJarView(jarLedger, jar).remainingAmount)}</option>)}
               </select>
             </label>
-            {selectedJar && <label className="ledger-field">
-              <span>Nguồn tiền trong hũ</span>
-              <select value={jarSourceId} onChange={(event) => setJarSourceId(event.target.value)}>
-                <option value="">Tự động chia theo nguồn</option>
-                {getJarView(jarLedger, selectedJar).sources.filter((source) => source.amount > 0).map((source) =>
-                  <option key={source.accountId} value={source.accountId}>
-                    {accounts.find((account) => account.id === source.accountId)?.name ?? "Tài khoản"} · {formatMoney(source.amount)}
-                  </option>)}
-              </select>
-              <small>Khoản chi sẽ trừ tiền thật ở từng tài khoản nguồn.</small>
-            </label>}
           </>}
 
-          <label className="ledger-field">
+          <label className={`ledger-field${type === "income" || (type === "expense" && (transaction || !jarLedger.jars.some((jar) => jar.status === "active"))) ? " ledger-field-wide" : ""}`}>
             <span>Ảnh hưởng mục tiêu</span>
             <select
               onChange={(event) => { setPurpose(event.target.value as TransactionPurpose); setPurposeTouched(true); }}
@@ -485,6 +494,18 @@ function TransactionForm({
             </select>
             <small>Phân bổ và chuyển nội bộ không làm giảm tiền đã kiếm được cho mục tiêu.</small>
           </label>
+
+          {selectedJar && <label className="ledger-field ledger-field-wide">
+            <span>Nguồn tiền trong hũ</span>
+            <select value={jarSourceId} onChange={(event) => setJarSourceId(event.target.value)}>
+              <option value="">Tự động chia theo nguồn</option>
+              {getJarView(jarLedger, selectedJar).sources.filter((source) => source.amount > 0).map((source) =>
+                <option key={source.accountId} value={source.accountId}>
+                  {accounts.find((account) => account.id === source.accountId)?.name ?? "Tài khoản"} · {formatMoney(source.amount)}
+                </option>)}
+            </select>
+            <small>Khoản chi sẽ trừ tiền thật ở từng tài khoản nguồn.</small>
+          </label>}
 
           <label className="ledger-field ledger-field-wide">
             <span>Ghi chú</span>
@@ -511,12 +532,18 @@ function TransactionForm({
           </button>
         </footer>
       </form>
+      {showCategoryManager && <TransactionCategoryManager categories={categories} transactions={transactions}
+        onCommand={onCategoryCommand} onClose={() => setShowCategoryManager(false)} />}
     </div>
   );
 }
 
 export function AccountLedgerPage({
   accounts,
+  editTransactionId,
+  onEditIntentConsumed,
+  categories,
+  onCategoryCommand,
   jars,
   jarActivities,
   onJarCommand,
@@ -533,6 +560,10 @@ export function AccountLedgerPage({
   transactions,
 }: {
   accounts: FinancialAccount[];
+  editTransactionId?: string | null;
+  onEditIntentConsumed?: () => void;
+  categories: TransactionCategory[];
+  onCategoryCommand: (command: CategoryCommand) => void;
   jars: SpendingJar[];
   jarActivities: JarActivity[];
   onJarCommand: (command: JarCommand) => void;
@@ -561,6 +592,15 @@ export function AccountLedgerPage({
     useState<AccountTransaction | null>(null);
   const [showAccountForm, setShowAccountForm] = useState(false);
   const [showTransactionForm, setShowTransactionForm] = useState(false);
+  useEffect(() => {
+    if (!editTransactionId) return;
+    const timer = window.setTimeout(() => {
+      const selected = transactions.find((item) => item.id === editTransactionId);
+      if (selected) { setEditingTransaction(selected); setShowTransactionForm(true); }
+      onEditIntentConsumed?.();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [editTransactionId, onEditIntentConsumed, transactions]);
   const [externalDialog, setExternalDialog] = useState<ExternalDialog | null>(null);
   const activeAccounts = accounts.filter((account) => !account.archivedAt);
   const accountMap = useMemo(
@@ -1022,6 +1062,9 @@ export function AccountLedgerPage({
       {showTransactionForm && (
         <TransactionForm
           accounts={activeAccounts}
+          categories={categories}
+          transactions={transactions}
+          onCategoryCommand={onCategoryCommand}
           jarLedger={{ accounts, transactions, jars, jarActivities }}
           onJarCommand={onJarCommand}
           onClose={() => setShowTransactionForm(false)}

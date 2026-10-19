@@ -1,0 +1,21 @@
+.category-manager { width: min(560px, calc(100vw - 24px)); max-height: min(90dvh, 800px); overflow: auto; }
+.category-manager__tabs { display: flex; gap: 8px; margin: 18px 0; }
+.category-manager__tabs button { flex: 1; padding: 10px; border: 1px solid var(--border, #dbe4dc); border-radius: 12px; background: transparent; color: inherit; }
+.category-manager__tabs button[aria-pressed="true"] { background: #1b4031; color: white; }
+.category-manager__list { display: grid; gap: 7px; }
+.category-manager__item { display: flex; align-items: center; gap: 9px; padding: 8px 0; border-bottom: 1px solid #dde4dd; }
+.category-manager__item strong { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.category-manager__item button { border: 0; background: transparent; color: #315f49; padding: 7px; }
+.category-manager__swatch { width: 14px; height: 14px; border-radius: 50%; flex: none; }
+.category-manager__editor { display: grid; grid-template-columns: minmax(0, 1fr) 60px; gap: 10px; margin-top: 18px; }
+.category-manager__editor label { display: grid; gap: 4px; min-width: 0; }
+.category-manager__editor input { width: 100%; min-width: 0; }
+.category-manager__editor button { grid-column: 1 / -1; }
+.category-manager__editor .category-manager__icon { grid-column: 1 / -1; }
+.category-manager__editor .category-manager__shared { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; }
+.category-manager__shared input { width: auto; }
+.category-manager__confirm { margin-top: 18px; padding: 14px; border-radius: 14px; background: #fff5e8; color: #372b20; }
+.category-manager__confirm label { display: grid; gap: 6px; }
+.category-manager__confirm select { width: 100%; }
+.category-manager__confirm > div { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+.category-manager-backdrop { z-index: 1500; }

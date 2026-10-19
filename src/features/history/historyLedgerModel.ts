@@ -1,4 +1,4 @@
-import type { AccountTransaction } from "../account-ledger/accountLedgerModel";
+import { isExpenseReversal, type AccountTransaction } from "../account-ledger/accountLedgerModel.ts";
 import type { ExpenseEntry } from "../../types";
 import { getExpenseTotal, getOtherExpenseItems, type OtherExpenseBreakdownItem } from "../../utils/entries.ts";
 import { getReportingTransactions } from "../analytics/reportingTransactions.ts";
@@ -20,6 +20,24 @@ export function filterHistoryLedgerTransactions(
     })
     .sort((a, b) => b.date.localeCompare(a.date) ||
       (b.occurredAt ?? b.createdAt).localeCompare(a.occurredAt ?? a.createdAt));
+}
+
+export function groupLedgerTransactionsByDay(transactions: AccountTransaction[]) {
+  const days = new Map<string, AccountTransaction[]>();
+  for (const transaction of transactions) {
+    const current = days.get(transaction.date) ?? [];
+    current.push(transaction);
+    days.set(transaction.date, current);
+  }
+  return [...days].sort(([left], [right]) => right.localeCompare(left)).map(([date, items]) => {
+    const ordered = [...items].sort((a, b) => (b.occurredAt ?? b.createdAt)
+      .localeCompare(a.occurredAt ?? a.createdAt));
+    const income = ordered.reduce((sum, item) => sum +
+      (item.type === "income" && !isExpenseReversal(item) ? item.amount : 0), 0);
+    const expense = ordered.reduce((sum, item) => sum +
+      (item.type === "expense" ? item.amount : isExpenseReversal(item) ? -item.amount : 0), 0);
+    return { date, transactions: ordered, income, expense, net: income - expense, count: ordered.length };
+  });
 }
 
 export function buildCombinedExpenseReport(

@@ -26,6 +26,7 @@ import type { BackupSourceData } from "./backupModel";
 import type {
   AccountTransaction,
   FinancialAccount,
+  TransactionCategory,
 } from "../account-ledger/accountLedgerModel";
 import type { AccountReconciliation } from "../account-reconciliation/accountReconciliationModel";
 import type {
@@ -49,6 +50,7 @@ export type MoneyBackupState = {
   financialAccounts: FinancialAccount[];
   jars: import("../spending-jars/domain/jarModel.ts").SpendingJar[];
   jarActivities: import("../spending-jars/domain/jarModel.ts").JarActivity[];
+  transactionCategories: TransactionCategory[];
   goals: Goals;
 };
 
@@ -74,6 +76,7 @@ export function buildBackupSourceData(
       accounts: moneyState.financialAccounts,
       jars: moneyState.jars,
       jarActivities: moneyState.jarActivities,
+      categories: moneyState.transactionCategories,
       reconciliations: moneyState.accountReconciliations,
       transactions: moneyState.accountTransactions,
     },

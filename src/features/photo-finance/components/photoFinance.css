@@ -116,6 +116,7 @@
 .photo-finance-sheet header { position: relative; z-index: 5; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; min-height: 46px; padding: 0 0 8px; background: var(--pf-capture-bg); }
 .photo-finance-sheet header > span { color: var(--pf-capture-muted); font-size: 11px; letter-spacing: .09em; text-align: center; }
 .photo-finance-sheet header > svg { justify-self: end; color: var(--pf-capture-accent); }
+.photo-finance-manage-labels { border: 1px solid rgb(114 217 138 / 35%); border-radius: 999px; padding: 8px 12px; color: var(--pf-capture-accent); background: #17261c; font-size: 12px; white-space: nowrap; }
 .photo-finance-sheet .photo-finance-sheet-cancel { display: inline-flex; justify-self: start; align-items: center; gap: 5px; width: auto; height: 38px; border: 0; border-radius: 999px; padding: 0 13px; color: var(--pf-capture-text); background: var(--pf-capture-panel); font-size: 13px; }
 .photo-finance-form { display: flex; min-height: 0; height: 100%; flex-direction: column; gap: clamp(8px, 1.4dvh, 14px); overflow-y: auto; overscroll-behavior: contain; }
 .photo-finance-file-input,

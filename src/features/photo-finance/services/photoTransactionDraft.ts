@@ -1,5 +1,5 @@
 import {
-  getDefaultTransactionPurpose, TRANSACTION_CATEGORIES,
+  getDefaultTransactionPurpose,
   type AccountTransaction, type AccountTransactionType,
   type FinancialAccount, type TransactionPurpose,
 } from "../../account-ledger/accountLedgerModel.ts";
@@ -15,6 +15,7 @@ export function buildPhotoTransaction(input: {
   accountId: string;
   toAccountId?: string;
   category: string;
+  categoryId?: string;
   purpose: TransactionPurpose;
   date: string;
   time: string;
@@ -34,8 +35,7 @@ export function buildPhotoTransaction(input: {
     if (input.accountId === input.toAccountId)
       throw new Error("Tài khoản nhận phải khác tài khoản chuyển.");
   }
-  if (!TRANSACTION_CATEGORIES[input.type].includes(input.category))
-    throw new Error("Danh mục không hợp lệ.");
+  if (!input.category.trim()) throw new Error("Hãy chọn nhãn giao dịch.");
 
   return {
     ...input.existing,
@@ -44,6 +44,7 @@ export function buildPhotoTransaction(input: {
     toAccountId: input.type === "transfer" ? input.toAccountId : undefined,
     amount: input.amount,
     category: input.category,
+    categoryId: input.type === "transfer" ? undefined : input.categoryId,
     type: input.type,
     purpose: input.type === "expense" && input.purpose === "goal_allocation"
       ? "goal_allocation" : getDefaultTransactionPurpose(input.type),

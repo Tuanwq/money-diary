@@ -1,6 +1,7 @@
 import type { AccountTransaction, FinancialAccount } from "../../account-ledger/accountLedgerModel";
 import { formatReportDate } from "../../../utils/date";
 import { formatMoney } from "../../../utils/money";
+import type { SpendingJar } from "../../spending-jars/domain/jarModel.ts";
 import "./LedgerHistoryRow.css";
 
 export function LedgerHistoryRow({ transaction, accounts, onView }: {
@@ -27,9 +28,10 @@ export function LedgerHistoryRow({ transaction, accounts, onView }: {
   );
 }
 
-export function LedgerHistoryDetails({ transaction, accounts }: {
+export function LedgerHistoryDetails({ transaction, accounts, jars = [] }: {
   transaction: AccountTransaction;
   accounts: FinancialAccount[];
+  jars?: SpendingJar[];
 }) {
   const accountName = accounts.find((account) => account.id === transaction.accountId)?.name ?? "Tài khoản cũ";
   const toAccountName = accounts.find((account) => account.id === transaction.toAccountId)?.name ?? "Tài khoản nhận";
@@ -40,6 +42,8 @@ export function LedgerHistoryDetails({ transaction, accounts }: {
       <div><dt>Tài khoản</dt><dd>{accountName}</dd></div>
       {transaction.type === "transfer" && <div><dt>Chuyển đến</dt><dd>{toAccountName}</dd></div>}
       <div><dt>Danh mục</dt><dd>{transaction.category || "Chưa phân loại"}</dd></div>
+      {transaction.jarId && <div><dt>Hũ chi tiêu</dt><dd>{jars.find((item) => item.id === transaction.jarId)?.name ?? "Hũ đã xóa"}</dd></div>}
+      <div><dt>Thời gian</dt><dd>{new Date(transaction.occurredAt ?? transaction.createdAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}</dd></div>
     </dl>
     {transaction.note && <section className="history-detail-text"><h3>Ghi chú</h3><p>{transaction.note}</p></section>}
   </div>;

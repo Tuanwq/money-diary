@@ -2,7 +2,9 @@ import { ArrowLeft, ArrowRight, Camera, Images } from "lucide-react";
 import type {
   AccountTransaction,
   FinancialAccount,
+  TransactionCategory,
 } from "../../account-ledger/accountLedgerModel.ts";
+import type { CategoryCommand } from "../../account-ledger/transactionCategories.ts";
 import type { DailyEntry, ExpenseEntry } from "../../../types.ts";
 import type { JarActivity, SpendingJar } from "../../spending-jars/domain/jarModel.ts";
 import type { JarCommand } from "../../spending-jars/services/jarService.ts";
@@ -12,6 +14,8 @@ import "./PhotoJournalPage.css";
 type PhotoJournalPageProps = {
   captureIntent: string | null;
   accounts: FinancialAccount[];
+  categories: TransactionCategory[];
+  onCategoryCommand: (command: CategoryCommand) => void;
   jars: SpendingJar[];
   jarActivities: JarActivity[];
   entries: DailyEntry[];
@@ -28,6 +32,8 @@ type PhotoJournalPageProps = {
 export function PhotoJournalPage({
   captureIntent,
   accounts,
+  categories,
+  onCategoryCommand,
   jars,
   jarActivities,
   entries,
@@ -66,6 +72,8 @@ export function PhotoJournalPage({
         captureIntent={captureIntent}
         onCaptureIntentConsumed={onCaptureIntentConsumed}
         accounts={accounts}
+        categories={categories}
+        onCategoryCommand={onCategoryCommand}
         jars={jars}
         jarActivities={jarActivities}
         entries={entries}

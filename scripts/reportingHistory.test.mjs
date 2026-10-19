@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { filterHistoryLedgerTransactions, buildCombinedExpenseReport } from "../src/features/history/historyLedgerModel.ts";
+import { filterHistoryLedgerTransactions, buildCombinedExpenseReport, groupLedgerTransactionsByDay } from "../src/features/history/historyLedgerModel.ts";
 import { isIndependentReportingTransaction } from "../src/features/analytics/reportingTransactions.ts";
 import { buildAnalyticsDataQuality } from "../src/features/analytics/analyticsDataQuality.ts";
 
@@ -33,6 +33,20 @@ test("history filters current transactions by date, category and note", () => {
     .map((row) => row.id), ["income"]);
   assert.equal(filterHistoryLedgerTransactions(transactions,
     { fromDate: "2026-09-21", toDate: "", search: "" }).length, 0);
+});
+
+test("daily cards sort newest first and exclude transfers and reversals from earned income", () => {
+  const rows = filterHistoryLedgerTransactions([
+    ...transactions,
+    { ...income, id: "tomorrow", date: "2026-09-21", amount: 90_000 },
+    { ...income, id: "jar-refund:r1", source: "spending_jar", reversesExpense: true, amount: 10_000 },
+  ], { fromDate: "", toDate: "", search: "" });
+  const days = groupLedgerTransactionsByDay(rows);
+  assert.deepEqual(days.map((day) => day.date), ["2026-09-21", date]);
+  assert.equal(days[1].income, 200_000);
+  assert.equal(days[1].expense, 65_000);
+  assert.equal(days[1].net, 135_000);
+  assert.equal(days[1].count, 5);
 });
 
 test("analytics identifies ambiguous legacy rows and possible overlap without changing totals", () => {

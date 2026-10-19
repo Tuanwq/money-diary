@@ -1,8 +1,12 @@
 import assert from "node:assert/strict";
-import { buildManagerMonthlyOverview, buildManagerOverview, buildManagerRecentTransactions } from "../src/features/money-diary/utils/managerDashboardSelectors.ts";
+import { buildDashboardJarFlow, buildManagerMonthlyOverview, buildManagerOverview, buildManagerRecentTransactions } from "../src/features/money-diary/utils/managerDashboardSelectors.ts";
+import { readDashboardTab, rememberDashboardTab } from "../src/features/money-diary/utils/dashboardTabPreference.ts";
 import { buildDailyFinancialSummaries, getDailyFinancialSummary } from "../src/features/photo-finance/services/photoFinanceModel.ts";
 import { buildMainGoalProgress } from "../src/features/goals/domain/mainGoalProgress.ts";
 import { getLedgerSummary } from "../src/features/account-ledger/accountLedgerModel.ts";
+import { calculateActualAvailableBalance } from "../src/features/account-ledger/accountExternalModel.ts";
+import { getFinancialPosition } from "../src/features/spending-jars/domain/financialPosition.ts";
+import { applyJarCommand } from "../src/features/spending-jars/services/jarService.ts";
 
 const entries = [
   {
@@ -110,5 +114,85 @@ assert.equal(withRefund.day.expense, 1_093_000, "refund reverses expense");
 assert.equal(withRefund.day.net, -923_000);
 assert.equal(buildManagerRecentTransactions(dayEntries, [], [...photoExpenses, refund])
   .find((item) => item.id === "ledger-jar-refund:r1")?.kind, "refund");
+
+// Account money and jar money share one ledger: allocations and internal moves
+// never create another income or change assets.
+const flowDay = "2026-10-20";
+const now = "2026-10-20T03:00:00.000Z";
+const account = (id, openingBalance, externalEntries = []) => ({
+  id, name: id, type: "bank", openingBalance, budgetEligibility: "eligible",
+  externalEntries, createdAt: now, updatedAt: now,
+});
+const outside = { id: "outside", accountId: "bank", amount: 100_000, type: "unavailable",
+  note: "Chưa khả dụng", date: flowDay, recoveries: [], createdAt: now, updatedAt: now };
+let ledger = {
+  accounts: [account("cash", 1_000_000), account("bank", 500_000, [outside])],
+  transactions: [
+    { id: "income", accountId: "cash", amount: 200_000, date: flowDay, type: "income",
+      source: "manual", category: "Lương", note: "", createdAt: now, updatedAt: now },
+    { id: "outside-expense", accountId: "cash", amount: 50_000, date: flowDay, type: "expense",
+      source: "manual", category: "Ăn uống", note: "", createdAt: now, updatedAt: now },
+    { id: "account-transfer", accountId: "cash", toAccountId: "bank", amount: 100_000,
+      date: flowDay, type: "transfer", source: "manual", category: "Chuyển nội bộ",
+      note: "", createdAt: now, updatedAt: now },
+  ], jars: [], jarActivities: [], updatedAt: now,
+};
+const jarFields = (name) => ({ name, icon: "🫙", limitAmount: 500_000,
+  startDate: flowDay, linkedLabels: [] });
+ledger = applyJarCommand(ledger, { kind: "create", id: "jar-1", now, fields: jarFields("Ăn uống") });
+ledger = applyJarCommand(ledger, { kind: "create", id: "jar-2", now, fields: jarFields("Đi lại") });
+ledger = applyJarCommand(ledger, { kind: "allocate", id: "allocate", now, jarId: "jar-1",
+  accountId: "cash", amount: 300_000 });
+ledger = applyJarCommand(ledger, { kind: "spend", id: "spend", now, jarId: "jar-1",
+  accountId: "cash", amount: 60_000, date: flowDay, category: "Ăn uống", note: "",
+  purpose: "daily_expense" });
+ledger = applyJarCommand(ledger, { kind: "transfer", id: "jar-transfer", now, jarId: "jar-1",
+  toJarId: "jar-2", accountId: "cash", amount: 40_000 });
+ledger = applyJarCommand(ledger, { kind: "release", id: "release", now, jarId: "jar-2",
+  accountId: "cash", amount: 20_000 });
+ledger = applyJarCommand(ledger, { kind: "refund", id: "refund", now, jarId: "jar-1",
+  accountId: "cash", amount: 10_000, date: flowDay, note: "" });
+const ledgerDay = buildManagerOverview([], [], flowDay, ledger.transactions).day;
+const jarFlow = buildDashboardJarFlow(ledgerDay, ledger.transactions, ledger.jarActivities);
+assert.deepEqual({ income: ledgerDay.income, expense: ledgerDay.expense, net: ledgerDay.net },
+  { income: 200_000, expense: 100_000, net: 100_000 });
+assert.deepEqual(jarFlow, {
+  incomeNotLinkedToJar: 200_000, incomeLinkedToJar: 0,
+  expenseOutsideJar: 50_000, expenseFromJar: 50_000,
+  allocatedToJar: 300_000, releasedFromJar: 20_000, transferredBetweenJars: 40_000,
+});
+const position = getFinancialPosition(ledger);
+const spendable = calculateActualAvailableBalance(ledger);
+assert.equal(getLedgerSummary(ledger.accounts, ledger.transactions, "2026-10").totalBalance, 1_600_000);
+assert.equal(spendable, 1_500_000, "money held outside is excluded");
+assert.equal(position.liquid, spendable, "dashboard and jar views use the same available-money scope");
+assert.equal(position.reserved, 230_000, "jar spend and refund change both account and jar balances");
+assert.equal(position.reserved + (spendable - position.reserved), spendable);
+assert.equal(jarFlow.expenseOutsideJar + jarFlow.expenseFromJar, ledgerDay.expense);
+
+// Switching tabs persists only the presentation choice, including after a remount.
+const previousStorage = globalThis.localStorage;
+const values = new Map();
+globalThis.localStorage = {
+  getItem: (key) => values.get(key) ?? null,
+  setItem: (key, value) => { values.set(key, value); },
+};
+try {
+  assert.equal(readDashboardTab(), "overview");
+  rememberDashboardTab("allocation");
+  assert.equal(readDashboardTab(), "allocation");
+  rememberDashboardTab("overview");
+  assert.equal(readDashboardTab(), "overview");
+  values.set("money-diary-financial-dashboard-tab", "unexpected");
+  assert.equal(readDashboardTab(), "overview", "invalid old preferences fall back safely");
+  globalThis.localStorage = {
+    getItem: () => { throw new Error("storage unavailable"); },
+    setItem: () => { throw new Error("storage unavailable"); },
+  };
+  assert.equal(readDashboardTab(), "overview");
+  assert.doesNotThrow(() => rememberDashboardTab("allocation"));
+} finally {
+  globalThis.localStorage = previousStorage;
+}
 
 console.log("Dashboard selector tests passed.");

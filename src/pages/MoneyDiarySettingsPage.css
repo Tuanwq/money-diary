@@ -1,0 +1,46 @@
+.money-legacy-tools-setting {
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  color: var(--text-primary);
+  display: flex;
+  gap: 1.25rem;
+  justify-content: space-between;
+  padding: 1.125rem 1.25rem;
+}
+
+.money-legacy-tools-setting h2 {
+  font-size: 1.05rem;
+  margin: 0 0 0.35rem;
+}
+
+.money-legacy-tools-setting p {
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin: 0;
+  max-width: 56rem;
+}
+
+.money-legacy-tools-switch {
+  align-items: center;
+  cursor: pointer;
+  display: flex;
+  flex: 0 0 auto;
+  gap: 0.5rem;
+  white-space: nowrap;
+}
+
+.money-legacy-tools-switch input {
+  accent-color: var(--primary);
+  cursor: pointer;
+  height: 1.2rem;
+  width: 1.2rem;
+}
+
+@media (max-width: 640px) {
+  .money-legacy-tools-setting {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

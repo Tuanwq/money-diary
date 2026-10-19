@@ -1,36 +1,45 @@
-import { Camera, PackagePlus, ReceiptText } from "lucide-react";
+import { Camera, PackagePlus, ReceiptText, WalletCards } from "lucide-react";
 import type { RefObject } from "react";
 import { MoneyBottomSheet } from "./MoneyBottomSheet";
 
 type AddDataSheetProps = {
   isOpen: boolean;
+  legacyMoneyToolsVisible: boolean;
   onAddExpense: () => void;
   onAddIncome: () => void;
   onCapturePhoto: () => void;
+  onOpenAccountLedger: () => void;
   onClose: () => void;
   returnFocusRef?: RefObject<HTMLButtonElement | null>;
 };
 
 export function AddDataSheet({
   isOpen,
+  legacyMoneyToolsVisible,
   onAddExpense,
   onAddIncome,
   onCapturePhoto,
+  onOpenAccountLedger,
   onClose,
   returnFocusRef,
 }: AddDataSheetProps) {
   const actions = [
-    {
+    ...(legacyMoneyToolsVisible ? [{
       description: "Ghi lại khoản tiền bạn vừa nhận được.",
       icon: PackagePlus,
       label: "Nhập thu nhập",
       onClick: onAddIncome,
-    },
-    {
+    }, {
       description: "Ghi lại khoản tiền bạn vừa chi.",
       icon: ReceiptText,
       label: "Thêm chi tiêu",
       onClick: onAddExpense,
+    }] : []),
+    {
+      description: "Mở Sổ tài khoản để thêm thu, chi hoặc chuyển tiền.",
+      icon: WalletCards,
+      label: "Sổ tài khoản",
+      onClick: onOpenAccountLedger,
     },
     {
       description: "Chụp ảnh và ghi lại giao dịch.",
@@ -46,7 +55,7 @@ export function AddDataSheet({
       onClose={onClose}
       returnFocusRef={returnFocusRef}
       title="Bạn muốn ghi gì?"
-      description="Chọn loại dữ liệu để tiếp tục với biểu mẫu hiện có."
+      description="Chọn cách ghi lại khoản tiền của bạn."
     >
       <div className="money-sheet-action-list">
         {actions.map((action) => {

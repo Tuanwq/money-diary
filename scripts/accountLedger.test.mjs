@@ -83,6 +83,8 @@ const newerCloudLedger = {
 };
 const pristineLedger = createDefaultLedger();
 assert.equal(isPristineLedger(pristineLedger), true);
+assert.equal(isPristineLedger({ ...pristineLedger,
+  categories: [{ id: "custom", name: "Đi lại", type: "expense" }] }), false);
 assert.equal(isPristineLedger({ ...pristineLedger, accounts: pristineLedger.accounts.map((account, index) =>
   index === 0 ? { ...account, budgetEligibility: "eligible" } : account) }), false,
 "choosing an account for budgeting is a local change that must not be overwritten");

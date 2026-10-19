@@ -22,12 +22,13 @@ function canonicalJson(value: unknown): unknown {
 
 /** A changed row revision alone is not a financial conflict. */
 export function areLedgerContentsEqual(local: AccountLedgerData, cloud: AccountLedgerData) {
-  const content = ({ accounts, transactions, jars, jarActivities }: AccountLedgerData) =>
-    JSON.stringify(canonicalJson({ accounts, transactions, jars, jarActivities }));
+  const content = ({ accounts, transactions, jars, jarActivities, categories }: AccountLedgerData) =>
+    JSON.stringify(canonicalJson({ accounts, transactions, jars, jarActivities, categories: categories ?? [] }));
   return content(local) === content(cloud);
 }
 
 export function isPristineLedger(ledger: AccountLedgerData) {
+  if (ledger.categories?.length) return false;
   if (ledger.transactions.length || ledger.jars.length || ledger.jarActivities.length) return false;
   if (ledger.accounts.some((account) => account.externalEntries?.length)) return false;
   const defaults = createDefaultAccounts(ledger.updatedAt);
@@ -53,9 +54,11 @@ export function decideLedgerLoad(local: AccountLedgerData, cloud: AccountLedgerD
 export function hasLocalOnlyRecords(local: AccountLedgerData, remote: AccountLedgerData) {
   const remoteJarIds = new Set(remote.jars.map((item) => item.id));
   const remoteTransactionIds = new Set(remote.transactions.map((item) => item.id));
+  const remoteCategoryIds = new Set((remote.categories ?? []).map((item) => item.id));
   const remoteExternal = new Map(remote.accounts.flatMap((account) =>
     (account.externalEntries ?? []).map((entry) => [entry.id, externalSignature(entry)] as const)));
-  return local.jars.some((item) => !remoteJarIds.has(item.id)) ||
+  return (local.categories ?? []).some((item) => !remoteCategoryIds.has(item.id)) ||
+    local.jars.some((item) => !remoteJarIds.has(item.id)) ||
     local.transactions.some((item) => !remoteTransactionIds.has(item.id)) ||
     local.accounts.some((account) => (account.externalEntries ?? []).some((entry) =>
       remoteExternal.get(entry.id) !== externalSignature(entry)));

@@ -85,6 +85,15 @@ export function createPhotoAttachmentRepository(client: SupabaseClient = supabas
       }
     },
 
+    async listForTransaction(ownerId: string, transactionId: string): Promise<PhotoAttachment[]> {
+      await requireOwner(client, ownerId);
+      const data = await unwrap(() => client.from("money_diary_financial_attachments")
+        .select("id,owner_id,source_type,source_id,storage_path,thumbnail_path,is_cover,width,height,created_at")
+        .eq("owner_id", ownerId).eq("source_id", transactionId).is("deleted_at", null)
+        .order("created_at", { ascending: false }));
+      return ((data ?? []) as AttachmentRow[]).map(fromRow);
+    },
+
     async signedImage(path: string) {
       const url = (await images.get([path])).get(path);
       if (!url) throw new Error("Không tải được ảnh riêng tư.");

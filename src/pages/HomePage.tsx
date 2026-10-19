@@ -1,12 +1,14 @@
-import { ArrowLeft, ArrowRight, CalendarRange, Camera, TrendingDown,
-  TrendingUp, WalletCards, CookingPot } from "lucide-react";
+import { ArrowRight, CalendarRange, TrendingDown,
+  TrendingUp } from "lucide-react";
 import { DataCompletionCard } from "../features/money-diary/components/dashboard/DataCompletionCard";
+import { FinancialDashboard } from "../features/money-diary/components/dashboard/FinancialDashboard";
 import { GreetingHeader } from "../features/money-diary/components/dashboard/GreetingHeader";
 import { MainGoalCard } from "../features/money-diary/components/dashboard/MainGoalCard";
 import { RecentTransactions } from "../features/money-diary/components/dashboard/RecentTransactions";
-import { buildManagerOverview } from "../features/money-diary/utils/managerDashboardSelectors";
+import { buildDashboardJarFlow, buildManagerOverview } from "../features/money-diary/utils/managerDashboardSelectors";
 import { useMemo } from "react";
 import type { AccountTransaction } from "../features/account-ledger/accountLedgerModel";
+import type { JarActivity } from "../features/spending-jars/domain/jarModel.ts";
 import { getFinancialPosition } from "../features/spending-jars/domain/financialPosition.ts";
 import type { MainGoalProgressSummary } from "../features/goals/domain/mainGoalProgress";
 import type {
@@ -21,9 +23,11 @@ import { formatMoney } from "../utils/money";
 import "./HomePage.css";
 
 type HomePageProps = {
+  legacyMoneyToolsVisible: boolean;
   actualMoney: number;
   spendableMoney: number;
   financialPosition: ReturnType<typeof getFinancialPosition>;
+  jarActivities: JarActivity[];
   balanceChecks: BalanceCheckEntry[];
   cloudLoadError: string | null;
   dataWarnings: DataWarning[];
@@ -52,9 +56,11 @@ type HomePageProps = {
 };
 
 export function HomePage({
+  legacyMoneyToolsVisible,
   actualMoney,
   spendableMoney,
   financialPosition,
+  jarActivities,
   balanceChecks,
   cloudLoadError,
   dataWarnings,
@@ -83,6 +89,8 @@ export function HomePage({
 }: HomePageProps) {
   const { day, month } = useMemo(() => buildManagerOverview(entries, expenses, selectedDate, transactions),
     [entries, expenses, selectedDate, transactions]);
+  const jarFlow = useMemo(() => buildDashboardJarFlow(day, transactions, jarActivities),
+    [day, transactions, jarActivities]);
   const openHistory = () => navigateTo("history");
   const openGoal = () => navigateTo("goals", "current");
   const requestNotificationPermission = () => navigateTo("settings");
@@ -99,54 +107,18 @@ export function HomePage({
         today={todayString}
       />
 
-      <section className="manager-balance-card" aria-labelledby="manager-balance-title">
-        <div className="manager-balance-heading">
-          <span><WalletCards aria-hidden="true" size={17} /> Tổng tiền hiện có (có thể dùng ngay)</span>
-          <button type="button" onClick={() => navigateTo("accounts")}>Xem tài khoản <ArrowRight size={16} /></button>
-        </div>
-        <strong id="manager-balance-title">{formatMoney(spendableMoney)}</strong>
-        <p>Trên tổng số dư {formatMoney(actualMoney)} trong Sổ tài khoản.</p>
-
-        <div className="manager-day-strip" aria-label="Biến động ngày đang xem">
-          <div><span>Thu trong ngày</span><strong className="is-positive">+{formatMoney(day.income)}</strong></div>
-          <div><span>Chi ròng trong ngày</span><strong className={day.expense < 0 ? "is-positive" : "is-negative"}>
-            {day.expense < 0 ? "+" : "−"}{formatMoney(Math.abs(day.expense))}</strong></div>
-          <div><span>Thay đổi ròng</span><strong className={day.net < 0 ? "is-negative" : "is-positive"}>
-            {day.net >= 0 ? "+" : "−"}{formatMoney(Math.abs(day.net))}
-          </strong></div>
-        </div>
-
-        <button className="manager-journal-entry" onClick={onOpenJournal} type="button">
-          <span><Camera aria-hidden="true" size={20} /><span><strong>Mở Nhật ký tài chính</strong>
-            <small>Chụp ảnh và lưu câu chuyện của khoản tiền</small></span></span>
-          <span className="manager-journal-swipe"><ArrowLeft size={15} /> Vuốt sang trái</span>
-        </button>
-      </section>
-
-      <section className="money-card manager-allocation-card" aria-label="Tiền trong tài khoản và hũ">
-        <div className="manager-card-title"><span><WalletCards size={17} aria-hidden="true" /> Tiền thực có đang được dùng thế nào</span></div>
-        <div className="manager-allocation-grid">
-          <div><span>Đã dành trong hũ</span><strong>{formatMoney(financialPosition.reserved)}</strong></div>
-          <div><span>Chưa dành trong hũ</span><strong>{formatMoney(Math.max(0, spendableMoney - financialPosition.reserved))}</strong></div>
-          <div><span>Có thể nạp thêm vào hũ</span><strong>{formatMoney(financialPosition.allocationCapacity)}</strong></div>
-        </div>
-        <div className="manager-allocation-bar" role="progressbar" aria-label="Tỷ lệ tiền thực có đã dành trong hũ"
-          aria-valuemin={0} aria-valuemax={100}
-          aria-valuenow={spendableMoney > 0 ? Math.min(100, Math.round(financialPosition.reserved / spendableMoney * 100)) : 0}>
-          <span style={{ width: `${spendableMoney > 0 ? Math.min(100, financialPosition.reserved / spendableMoney * 100) : 0}%` }} />
-        </div>
-        {(financialPosition.shortfall > 0 || financialPosition.needsReview > 0) && <p>
-          {financialPosition.shortfall > 0 && `Tiền đã dành vượt tiền thực có ${formatMoney(financialPosition.shortfall)}. `}
-          {financialPosition.needsReview > 0 && `${financialPosition.needsReview} tài khoản cần xác nhận quyền dùng cho hũ.`}
-        </p>}
-        <button className="money-text-action" type="button" onClick={() => navigateTo("spendingJars")}>Xem các hũ <ArrowRight size={16} /></button>
-      </section>
+      <FinancialDashboard
+        actualMoney={actualMoney}
+        day={day}
+        flow={jarFlow}
+        financialPosition={financialPosition}
+        onOpenAccounts={() => navigateTo("accounts")}
+        onOpenJars={() => navigateTo("spendingJars")}
+        onOpenJournal={onOpenJournal}
+        spendableMoney={spendableMoney}
+      />
 
       <MainGoalCard name={mainGoalName} onOpenGoals={openGoal} summary={mainGoal} />
-
-      <button className="money-card manager-jars-shortcut" onClick={() => navigateTo("spendingJars")} type="button">
-        <CookingPot size={20} aria-hidden="true" /> <span><strong>Hũ chi tiêu</strong><small>Dành tiền cho các khoản sắp chi · vuốt sang phải</small></span><ArrowRight size={18} />
-      </button>
 
       <section className="money-card manager-month-card" aria-labelledby="manager-month-title">
           <div className="manager-card-title"><span><CalendarRange size={17} /> Tháng đang xem</span>
@@ -162,7 +134,7 @@ export function HomePage({
           <button className="money-text-action" onClick={() => navigateTo("analytics")} type="button">Xem thống kê <ArrowRight size={16} /></button>
       </section>
 
-      <DataCompletionCard
+      {legacyMoneyToolsVisible && <DataCompletionCard
         balanceCheck={selectedBalanceCheck}
         entry={selectedEntry}
         error={cloudLoadError}
@@ -178,7 +150,7 @@ export function HomePage({
         onWarningAction={onDataWarningAction}
         selectedDate={selectedDate}
         warnings={dataWarnings}
-      />
+      />}
 
       <RecentTransactions entries={entries} expenses={expenses} accountTransactions={transactions} onViewAll={openHistory} />
 

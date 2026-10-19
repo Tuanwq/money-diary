@@ -26,6 +26,7 @@ type MoneyDesktopSidebarProps = {
   currentPage: Page;
   email?: string;
   isCloudRefreshing: boolean;
+  legacyMoneyToolsVisible: boolean;
   navigateTo: (page: Page, goalScreen?: GoalScreen) => void;
   accountButtonRef: RefObject<HTMLButtonElement | null>;
   onLogout: () => void;
@@ -52,6 +53,7 @@ export function MoneyDesktopSidebar({
   currentPage,
   email,
   isCloudRefreshing,
+  legacyMoneyToolsVisible,
   navigateTo,
   onLogout,
   onOpenAccount,
@@ -94,18 +96,17 @@ export function MoneyDesktopSidebar({
       label: "Mục tiêu",
       onClick: () => navigateTo("goals", "menu"),
     },
-    {
+    ...(legacyMoneyToolsVisible ? [{
       active: currentPage === "closeDay" || currentPage === "entry",
       icon: BookOpenText,
       label: "Ghi chép",
       onClick: () => navigateTo("closeDay"),
-    },
-    {
+    }, {
       active: currentPage === "hub",
       icon: PackagePlus,
       label: "Thu nhập",
       onClick: () => navigateTo("hub"),
-    },
+    }] : []),
     {
       active: currentPage === "accounts",
       icon: WalletCards,

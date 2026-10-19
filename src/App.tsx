@@ -4,6 +4,7 @@ import { HubSelectionPage } from "./features/hub/pages/HubSelectionPage";
 import { useAccountLedger } from "./features/account-ledger/useAccountLedger";
 import { selectTrustedLegacyBudgets } from "./features/account-ledger/ledgerStorageScope.ts";
 import { getLedgerSummary } from "./features/account-ledger/accountLedgerModel";
+import type { AccountTransaction } from "./features/account-ledger/accountLedgerModel.ts";
 import { calculateActualAvailableBalance } from "./features/account-ledger/accountExternalModel.ts";
 import { getFinancialPosition } from "./features/spending-jars/domain/financialPosition.ts";
 import { deleteAccountTransactionWithPhotos } from "./features/photo-finance/services/photoTransactionService.ts";
@@ -13,6 +14,7 @@ import { useCashFlowPlans } from "./features/cash-flow/useCashFlowPlans";
 import { buildMainGoalProgress, buildMainGoalProgressTimeline } from "./features/goals/domain/mainGoalProgress.ts";
 import type { BalanceCheckOverlayMode } from "./features/money-diary/components/balance-check/BalanceCheckOverlay";
 import { MoneyPageShell } from "./features/money-diary/components/layout/MoneyPageShell";
+import { useLegacyMoneyToolsVisibility } from "./features/money-diary/hooks/useLegacyMoneyToolsVisibility";
 import { useMoneyDiaryNotificationScheduler } from "./features/notifications/useNotificationScheduler";
 import type {
   BackupSection,
@@ -32,6 +34,7 @@ import {
   Component,
   lazy,
   Suspense,
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -652,6 +655,8 @@ export default function App() {
   const { page, goalId, goalScreen, navigateTo, returnFromPhotoJournal, resetMoneyNavigation } =
     useAppNavigation();
   const [photoCaptureIntent, setPhotoCaptureIntent] = useState<string | null>(null);
+  const [ledgerEditIntent, setLedgerEditIntent] = useState<string | null>(null);
+  const consumeLedgerEditIntent = useCallback(() => setLedgerEditIntent(null), []);
   const actionReturnLocationRef = useRef<ActionReturnLocation | null>(null);
   const [chartDays, setChartDays] = useState(7);
   const [forecastDays, setForecastDays] = useState(14);
@@ -693,6 +698,8 @@ export default function App() {
   const cloudDataUserId = isMoneyCloudSyncEnabled
     ? session?.user.id
     : undefined;
+  const { legacyMoneyToolsVisible, setLegacyMoneyToolsVisible } =
+    useLegacyMoneyToolsVisibility(session?.user.id);
   const {
     accounts: financialAccounts,
     archiveAccount,
@@ -700,6 +707,8 @@ export default function App() {
     claimLegacyLocalLedger,
     deleteTransaction: deleteAccountTransaction,
     dispatchJar,
+    dispatchCategory,
+    categories: transactionCategories,
     dispatchExternal,
     jars,
     jarActivities,
@@ -712,6 +721,17 @@ export default function App() {
     transactions: accountTransactions,
   } = useAccountLedger(cloudDataUserId, selectTrustedLegacyBudgets(cloudDataUserId,
     isMoneyCloudSyncEnabled, remoteLegacyBudgets, goals.expenseBudgets));
+  function openLedgerTransaction(transaction: AccountTransaction) {
+    setLedgerEditIntent(transaction.id);
+    navigateTo("accounts");
+  }
+  function removeLedgerTransaction(transactionId: string) {
+    void deleteAccountTransactionWithPhotos(transactionId, cloudDataUserId, deleteAccountTransaction)
+      .catch((cause) => {
+        console.error(cause);
+        showAppToast("Chưa xóa được giao dịch vì ảnh liên kết cần dọn trước. Hãy thử lại.");
+      });
+  }
   const accountAwareSyncStatus = /migration|chưa thể|lỗi|xung đột/i.test(accountLedgerCloudStatus)
     ? accountLedgerCloudStatus
     : /đang tải|đang lưu/i.test(accountLedgerCloudStatus)
@@ -752,6 +772,7 @@ export default function App() {
         financialAccounts,
         jars,
         jarActivities,
+        transactionCategories,
         goals,
       }),
     [
@@ -769,6 +790,7 @@ export default function App() {
       financialAccounts,
       jars,
       jarActivities,
+      transactionCategories,
       goals,
     ]
   );
@@ -1129,7 +1151,8 @@ async function restoreBackup(
       snapshot.data.accounts.accounts,
       snapshot.data.accounts.transactions,
       snapshot.data.accounts.jars ?? [],
-      snapshot.data.accounts.jarActivities ?? []
+      snapshot.data.accounts.jarActivities ?? [],
+      snapshot.data.accounts.categories
     );
     replaceReconciliationState(
       snapshot.data.accounts.reconciliations ?? []
@@ -3405,6 +3428,7 @@ if (route.kind === "daymark") {
       currentPage={page}
       email={session.user.email}
       isCloudRefreshing={isCloudRefreshing}
+      legacyMoneyToolsVisible={legacyMoneyToolsVisible}
       navigateTo={navigateTo}
       onBackFromPhotoJournal={returnFromPhotoJournal}
       onExportReport={exportToWord}
@@ -3431,6 +3455,10 @@ if (route.kind === "daymark") {
           {page === "accounts" && (
             <LazyAccountLedgerPage
               accounts={financialAccounts}
+              editTransactionId={ledgerEditIntent}
+              onEditIntentConsumed={consumeLedgerEditIntent}
+              categories={transactionCategories}
+              onCategoryCommand={dispatchCategory}
               onExternalCommand={dispatchExternal}
               jars={jars}
               jarActivities={jarActivities}
@@ -3441,13 +3469,7 @@ if (route.kind === "daymark") {
               onClaimLegacyLocalLedger={claimLegacyLocalLedger}
               onRetrySync={retryAccountLedgerSync}
               onUseCloudVersion={useCloudAccountLedger}
-              deleteTransaction={(transactionId) => {
-                void deleteAccountTransactionWithPhotos(transactionId,
-                  cloudDataUserId, deleteAccountTransaction).catch((cause) => {
-                    console.error(cause);
-                    showAppToast("Chưa xóa được giao dịch vì ảnh liên kết cần dọn trước. Hãy thử lại.");
-                  });
-              }}
+              deleteTransaction={removeLedgerTransaction}
               saveAccount={saveAccount}
               saveTransaction={saveAccountTransaction}
               transactions={accountTransactions}
@@ -3484,8 +3506,10 @@ if (route.kind === "daymark") {
           {page === "home" && (
             <HomePage
               actualMoney={actualMoney}
+              legacyMoneyToolsVisible={legacyMoneyToolsVisible}
               spendableMoney={spendableMoney}
               financialPosition={financialPosition}
+              jarActivities={jarActivities}
               balanceChecks={balanceChecks}
               cloudLoadError={cloudLoadError}
               dataWarnings={dataWarnings}
@@ -3520,6 +3544,8 @@ if (route.kind === "daymark") {
               captureIntent={photoCaptureIntent}
               onCaptureIntentConsumed={() => setPhotoCaptureIntent(null)}
               accounts={financialAccounts}
+              categories={transactionCategories}
+              onCategoryCommand={dispatchCategory}
               jars={jars}
               jarActivities={jarActivities}
               entries={entries}
@@ -3759,6 +3785,11 @@ if (route.kind === "daymark") {
 
   {page === "history" && (
     <LazyHistoryPage
+      onEditLedger={openLedgerTransaction}
+      onDeleteLedger={(transaction) => removeLedgerTransaction(transaction.id)}
+      ownerId={cloudDataUserId}
+      jars={jars}
+      showLegacyHistory={legacyMoneyToolsVisible}
       accountTransactions={accountTransactions}
       financialAccounts={financialAccounts}
       historySearch={historySearch}
@@ -3798,6 +3829,11 @@ if (route.kind === "daymark") {
   )}
   {page === "expenses" && (
     <LazyExpensesPage
+      onEditLedger={openLedgerTransaction}
+      onDeleteLedger={(transaction) => removeLedgerTransaction(transaction.id)}
+      ownerId={cloudDataUserId}
+      jars={jars}
+      showLegacyHistory={legacyMoneyToolsVisible}
       accountTransactions={accountTransactions}
       financialAccounts={financialAccounts}
       expenseSearch={expenseSearch}
@@ -3842,6 +3878,8 @@ if (route.kind === "daymark") {
   {page === "settings" && (
     <LazyMoneyDiarySettingsPage
       backupSource={backupSource}
+      legacyMoneyToolsVisible={legacyMoneyToolsVisible}
+      onLegacyMoneyToolsVisibilityChange={setLegacyMoneyToolsVisible}
       onRestoreBackup={restoreBackup}
       syncStatus={syncStatus}
       userId={session.user.id}

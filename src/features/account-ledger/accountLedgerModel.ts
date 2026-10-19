@@ -34,6 +34,8 @@ export type AccountTransaction = {
   accountId: string;
   amount: number;
   category: string;
+  /** Stable link; category remains a display snapshot for older clients and reports. */
+  categoryId?: string;
   createdAt: string;
   date: string;
   id: string;
@@ -63,7 +65,17 @@ export type AccountLedgerData = {
   transactions: AccountTransaction[];
   jars: import("../spending-jars/domain/jarModel.ts").SpendingJar[];
   jarActivities: import("../spending-jars/domain/jarModel.ts").JarActivity[];
+  categories?: TransactionCategory[];
   updatedAt: string;
+};
+
+export type TransactionCategory = {
+  id: string;
+  name: string;
+  type: "income" | "expense" | "both";
+  color?: string;
+  icon?: string;
+  deletedAt?: string;
 };
 
 export const ACCOUNT_TYPE_LABELS: Record<FinancialAccountType, string> = {
@@ -155,6 +167,7 @@ export function createDefaultLedger(): AccountLedgerData {
     transactions: [],
     jars: [],
     jarActivities: [],
+    categories: undefined,
     updatedAt: now,
   };
 }
