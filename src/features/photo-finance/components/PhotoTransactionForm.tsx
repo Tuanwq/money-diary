@@ -5,7 +5,7 @@ import { ArrowDownLeft, ArrowUpRight, ArrowLeftRight, CalendarDays, Camera, Chec
 import type { AccountTransaction, AccountTransactionType, FinancialAccount, TransactionCategory } from "../../account-ledger/accountLedgerModel.ts";
 import { getDefaultTransactionPurpose,
   type TransactionPurpose } from "../../account-ledger/accountLedgerModel.ts";
-import { categoriesForType, type CategoryCommand } from "../../account-ledger/transactionCategories.ts";
+import { categoriesForType, findJarLinkedCategoryId, type CategoryCommand } from "../../account-ledger/transactionCategories.ts";
 import { TransactionCategoryManager } from "../../account-ledger/TransactionCategoryManager.tsx";
 import { formatMoneyInput, parseMoneyInput } from "../../../utils/money.ts";
 import { vietnamFinancialDate, vietnamFinancialTime } from "../services/photoFinanceModel.ts";
@@ -263,7 +263,12 @@ export function PhotoTransactionForm({ accounts, categories, onCategoryCommand, 
       {kind === "expense" && !existing && jars.some((jar) => jar.status === "active") &&
         <div className="photo-finance-jar-link">
           <label>Hũ chi tiêu<select aria-label="Hũ chi tiêu" disabled={!canEdit} value={selectedJarId}
-            onChange={(event) => { setJarChoiceTouched(true); setJarId(event.target.value); setJarSourceId(""); setPurposeTouched(false); }}>
+            onChange={(event) => {
+              const nextJar = jars.find((jar) => jar.id === event.target.value && jar.status === "active");
+              const linkedCategoryId = nextJar && findJarLinkedCategoryId(categories, nextJar.linkedLabels);
+              setJarChoiceTouched(true); setJarId(event.target.value); setJarSourceId(""); setPurposeTouched(false);
+              if (linkedCategoryId) setCategoryId(linkedCategoryId);
+            }}>
             <option value="">Không dùng hũ</option>
             {jars.filter((jar) => jar.status === "active").map((jar) =>
               <option key={jar.id} value={jar.id}>{jar.icon} {jar.name} · còn {formatMoneyInput(String(getJarView(jarLedger, jar).remainingAmount))}đ</option>)}

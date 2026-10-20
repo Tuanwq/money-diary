@@ -408,8 +408,12 @@ export function useAccountLedger(userId?: string, legacyBudgets: ExpenseBudget[]
   const dispatchJar = useCallback((command: JarCommand) => {
     const current = latestLedgerRef.current;
     const next = applyJarCommand(current, command);
-    if (next !== current) updateLedger(() => ({ ...current, ...next,
-      transactions: next.transactions.map((item) => linkTransactionCategory(item, current.categories ?? [])) }));
+    if (next !== current) {
+      const withCategories = migrateTransactionCategories({ ...current, ...next });
+      updateLedger(() => ({ ...withCategories,
+        transactions: withCategories.transactions.map((item) =>
+          linkTransactionCategory(item, withCategories.categories ?? [])) }));
+    }
   }, [updateLedger]);
 
   const dispatchExternal = useCallback((command: AccountExternalCommand) => {

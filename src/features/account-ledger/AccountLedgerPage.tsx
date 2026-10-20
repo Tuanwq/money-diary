@@ -46,7 +46,7 @@ import {
   type BudgetEligibility,
   type TransactionCategory,
 } from "./accountLedgerModel";
-import { categoriesForType, resolveCategorySelection, type CategoryCommand } from "./transactionCategories.ts";
+import { categoriesForType, findJarLinkedCategoryId, resolveCategorySelection, type CategoryCommand } from "./transactionCategories.ts";
 import { TransactionCategoryManager } from "./TransactionCategoryManager.tsx";
 import { AccountExternalForm, AccountExternalSection, type ExternalDialog } from "./AccountExternalMoney.tsx";
 import { calculateAccountActualAvailable, calculateAccountExternalAmount,
@@ -468,7 +468,10 @@ function TransactionForm({
             <label className="ledger-field">
               <span>Hũ chi tiêu</span>
               <select value={selectedJarId} onChange={(event) => {
+                const nextJar = jarLedger.jars.find((jar) => jar.id === event.target.value && jar.status === "active");
+                const linkedCategoryId = nextJar && findJarLinkedCategoryId(categories, nextJar.linkedLabels);
                 setJarChoiceTouched(true); setJarId(event.target.value); setJarSourceId(""); setPurposeTouched(false);
+                if (linkedCategoryId) setCategoryId(linkedCategoryId);
               }}>
                 <option value="">Không dùng hũ</option>
                 {jarLedger.jars.filter((jar) => jar.status === "active").map((jar) =>

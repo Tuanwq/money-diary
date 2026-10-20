@@ -10,11 +10,33 @@ export type CategoryCommand =
 const key = (type: CategoryType, name: string) => `${type}:${name.trim().toLocaleLowerCase("vi-VN")}`;
 const legacyId = (type: CategoryType, name: string) => `category:${encodeURIComponent(key(type, name))}`;
 
+function addMissingJarLabels(ledger: AccountLedgerData, categories: TransactionCategory[]) {
+  let changed = false;
+  for (const jar of ledger.jars) {
+    if (jar.status !== "active") continue;
+    for (const name of jar.linkedLabels.map((label) => label.trim()).filter(Boolean)) {
+      if (categories.some((item) => !item.deletedAt && (item.type === "expense" || item.type === "both") &&
+        key("expense", item.name) === key("expense", name))) continue;
+      const baseId = legacyId("expense", name);
+      let id = baseId;
+      if (categories.some((item) => item.id === id)) {
+        const jarId = `${baseId}:jar:${encodeURIComponent(jar.id)}:${encodeURIComponent(jar.updatedAt)}`;
+        id = jarId;
+        let suffix = 2;
+        while (categories.some((item) => item.id === id)) id = `${jarId}:${suffix++}`;
+      }
+      categories.push({ id, name, type: "expense" });
+      changed = true;
+    }
+  }
+  return changed;
+}
+
 /** A one-time, deterministic bridge from name-only transactions to stable IDs. */
 export function migrateTransactionCategories(ledger: AccountLedgerData): AccountLedgerData {
   if (ledger.categories !== undefined && ledger.categories.length > 0) {
     const categories = [...ledger.categories];
-    let changed = false;
+    let changed = addMissingJarLabels(ledger, categories);
     const transactions = ledger.transactions.map((item) => {
       if (item.categoryId || item.type === "transfer" || !item.category.trim()) return item;
       const name = item.category.trim();
@@ -34,7 +56,7 @@ export function migrateTransactionCategories(ledger: AccountLedgerData): Account
   for (const type of ["income", "expense"] as const) {
     const names = [...TRANSACTION_CATEGORIES[type], ...ledger.transactions
       .filter((item) => item.type === type).map((item) => item.category.trim()).filter(Boolean),
-      ...(type === "expense" ? ledger.jars.flatMap((jar) => jar.linkedLabels) : [])];
+      ...(type === "expense" ? ledger.jars.filter((jar) => jar.status === "active").flatMap((jar) => jar.linkedLabels) : [])];
     for (const name of names) {
       if (categories.some((item) => item.id === legacyId(type, name))) continue;
       categories.push({ id: legacyId(type, name), name, type });
@@ -49,6 +71,12 @@ export function migrateTransactionCategories(ledger: AccountLedgerData): Account
 export function categoriesForType(categories: TransactionCategory[], type: AccountTransaction["type"]) {
   if (type === "transfer") return [];
   return categories.filter((item) => !item.deletedAt && (item.type === type || item.type === "both"));
+}
+
+export function findJarLinkedCategoryId(categories: TransactionCategory[], linkedLabels: string[]) {
+  const expenseCategories = categoriesForType(categories, "expense");
+  return linkedLabels.map((label) => expenseCategories.find((item) =>
+    key("expense", item.name) === key("expense", label))?.id).find(Boolean);
 }
 
 export function applyCategoryCommand(ledger: AccountLedgerData, command: CategoryCommand): AccountLedgerData {
@@ -77,7 +105,7 @@ export function applyCategoryCommand(ledger: AccountLedgerData, command: Categor
         color: command.color ?? item.color, icon: command.icon ?? item.icon } : item),
       transactions: current.transactions.map((item) => item.categoryId === target.id ? { ...item, category: named } : item),
       jars: target.type === "income" ? current.jars : current.jars.map((jar) => ({ ...jar,
-        linkedLabels: jar.linkedLabels.map((label) => label === target.name ? named : label) })),
+        linkedLabels: jar.linkedLabels.map((label) => key("expense", label) === key("expense", target.name) ? named : label) })),
     };
   }
   const replacement = command.replacementId ? categories.find((item) => item.id === command.replacementId && !item.deletedAt) : undefined;
@@ -89,7 +117,7 @@ export function applyCategoryCommand(ledger: AccountLedgerData, command: Categor
     transactions: current.transactions.map((item) => item.categoryId === target.id
       ? { ...item, categoryId: replacement?.id, category: replacement?.name ?? "" } : item),
     jars: target.type === "income" ? current.jars : current.jars.map((jar) => ({ ...jar,
-      linkedLabels: jar.linkedLabels.flatMap((label) => label === target.name
+      linkedLabels: jar.linkedLabels.flatMap((label) => key("expense", label) === key("expense", target.name)
         ? replacement ? [replacement.name] : [] : [label]) })),
   };
 }
@@ -103,7 +131,9 @@ export function resolveCategorySelection(categories: TransactionCategory[], type
 }
 
 export function linkTransactionCategory(transaction: AccountTransaction, categories: TransactionCategory[]): AccountTransaction {
-  if (transaction.categoryId || transaction.type === "transfer") return transaction;
-  const match = categoriesForType(categories, transaction.type).find((item) => item.name === transaction.category);
+  const type = transaction.type;
+  if (transaction.categoryId || type === "transfer") return transaction;
+  const match = categoriesForType(categories, type).find((item) =>
+    key(type, item.name) === key(type, transaction.category));
   return match ? { ...transaction, categoryId: match.id } : transaction;
 }
