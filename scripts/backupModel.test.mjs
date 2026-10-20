@@ -3,6 +3,7 @@ import {
   getBackupPeriodKey,
   getExpiredBackupIds,
   mergeBackupRecords,
+  parseBackupFile,
 } from "../src/features/backup/backupModel.ts";
 
 function record(kind, index) {
@@ -56,5 +57,13 @@ const merged = mergeBackupRecords([local], [cloud]);
 assert.equal(merged.length, 1);
 assert.equal(merged[0].location, "both");
 assert.equal(merged[0].updatedAt, cloud.updatedAt);
+
+const debtBackup = parseBackupFile(JSON.stringify({ format: "money-diary-backup", schemaVersion: 1,
+  createdAt: "2026-10-20T00:00:00.000Z", appVersion: "1.0.0", data: {
+    accounts: { accounts: [], transactions: [], reconciliations: [], debts: [{ id: "debt-1", principal: 1000 }] },
+    journal: { entries: [], expenses: [], balanceChecks: [] },
+    goals: { completedGoals: [], goals: {} }, hub: { entries: [], settings: {} },
+  } }), "user-1");
+assert.equal(debtBackup.snapshot.data.accounts.debts[0].id, "debt-1", "backup import retains debt records");
 
 console.log("Backup model tests passed.");

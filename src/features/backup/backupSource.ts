@@ -51,6 +51,7 @@ export type MoneyBackupState = {
   jars: import("../spending-jars/domain/jarModel.ts").SpendingJar[];
   jarActivities: import("../spending-jars/domain/jarModel.ts").JarActivity[];
   transactionCategories: TransactionCategory[];
+  debts: import("../account-ledger/debtModel.ts").Debt[];
   goals: Goals;
 };
 
@@ -77,6 +78,7 @@ export function buildBackupSourceData(
       jars: moneyState.jars,
       jarActivities: moneyState.jarActivities,
       categories: moneyState.transactionCategories,
+      debts: moneyState.debts,
       reconciliations: moneyState.accountReconciliations,
       transactions: moneyState.accountTransactions,
     },

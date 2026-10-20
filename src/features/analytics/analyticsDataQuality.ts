@@ -70,7 +70,7 @@ export function buildAnalyticsDataQuality(input: {
       addLegacy(expense.date, "expense", item.amount, item.label);
   }
   for (const transaction of input.transactions) {
-    if (!inRange(transaction.date, input.range) || transaction.type === "transfer") continue;
+    if (!inRange(transaction.date, input.range) || transaction.type === "transfer" || transaction.type === "debt") continue;
     if (!isIndependentReportingTransaction(transaction)) {
       result.omittedTransactions += 1;
       result.omittedAmount += transaction.amount;

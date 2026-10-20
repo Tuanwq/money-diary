@@ -13,6 +13,7 @@
     "test:reporting-history": "node --experimental-strip-types scripts/reportingHistory.test.mjs",
     "test:transaction-categories": "node --experimental-strip-types scripts/transactionCategories.test.mjs",
     "test:account-external": "node --experimental-strip-types scripts/accountExternal.test.mjs",
+    "test:debt": "node --experimental-strip-types scripts/debtModel.test.mjs",
     "test:spending-jars": "node --experimental-strip-types scripts/spendingJars.test.mjs",
     "test:photo-finance": "node --experimental-strip-types scripts/photoFinance.test.mjs",
     "test:app-toast": "node --experimental-strip-types scripts/appToast.test.mjs",

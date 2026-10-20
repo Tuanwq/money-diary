@@ -4,10 +4,12 @@ import { ArrowDownLeft, Clock3, Plus, RotateCcw, Trash2, X } from "lucide-react"
 import { formatMoney, formatMoneyInput, parseMoneyInput } from "../../utils/money.ts";
 import { getToday } from "../../utils/date.ts";
 import type { AccountTransaction, FinancialAccount } from "./accountLedgerModel.ts";
-import { calculateAccountActualAvailable, calculateAccountExternalAmount,
+import { calculateAccountActualAvailable,
   getExternalEntries, getExternalOutstanding, getExternalStatus, getReturnedAmount,
   ACCOUNT_EXTERNAL_LABELS, type AccountExternalCommand, type AccountExternalEntry,
   type AccountExternalType } from "./accountExternalModel.ts";
+import { getDebtNetAssets, getDebtRemaining, type Debt, type DebtCommand } from "./debtModel.ts";
+import { DebtManager } from "./DebtManager.tsx";
 import "./accountExternal.css";
 
 export type ExternalDialog =
@@ -22,7 +24,7 @@ export function AccountExternalForm({ accounts, transactions, dialog, onClose, o
   const [accountId, setAccountId] = useState(dialog.accountId);
   const [amount, setAmount] = useState(existing && dialog.kind === "edit"
     ? formatMoneyInput(String(existing.amount)) : "");
-  const [kind, setKind] = useState<AccountExternalType>(existing?.type ?? "loaned");
+  const [kind, setKind] = useState<AccountExternalType>(existing?.type ?? "held_elsewhere");
   const [person, setPerson] = useState(existing?.relatedPerson ?? "");
   const [note, setNote] = useState(existing?.note ?? "");
   const [date, setDate] = useState(dialog.kind === "edit" ? existing?.date ?? getToday() : getToday());
@@ -57,7 +59,7 @@ export function AccountExternalForm({ accounts, transactions, dialog, onClose, o
     <header className="ledger-modal-header"><div><span>Tiền vẫn thuộc về bạn</span>
       <h2>{dialog.kind === "recover" ? "Thu hồi tiền" : dialog.kind === "edit" ? "Sửa khoản đang ở ngoài" : "Đánh dấu tiền đang ở ngoài"}</h2></div>
       <button className="ledger-icon-button" type="button" aria-label="Đóng" onClick={onClose}><X size={20} /></button></header>
-    <p className="external-money-help">Khoản này chỉ thay đổi tiền có thể dùng ngay; tổng số dư và báo cáo Thu/Chi không đổi.</p>
+    <p className="external-money-help">Khoản này chỉ đánh dấu tiền ngoài thông thường. Nếu cho vay hoặc đi vay, hãy dùng “Thêm khoản công nợ”. Tổng số dư và báo cáo Thu/Chi không đổi.</p>
     {dialog.kind === "create" && <label className="ledger-field"><span>Tài khoản</span>
       <select value={accountId} onChange={(event) => setAccountId(event.target.value)}>
         {accounts.filter((item) => !item.archivedAt).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
@@ -66,7 +68,9 @@ export function AccountExternalForm({ accounts, transactions, dialog, onClose, o
       {dialog.kind === "recover" && <> · còn {formatMoney(outstanding)} ở ngoài</>}</p>}
     {dialog.kind !== "recover" && <><label className="ledger-field"><span>Loại khoản</span>
       <select value={kind} onChange={(event) => setKind(event.target.value as AccountExternalType)}>
-        {Object.entries(ACCOUNT_EXTERNAL_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+        {Object.entries(ACCOUNT_EXTERNAL_LABELS).filter(([value]) => dialog.kind !== "create" ||
+          (value !== "loaned" && value !== "receivable")).map(([value, label]) =>
+          <option key={value} value={value}>{label}</option>)}
       </select></label>
       <label className="ledger-field"><span>Người liên quan (nếu có)</span>
         <input value={person} onChange={(event) => setPerson(event.target.value)} maxLength={80} placeholder="Ví dụ: Nam" /></label></>}
@@ -88,26 +92,54 @@ export function AccountExternalForm({ accounts, transactions, dialog, onClose, o
   </form></div>;
 }
 
-export function AccountExternalSection({ accounts, selectedAccountId, onCreate, onEdit, onRecover, onDelete }: {
-  accounts: FinancialAccount[]; selectedAccountId: string;
+export function AccountExternalSection({ accounts, transactions, debts, selectedAccountId, onCreate, onEdit, onRecover, onDelete, onDebtCommand, onShowAll }: {
+  accounts: FinancialAccount[]; transactions: AccountTransaction[]; debts: Debt[]; selectedAccountId: string;
   onCreate: (accountId: string) => void; onEdit: (entry: AccountExternalEntry) => void;
   onRecover: (entry: AccountExternalEntry) => void; onDelete: (entry: AccountExternalEntry) => void;
+  onDebtCommand: (command: DebtCommand) => void;
+  onShowAll: () => void;
 }) {
+  const [filter, setFilter] = useState<"all" | "receivable" | "payable" | "other">("all");
   const visibleAccounts = accounts.filter((item) => !item.archivedAt &&
     (selectedAccountId === "all" || item.id === selectedAccountId));
-  const rows = visibleAccounts.flatMap((account) => getExternalEntries(account).map((entry) => ({ account, entry })))
+  const allRows = visibleAccounts.flatMap((account) => getExternalEntries(account).map((entry) => ({ account, entry })));
+  const rows = allRows.filter(({ entry }) => filter === "all" ||
+    (filter === "receivable" && (entry.type === "loaned" || entry.type === "receivable")) ||
+    (filter === "other" && entry.type !== "loaned" && entry.type !== "receivable"))
     .sort((a, b) => Number(getExternalOutstanding(b.entry) > 0) - Number(getExternalOutstanding(a.entry) > 0)
       || b.entry.date.localeCompare(a.entry.date));
-  const total = visibleAccounts.reduce((sum, account) => sum + calculateAccountExternalAmount(account), 0);
+  const ordinaryTotal = allRows.filter(({ entry }) => entry.type !== "loaned" && entry.type !== "receivable")
+    .reduce((sum, { entry }) => sum + getExternalOutstanding(entry), 0);
+  const legacyReceivable = allRows.filter(({ entry }) => entry.type === "loaned" || entry.type === "receivable")
+    .reduce((sum, { entry }) => sum + getExternalOutstanding(entry), 0);
+  const visibleDebts = debts.filter((debt) => !debt.deletedAt && (selectedAccountId === "all" ||
+    debt.originAccountId === selectedAccountId || debt.payments.some((payment) => !payment.voidedAt && payment.accountId === selectedAccountId)));
+  const receivable = legacyReceivable + visibleDebts.filter((debt) => debt.kind === "receivable")
+    .reduce((sum, debt) => sum + getDebtRemaining(debt), 0);
+  const payable = visibleDebts.filter((debt) => debt.kind === "payable")
+    .reduce((sum, debt) => sum + getDebtRemaining(debt), 0);
+  const position = selectedAccountId === "all" ? getDebtNetAssets({ accounts, transactions, debts,
+    jars: [], jarActivities: [], updatedAt: "" }) : null;
   return <section className="account-external-section" id="account-external-money">
     <div className="account-ledger-section-heading"><div><h2>Tiền đang ở ngoài</h2>
-      <p>Vẫn thuộc tổng số dư, nhưng chưa thể dùng ngay.</p></div>
+      <p>Tiền ngoài thông thường và công nợ của bạn.</p></div>
       <button className="notification-secondary-button" type="button" onClick={() => onCreate(
         selectedAccountId !== "all" ? selectedAccountId : visibleAccounts[0]?.id ?? "")} disabled={!visibleAccounts.length}>
-        <Plus size={17} /> Đánh dấu khoản tiền</button></div>
-    <div className="account-external-total"><span>Chưa thực cầm</span><strong>{formatMoney(total)}</strong></div>
-    {rows.length === 0 ? <p className="account-external-empty">Chưa có khoản nào đang ở ngoài.</p>
-      : <div className="account-external-list">{rows.map(({ account, entry }) => {
+        <Plus size={17} /> Tiền ngoài khác</button></div>
+    <div className="debt-totals"><div><span>Tiền ngoài thông thường</span><strong>{formatMoney(ordinaryTotal)}</strong></div>
+      <div><span>Nợ phải thu</span><strong>{formatMoney(receivable)}</strong></div>
+      <div><span>Nợ phải trả</span><strong>{formatMoney(payable)}</strong></div></div>
+    {position && <p className="debt-position-note">Tài sản ròng theo sổ: <strong>{formatMoney(position.netAssets)}</strong>
+      {position.unlinkedPayments && <span> · Có khoản thanh toán chưa liên kết tài khoản, cần đối chiếu tiền thực tế.</span>}</p>}
+    <div className="debt-filters" role="group" aria-label="Lọc công nợ">
+      {([ ["all", "Tất cả"], ["receivable", "Cho vay"], ["payable", "Đi vay"], ["other", "Khác"] ] as const)
+        .map(([value, label]) => <button key={value} className={filter === value ? "is-active" : ""} type="button" onClick={() => setFilter(value)}>{label}</button>)}</div>
+    <DebtManager debts={debts} accounts={accounts} transactions={transactions} selectedAccountId={selectedAccountId}
+      filter={filter} onCommand={(command) => { onDebtCommand(command); if (command.kind === "create" && filter !== "all")
+        setFilter(command.fields.kind); }} onShowAll={onShowAll} />
+    {rows.length === 0 ? (filter === "other" && <p className="account-external-empty">Chưa có khoản tiền ngoài thông thường.</p>)
+      : <><p className="debt-position-note">Khoản đánh dấu cũ: thu hồi ở đây chỉ cập nhật tiền khả dụng, không tự ghi tiền vào tài khoản.</p>
+        <div className="account-external-list">{rows.map(({ account, entry }) => {
         const outstanding = getExternalOutstanding(entry);
         const status = getExternalStatus(entry);
         return <article className={`account-external-item${outstanding === 0 ? " is-returned" : ""}`} key={entry.id}>
@@ -125,6 +157,6 @@ export function AccountExternalSection({ accounts, selectedAccountId, onCreate, 
             </div>
           </div>
         </article>;
-      })}</div>}
+      })}</div></>}
   </section>;
 }

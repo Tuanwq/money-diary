@@ -710,6 +710,8 @@ export default function App() {
     dispatchCategory,
     categories: transactionCategories,
     dispatchExternal,
+    dispatchDebt,
+    debts,
     jars,
     jarActivities,
     legacyLocalRecoveryCandidate,
@@ -770,6 +772,7 @@ export default function App() {
         entries,
         expenses,
         financialAccounts,
+        debts,
         jars,
         jarActivities,
         transactionCategories,
@@ -788,6 +791,7 @@ export default function App() {
       entries,
       expenses,
       financialAccounts,
+      debts,
       jars,
       jarActivities,
       transactionCategories,
@@ -1152,7 +1156,8 @@ async function restoreBackup(
       snapshot.data.accounts.transactions,
       snapshot.data.accounts.jars ?? [],
       snapshot.data.accounts.jarActivities ?? [],
-      snapshot.data.accounts.categories
+      snapshot.data.accounts.categories,
+      snapshot.data.accounts.debts ?? []
     );
     replaceReconciliationState(
       snapshot.data.accounts.reconciliations ?? []
@@ -3460,6 +3465,8 @@ if (route.kind === "daymark") {
               categories={transactionCategories}
               onCategoryCommand={dispatchCategory}
               onExternalCommand={dispatchExternal}
+              onDebtCommand={dispatchDebt}
+              debts={debts}
               jars={jars}
               jarActivities={jarActivities}
               onJarCommand={dispatchJar}
@@ -3479,6 +3486,7 @@ if (route.kind === "daymark") {
             <LazyFinancialAnalyticsPage
               accounts={financialAccounts}
               accountTransactions={accountTransactions}
+              debts={debts}
               actualMoney={actualMoney}
               spendableMoney={spendableMoney}
               completedGoals={completedGoals}

@@ -32,6 +32,7 @@ import type {
   AccountTransaction,
   FinancialAccount,
 } from "../account-ledger/accountLedgerModel";
+import { getDebtNetAssets, type Debt } from "../account-ledger/debtModel.ts";
 import type {
   CompletedGoal,
   DailyEntry,
@@ -54,6 +55,7 @@ import "./FinancialAnalyticsPage.css";
 type FinancialAnalyticsPageProps = {
   accounts: FinancialAccount[];
   accountTransactions: AccountTransaction[];
+  debts: Debt[];
   actualMoney: number;
   spendableMoney: number;
   completedGoals: CompletedGoal[];
@@ -210,6 +212,7 @@ function ChartEmptyState({ message }: { message: string }) {
 export function FinancialAnalyticsPage({
   accounts,
   accountTransactions,
+  debts,
   actualMoney,
   spendableMoney,
   completedGoals,
@@ -277,6 +280,8 @@ export function FinancialAnalyticsPage({
     () => aggregateChartPoints(model.dailyPoints),
     [model.dailyPoints]
   );
+  const debtPosition = useMemo(() => getDebtNetAssets({ accounts, transactions: accountTransactions,
+    debts, jars: [], jarActivities: [], updatedAt: "" }), [accounts, accountTransactions, debts]);
   const kpis: KpiDefinition[] = [
     {
       icon: WalletCards,
@@ -290,6 +295,12 @@ export function FinancialAnalyticsPage({
       detail: "Số dư hiện tại trong tài khoản",
       value: formatMoney(model.accountTotal),
     },
+    ...(debts.some((debt) => !debt.deletedAt) ? [{
+      icon: Scale,
+      label: "Tài sản ròng theo sổ",
+      detail: `Số dư + phải thu ${formatMoney(debtPosition.receivable)} − phải trả ${formatMoney(debtPosition.payable)}${debtPosition.unlinkedPayments ? " · có khoản cần đối chiếu" : ""}`,
+      value: formatMoney(debtPosition.netAssets),
+    }] : []),
     {
       icon: CircleDollarSign,
       label: "Thu trong kỳ",

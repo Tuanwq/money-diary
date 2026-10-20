@@ -9,13 +9,14 @@ export type FinancialAccountType =
 /** Existing accounts remain review-only until their owner chooses explicitly. */
 export type BudgetEligibility = "eligible" | "excluded" | "needs_review";
 
-export type AccountTransactionType = "income" | "expense" | "transfer";
+export type AccountTransactionType = "income" | "expense" | "transfer" | "debt";
 
 export type TransactionPurpose =
   | "income"
   | "daily_expense"
   | "goal_allocation"
-  | "internal_transfer";
+  | "internal_transfer"
+  | "debt_principal";
 
 export type FinancialAccount = {
   archivedAt?: string;
@@ -43,10 +44,14 @@ export type AccountTransaction = {
   /** Explicit purpose used by goal calculations. Missing legacy values are left unclassified. */
   purpose?: TransactionPurpose;
   toAccountId?: string;
+  /** Debt movements are cash movements, never earned income or spending. */
+  debtDirection?: "in" | "out";
+  debtId?: string;
+  debtPaymentId?: string;
   type: AccountTransactionType;
   updatedAt: string;
   /** Photo Finance owns this transaction; legacy diary amounts are never written for it. */
-  source?: "photo_finance" | "spending_jar" | "manual";
+  source?: "photo_finance" | "spending_jar" | "manual" | "debt";
   /** A jar expense/refund belongs to one activity; several rows may share its activity ID. */
   jarId?: string;
   jarActivityId?: string;
@@ -66,6 +71,7 @@ export type AccountLedgerData = {
   jars: import("../spending-jars/domain/jarModel.ts").SpendingJar[];
   jarActivities: import("../spending-jars/domain/jarModel.ts").JarActivity[];
   categories?: TransactionCategory[];
+  debts?: import("./debtModel.ts").Debt[];
   updatedAt: string;
 };
 
@@ -92,6 +98,7 @@ export const TRANSACTION_TYPE_LABELS: Record<
   income: "Thu tiền",
   expense: "Chi tiền",
   transfer: "Chuyển tiền",
+  debt: "Công nợ",
 };
 
 export const TRANSACTION_PURPOSE_LABELS: Record<TransactionPurpose, string> = {
@@ -99,6 +106,7 @@ export const TRANSACTION_PURPOSE_LABELS: Record<TransactionPurpose, string> = {
   daily_expense: "Chi phí thường ngày",
   goal_allocation: "Phân bổ tiền mục tiêu",
   internal_transfer: "Chuyển nội bộ",
+  debt_principal: "Biến động công nợ",
 };
 
 export function getDefaultTransactionPurpose(
@@ -106,6 +114,7 @@ export function getDefaultTransactionPurpose(
 ): TransactionPurpose {
   if (type === "income") return "income";
   if (type === "transfer") return "internal_transfer";
+  if (type === "debt") return "debt_principal";
   return "daily_expense";
 }
 
@@ -120,6 +129,7 @@ export const TRANSACTION_CATEGORIES = {
     "Khác",
   ],
   transfer: ["Chuyển nội bộ"],
+  debt: ["Công nợ"],
 } satisfies Record<AccountTransactionType, string[]>;
 
 export function createDefaultAccounts(now = new Date().toISOString()) {
@@ -168,6 +178,7 @@ export function createDefaultLedger(): AccountLedgerData {
     jars: [],
     jarActivities: [],
     categories: undefined,
+    debts: [],
     updatedAt: now,
   };
 }
@@ -196,6 +207,10 @@ export function calculateAccountBalance(
       if (transaction.toAccountId === account.id) {
         return balance + transaction.amount;
       }
+    }
+
+    if (transaction.type === "debt" && transaction.accountId === account.id) {
+      return balance + (transaction.debtDirection === "in" ? transaction.amount : -transaction.amount);
     }
 
     return balance;

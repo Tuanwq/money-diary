@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { createDefaultLedger } from "../src/features/account-ledger/accountLedgerModel.ts";
 import { applyAccountExternalCommand, assertExternalCoverageAfterLedgerChange,
   calculateAccountActualAvailable, calculateAccountExternalAmount,
+  calculateAccountExternalAmountAtDate,
   calculateActualAvailableBalance, calculateTotalBalance, calculateTotalExternalAmount,
   getExternalOutstanding, getExternalStatus } from "../src/features/account-ledger/accountExternalModel.ts";
 import { decideLedgerLoad, hasLocalOnlyRecords, isPristineLedger } from "../src/features/account-ledger/ledgerSync.ts";
@@ -55,6 +56,12 @@ assert.equal(calculateActualAvailableBalance(ledger), 5_000_000);
 assert.equal(ledger.accounts[0].externalEntries.length, 2, "soft delete keeps recovery history");
 assert.equal(hasLocalOnlyRecords(beforeDelete, ledger), true,
   "a clean stale device backs up its view before loading a deletion from cloud");
+const historical = applyAccountExternalCommand(initial, { kind: "create", accountId: "bank",
+  id: "historical", now, fields: fields(100_000, "held_elsewhere") });
+const deletedHistorical = applyAccountExternalCommand(historical, { kind: "delete", accountId: "bank",
+  id: "historical", now: "2026-09-26T02:00:00.000Z" });
+assert.equal(calculateAccountExternalAmountAtDate(deletedHistorical.accounts[0], "2026-09-25"), 100_000);
+assert.equal(calculateAccountExternalAmountAtDate(deletedHistorical.accounts[0], "2026-09-26"), 0);
 
 const protectedLedger = applyAccountExternalCommand(initial, { kind: "create", accountId: "bank",
   id: "pending", now, fields: fields(1_500_000, "held_elsewhere") });

@@ -38,7 +38,7 @@ export function migrateTransactionCategories(ledger: AccountLedgerData): Account
     const categories = [...ledger.categories];
     let changed = addMissingJarLabels(ledger, categories);
     const transactions = ledger.transactions.map((item) => {
-      if (item.categoryId || item.type === "transfer" || !item.category.trim()) return item;
+      if (item.categoryId || item.type === "transfer" || item.type === "debt" || !item.category.trim()) return item;
       const name = item.category.trim();
       const matching = categories.find((category) => !category.deletedAt && category.name === name &&
         (category.type === item.type || category.type === "both"));
@@ -63,13 +63,13 @@ export function migrateTransactionCategories(ledger: AccountLedgerData): Account
     }
   }
   return { ...ledger, categories, transactions: ledger.transactions.map((item) => {
-    if (item.categoryId || item.type === "transfer" || !item.category.trim()) return item;
+    if (item.categoryId || item.type === "transfer" || item.type === "debt" || !item.category.trim()) return item;
     return { ...item, categoryId: legacyId(item.type, item.category) };
   }) };
 }
 
 export function categoriesForType(categories: TransactionCategory[], type: AccountTransaction["type"]) {
-  if (type === "transfer") return [];
+  if (type === "transfer" || type === "debt") return [];
   return categories.filter((item) => !item.deletedAt && (item.type === type || item.type === "both"));
 }
 
@@ -125,6 +125,7 @@ export function applyCategoryCommand(ledger: AccountLedgerData, command: Categor
 export function resolveCategorySelection(categories: TransactionCategory[], type: AccountTransaction["type"],
   id: string): { category: string; categoryId?: string } {
   if (type === "transfer") return { category: "Chuyển nội bộ" };
+  if (type === "debt") return { category: "Công nợ" };
   const category = categoriesForType(categories, type).find((item) => item.id === id);
   if (!category) throw new Error("Hãy chọn nhãn còn hiệu lực.");
   return { category: category.name, categoryId: category.id };
@@ -132,7 +133,7 @@ export function resolveCategorySelection(categories: TransactionCategory[], type
 
 export function linkTransactionCategory(transaction: AccountTransaction, categories: TransactionCategory[]): AccountTransaction {
   const type = transaction.type;
-  if (transaction.categoryId || type === "transfer") return transaction;
+  if (transaction.categoryId || type === "transfer" || type === "debt") return transaction;
   const match = categoriesForType(categories, type).find((item) =>
     key(type, item.name) === key(type, transaction.category));
   return match ? { ...transaction, categoryId: match.id } : transaction;

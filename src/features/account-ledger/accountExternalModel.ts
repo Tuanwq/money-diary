@@ -54,8 +54,10 @@ export function calculateAccountExternalAmount(account: FinancialAccount): numbe
 
 /** Outstanding money on a financial date; later recoveries must not change an earlier check. */
 export function calculateAccountExternalAmountAtDate(account: FinancialAccount, date: string): number {
-  return getExternalEntries(account).reduce((sum, entry) => {
-    if (entry.date > date) return sum;
+  return (account.externalEntries ?? []).reduce((sum, entry) => {
+    const deletedDay = entry.deletedAt ? new Date(Date.parse(entry.deletedAt) + 7 * 60 * 60 * 1000)
+      .toISOString().slice(0, 10) : undefined;
+    if (entry.date > date || (deletedDay && deletedDay <= date)) return sum;
     const returned = (entry.recoveries ?? []).reduce((total, recovery) =>
       total + (recovery.date <= date ? recovery.amount : 0), 0);
     return sum + Math.max(0, entry.amount - returned);

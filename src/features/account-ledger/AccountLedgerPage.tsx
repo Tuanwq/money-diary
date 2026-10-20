@@ -49,6 +49,7 @@ import {
 import { categoriesForType, findJarLinkedCategoryId, resolveCategorySelection, type CategoryCommand } from "./transactionCategories.ts";
 import { TransactionCategoryManager } from "./TransactionCategoryManager.tsx";
 import { AccountExternalForm, AccountExternalSection, type ExternalDialog } from "./AccountExternalMoney.tsx";
+import type { Debt, DebtCommand } from "./debtModel.ts";
 import { calculateAccountActualAvailable, calculateAccountExternalAmount,
   calculateActualAvailableBalance, calculateTotalExternalAmount,
   type AccountExternalCommand, type AccountExternalEntry } from "./accountExternalModel.ts";
@@ -551,6 +552,8 @@ export function AccountLedgerPage({
   jarActivities,
   onJarCommand,
   onExternalCommand,
+  onDebtCommand,
+  debts,
   archiveAccount,
   cloudStatus,
   legacyLocalRecoveryCandidate,
@@ -571,6 +574,8 @@ export function AccountLedgerPage({
   jarActivities: JarActivity[];
   onJarCommand: (command: JarCommand) => void;
   onExternalCommand: (command: AccountExternalCommand) => void;
+  onDebtCommand: (command: DebtCommand) => void;
+  debts: Debt[];
   archiveAccount: (accountId: string) => void;
   cloudStatus: string;
   legacyLocalRecoveryCandidate: { accounts: number; transactions: number; jars: number } | null;
@@ -599,7 +604,7 @@ export function AccountLedgerPage({
     if (!editTransactionId) return;
     const timer = window.setTimeout(() => {
       const selected = transactions.find((item) => item.id === editTransactionId);
-      if (selected) { setEditingTransaction(selected); setShowTransactionForm(true); }
+      if (selected && selected.type !== "debt") { setEditingTransaction(selected); setShowTransactionForm(true); }
       onEditIntentConsumed?.();
     }, 0);
     return () => window.clearTimeout(timer);
@@ -887,7 +892,9 @@ export function AccountLedgerPage({
         </div>
       </section>
 
-      <AccountExternalSection accounts={accounts} selectedAccountId={selectedAccountId}
+      <AccountExternalSection accounts={accounts} transactions={transactions} debts={debts}
+        onDebtCommand={onDebtCommand} selectedAccountId={selectedAccountId}
+        onShowAll={() => setSelectedAccountId("all")}
         onCreate={(accountId) => setExternalDialog({ kind: "create", accountId })}
         onEdit={(entry) => setExternalDialog({ kind: "edit", accountId: entry.accountId, entry })}
         onRecover={(entry) => setExternalDialog({ kind: "recover", accountId: entry.accountId, entry })}
@@ -930,7 +937,7 @@ export function AccountLedgerPage({
           />
           <div className="account-ledger-type-filters">
             {(
-              ["all", "income", "expense", "transfer"] as const
+              ["all", "income", "expense", "transfer", "debt"] as const
             ).map((filter) => (
               <button
                 className={typeFilter === filter ? "is-active" : ""}
@@ -993,10 +1000,12 @@ export function AccountLedgerPage({
                     {formatDate(transaction.date)}
                   </time>
                   <strong className="account-transaction-amount">
-                    {isIncome ? "+" : isExpense ? "−" : ""}
+                    {isIncome || (transaction.type === "debt" && transaction.debtDirection === "in") ? "+" :
+                      isExpense || (transaction.type === "debt" && transaction.debtDirection === "out") ? "−" : ""}
                     {formatMoney(transaction.amount)}
                   </strong>
                   <div className="account-transaction-actions">
+                    {transaction.type !== "debt" && <>
                     <button
                       aria-label="Sửa giao dịch"
                       className="ledger-icon-button"
@@ -1016,6 +1025,7 @@ export function AccountLedgerPage({
                     >
                       <Trash2 aria-hidden="true" size={16} />
                     </button>
+                    </>}
                   </div>
                 </article>
               );
