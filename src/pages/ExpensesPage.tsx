@@ -20,7 +20,7 @@ import { formatReportDate } from "../utils/date";
 import { buildOtherExpenseBreakdown } from "../utils/entries";
 import { formatMoney } from "../utils/money";
 
-type ExpenseQuickFilter = "today" | "7days" | "30days" | "month" | "lastMonth" | "all";
+type ExpenseQuickFilter = "today" | "week" | "7days" | "30days" | "month" | "lastMonth" | "all";
 type ExpenseBudgetForm = { label: string; monthlyLimit: string };
 
 type ExpensesPageProps = {
@@ -65,6 +65,7 @@ type ExpensesPageProps = {
 
 const quickFilters = [
   { label: "Hôm nay", value: "today" as const },
+  { label: "Tuần này", value: "week" as const },
   { label: "7 ngày", value: "7days" as const },
   { label: "30 ngày", value: "30days" as const },
   { label: "Tháng này", value: "month" as const },

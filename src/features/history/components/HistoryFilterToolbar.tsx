@@ -86,8 +86,6 @@ export function HistoryFilterToolbar<T extends string>({
     };
   }, [isFilterOpen]);
 
-  const mobileQuickFilters = quickFilters.slice(0, 3);
-
   return (
     <section className="history-filter-toolbar" aria-label="Tìm kiếm và lọc lịch sử">
       <label className="history-search-field">
@@ -127,7 +125,7 @@ export function HistoryFilterToolbar<T extends string>({
       </div>
 
       <div className="history-quick-filters is-mobile" aria-label="Lọc nhanh trên điện thoại">
-        {mobileQuickFilters.map((filter) => (
+        {quickFilters.map((filter) => (
           <button key={filter.value} type="button" onClick={() => onQuickFilter(filter.value)}>
             {filter.label}
           </button>

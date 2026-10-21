@@ -18,7 +18,7 @@ import type { DailyEntry, GoalScreen, Page } from "../types";
 import { formatReportDate } from "../utils/date";
 import { formatMoney } from "../utils/money";
 
-type HistoryQuickFilter = "today" | "7days" | "30days" | "month" | "lastMonth" | "all";
+type HistoryQuickFilter = "today" | "week" | "7days" | "30days" | "month" | "lastMonth" | "all";
 
 type HistoryPageProps = {
   showLegacyHistory?: boolean;
@@ -54,6 +54,7 @@ type HistoryPageProps = {
 
 const quickFilters = [
   { label: "Hôm nay", value: "today" as const },
+  { label: "Tuần này", value: "week" as const },
   { label: "7 ngày", value: "7days" as const },
   { label: "30 ngày", value: "30days" as const },
   { label: "Tháng này", value: "month" as const },

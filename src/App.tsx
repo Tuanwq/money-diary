@@ -79,6 +79,7 @@ import {
   getDateString,
   getMonthStart,
   getToday,
+  getWeekStart,
   isDateInRange,
   isSameMonth,
   toDate,
@@ -1359,12 +1360,17 @@ function updateHistoryToDate(value: string) {
 }
 
 function setHistoryQuickFilter(
-  type: "today" | "7days" | "30days" | "month" | "lastMonth" | "all"
+  type: "today" | "week" | "7days" | "30days" | "month" | "lastMonth" | "all"
 ) {
   setHistoryCurrentPage(1);
 
   if (type === "today") {
     setHistoryFromDate(getToday());
+    setHistoryToDate(getToday());
+  }
+
+  if (type === "week") {
+    setHistoryFromDate(getWeekStart());
     setHistoryToDate(getToday());
   }
 
@@ -1428,12 +1434,17 @@ function getLastMonthRange() {
 }
 
 function setExpenseQuickFilter(
-  type: "today" | "7days" | "30days" | "month" | "lastMonth" | "all"
+  type: "today" | "week" | "7days" | "30days" | "month" | "lastMonth" | "all"
 ) {
   setExpenseCurrentPage(1);
 
   if (type === "today") {
     setExpenseFromDate(getToday());
+    setExpenseToDate(getToday());
+  }
+
+  if (type === "week") {
+    setExpenseFromDate(getWeekStart());
     setExpenseToDate(getToday());
   }
 

@@ -12,10 +12,10 @@ import { BalanceDetails, BalanceHistoryCard } from "../features/history/componen
 import { formatSignedDifference } from "../features/history/historySelectors";
 import type { BalanceCheckEntry, GoalScreen, Page } from "../types";
 import { getBalanceStatus } from "../utils/balance";
-import { formatReportDate, getDateDaysAgo, getMonthStart, getToday, isDateInRange } from "../utils/date";
+import { formatReportDate, getDateDaysAgo, getMonthStart, getToday, getWeekStart, isDateInRange } from "../utils/date";
 import { formatMoney } from "../utils/money";
 
-type BalanceQuickFilter = "today" | "7days" | "30days" | "month" | "lastMonth" | "all";
+type BalanceQuickFilter = "today" | "week" | "7days" | "30days" | "month" | "lastMonth" | "all";
 
 type BalanceChecksPageProps = {
   balanceChecks: BalanceCheckEntry[];
@@ -29,6 +29,7 @@ type BalanceChecksPageProps = {
 
 const quickFilters = [
   { label: "Hôm nay", value: "today" as const },
+  { label: "Tuần này", value: "week" as const },
   { label: "7 ngày", value: "7days" as const },
   { label: "30 ngày", value: "30days" as const },
   { label: "Tháng này", value: "month" as const },
@@ -64,6 +65,7 @@ export function BalanceChecksPage({ balanceChecks, cloudLoadError, deleteBalance
   function setQuickFilter(filter: BalanceQuickFilter) {
     setCurrentPage(1);
     if (filter === "today") { setFromDate(getToday()); setToDate(getToday()); }
+    if (filter === "week") { setFromDate(getWeekStart()); setToDate(getToday()); }
     if (filter === "7days") { setFromDate(getDateDaysAgo(6)); setToDate(getToday()); }
     if (filter === "30days") { setFromDate(getDateDaysAgo(29)); setToDate(getToday()); }
     if (filter === "month") { setFromDate(getMonthStart()); setToDate(getToday()); }

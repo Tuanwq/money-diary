@@ -3,6 +3,13 @@ import test from "node:test";
 import { filterHistoryLedgerTransactions, buildCombinedExpenseReport, groupLedgerTransactionsByDay } from "../src/features/history/historyLedgerModel.ts";
 import { isIndependentReportingTransaction } from "../src/features/analytics/reportingTransactions.ts";
 import { buildAnalyticsDataQuality } from "../src/features/analytics/analyticsDataQuality.ts";
+import { getWeekStart } from "../src/utils/date.ts";
+
+test("this-week filter starts on Monday across Sunday and year boundaries", () => {
+  assert.equal(getWeekStart(new Date(2026, 9, 21)), "2026-10-19");
+  assert.equal(getWeekStart(new Date(2026, 9, 18)), "2026-10-12");
+  assert.equal(getWeekStart(new Date(2027, 0, 1)), "2026-12-28");
+});
 
 const date = "2026-09-20";
 const base = { date, accountId: "bank", category: "Ăn uống", note: "Bữa tối", createdAt: `${date}T11:00:00Z` };

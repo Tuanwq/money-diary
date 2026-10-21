@@ -37,6 +37,13 @@ export function isThisWeek(dateString: string, now = new Date()) {
   return date >= monday && date <= sunday;
 }
 
+export function getWeekStart(now = new Date()) {
+  const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const weekday = monday.getDay() || 7;
+  monday.setDate(monday.getDate() - weekday + 1);
+  return getDateString(monday);
+}
+
 export function formatDateShort(dateString: string) {
   return new Intl.DateTimeFormat("vi-VN", {
     day: "2-digit",
