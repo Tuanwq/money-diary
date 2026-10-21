@@ -19,9 +19,8 @@ export function AvailableAllocationSection({ position, accounts }: {
   const totalAvailable = position.allocationCapacity;
 
   return <section className="jars-accounts" aria-labelledby="jars-accounts-title">
-    <div className="jars-accounts-heading"><div><h2 id="jars-accounts-title">Tiền có thể phân bổ</h2><p>Tiền chưa được dành cho bất kỳ hũ nào.</p></div>
-      <div className="jars-accounts-total"><span>Tổng khả dụng</span><strong>{formatMoney(totalAvailable)}</strong></div>
-    </div>
+    <div className="jars-accounts-heading"><div><h2 id="jars-accounts-title">Chưa phân bổ theo tài khoản</h2>
+      <p>Chỉ tài khoản được phép dùng cho hũ mới có thể chia thêm.</p></div></div>
     {rows.length === 0 ? <p className="jars-section-empty">Chưa có tài khoản để phân bổ tiền.</p> : <>
       {totalAvailable === 0 && <p className="jars-section-empty">Hiện chưa còn tiền có thể phân bổ từ các tài khoản.</p>}
       <div className="jars-account-grid">{rows.map(({ account, position: row }) => {

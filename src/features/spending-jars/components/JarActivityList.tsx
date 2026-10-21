@@ -1,42 +1,35 @@
 import type { JarActivity, JarLedger } from "../domain/jarModel.ts";
+import { getJarActivityGroups } from "../domain/jarActivityPresentation.ts";
+import { getToday, toDate } from "../../../utils/date.ts";
 import { formatMoney } from "../../../utils/money.ts";
-
-const names: Record<JarActivity["kind"], string> = {
-  allocate: "Nạp vào hũ", release: "Giải phóng", transfer_in: "Nhận từ hũ khác",
-  transfer_out: "Chuyển sang hũ khác", spend: "Chi tiêu", refund: "Hoàn tiền", close: "Đóng hũ",
-};
 
 export function JarActivityList({ ledger, jarId, onEditSpend, onDeleteSpend }: {
   ledger: JarLedger; jarId: string; onEditSpend: (activity: JarActivity) => void;
   onDeleteSpend: (activity: JarActivity) => void;
 }) {
-  const transactions = new Map(ledger.transactions.map((item) => [item.id, item]));
-  const accounts = new Map(ledger.accounts.map((item) => [item.id, item.name]));
-  const history = ledger.jarActivities.filter((item) => item.jarId === jarId)
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const groups = getJarActivityGroups(ledger, jarId);
+  const today = getToday();
   return <section className="jar-history" aria-label="Lịch sử hũ">
-    <h3>Lịch sử hũ</h3>
-    {history.length === 0 && <p>Chưa có phân bổ hoặc giao dịch.</p>}
-    {history.map((activity) => {
-      const lines = (activity.transactionIds ?? []).flatMap((id) => {
-        const item = transactions.get(id);
-        return item ? [item] : [];
-      });
-      const amount = activity.kind === "spend" || activity.kind === "refund"
-        ? lines.reduce((sum, item) => sum + item.amount, 0) : activity.amount ?? 0;
-      return <article key={activity.id} className="jar-history-row">
-        <div><strong>{names[activity.kind]}</strong><small>{new Date(activity.createdAt).toLocaleString("vi-VN")}</small></div>
-        {amount > 0 && <strong>{formatMoney(amount)}</strong>}
-        {activity.accountId && <p>{accounts.get(activity.accountId) ?? "Tài khoản đã xóa"}</p>}
-        {lines.map((item) => <p key={item.id}>{accounts.get(item.accountId) ?? "Tài khoản đã xóa"} · {formatMoney(item.amount)}
-          {item.category ? ` · ${item.category}` : ""}</p>)}
-        {Boolean(activity.transactionIds?.length) && lines.length === 0 && <p>Giao dịch đã xóa; tiền được hoàn về phần phân bổ.</p>}
-        {activity.note && <p>{activity.note}</p>}
-        {activity.kind === "spend" && lines.length > 0 && <div className="jar-history-actions">
-          <button onClick={() => onEditSpend(activity)} type="button">Sửa khoản chi</button>
-          <button onClick={() => onDeleteSpend(activity)} type="button">Xóa khoản chi</button>
+    <h2>Lịch sử hũ</h2>
+    {groups.length === 0 && <p>Chưa có hoạt động nào. Nạp tiền hoặc ghi một khoản chi để bắt đầu.</p>}
+    {groups.map((group) => <div className="jar-history-group" key={group.date}>
+      <h3>{group.date === today ? "Hôm nay" : new Intl.DateTimeFormat("vi-VN", {
+        day: "numeric", month: "long", year: "numeric",
+      }).format(toDate(group.date))}</h3>
+      {group.activities.map((row) => <article className="jar-history-row" key={row.activity.id}>
+        <div className="jar-history-main"><strong>{row.label}{row.category ? ` · ${row.category}` : ""}</strong>
+          <small>{row.context || "Hoạt động trong hũ"} · {row.recordedLater ? "Ghi lúc " : ""}{new Date(row.time).toLocaleTimeString("vi-VN", {
+            hour: "2-digit", minute: "2-digit",
+          })}</small></div>
+        {row.amount !== null && <strong className={row.sign < 0 ? "is-outflow" : "is-inflow"}>
+          {row.sign < 0 ? "−" : "+"}{formatMoney(row.amount)}</strong>}
+        {row.activity.note && <p>{row.activity.note}</p>}
+        {row.missingTransaction && <p>Giao dịch liên kết đã bị xóa; cần kiểm tra lại lịch sử tài khoản.</p>}
+        {row.activity.kind === "spend" && row.amount !== null && <div className="jar-history-actions">
+          <button onClick={() => onEditSpend(row.activity)} type="button">Sửa khoản chi</button>
+          <button onClick={() => onDeleteSpend(row.activity)} type="button">Xóa khoản chi</button>
         </div>}
-      </article>;
-    })}
+      </article>)}
+    </div>)}
   </section>;
 }

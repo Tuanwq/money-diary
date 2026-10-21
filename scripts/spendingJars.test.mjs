@@ -9,6 +9,10 @@ import { assertReservationCoverageAfterLedgerChange, getFinancialPosition } from
   "../src/features/spending-jars/domain/financialPosition.ts";
 import { getJarSpendingAnalysis } from
   "../src/features/spending-jars/domain/jarSpendingAnalysis.ts";
+import { getJarDetailPresentation, getJarOverviewPresentation } from
+  "../src/features/spending-jars/domain/jarPresentation.ts";
+import { getJarActivityGroups } from
+  "../src/features/spending-jars/domain/jarActivityPresentation.ts";
 import { applyJarCommand, planJarSpend, smartAllocate } from
   "../src/features/spending-jars/services/jarService.ts";
 import { repairClosedJars } from "../src/features/spending-jars/services/closedJarMigration.ts";
@@ -198,5 +202,39 @@ const outside = { ...monthly, accounts: monthly.accounts.map((account) => accoun
 assert.equal(getAccountAvailableToAllocate(outside, "b"), 0,
   "money outside an account cannot be reserved twice");
 assert.throws(() => assertReservationCoverageAfterLedgerChange(monthly, outside), /không đủ tiền thực có/);
+
+const overview = getJarOverviewPresentation(monthly);
+assert.equal(overview.allocatedAmount + overview.unallocatedAmount, overview.totalAllocatableAmount);
+assert.equal(overview.spentFromActiveJars, 500_000, "active-jar spending is labeled with its actual scope");
+assert.equal(overview.allocationPercent, Math.round(overview.allocatedAmount / overview.totalAllocatableAmount * 100));
+const detail = getJarDetailPresentation(monthly, monthly.jars[0], "2026-09-22");
+assert.equal(detail.budget.remaining, 2_500_000);
+assert.equal(detail.heldAmount, 300_000, "reserved cash is distinct from remaining budget");
+assert.equal(detail.fundingDifference, -2_200_000);
+assert.equal(detail.daysRemaining, 9);
+assert.equal(detail.suggestedDailyLimit, Math.floor(2_500_000 / 9));
+assert.equal(getJarDetailPresentation(monthly, monthly.jars[0], "2026-10-01").budget.remaining, 3_000_000,
+  "budget resets without changing reserved cash");
+assert.equal(getJarDetailPresentation(outside, outside.jars[0], "2026-09-22").status, "source_shortfall");
+assert.equal(getJarDetailPresentation(ledger, ledger.jars[0], "2026-09-22").status, "closed");
+const emptyJar = { ...monthly, jars: [{ ...monthly.jars[0], id: "empty" }], jarActivities: [], transactions: [] };
+assert.equal(getJarDetailPresentation(emptyJar, emptyJar.jars[0], "2026-09-22").status, "unfunded");
+const overBudgetJar = { ...emptyJar, accounts: emptyJar.accounts.map((account) =>
+  ({ ...account, openingBalance: 10_000_000 })), transactions: [{ id: "over-budget", accountId: "b",
+  amount: 3_100_000, category: "Nhà", note: "", type: "expense", date: "2026-09-22",
+  jarId: "empty", createdAt: now, updatedAt: now }] };
+assert.equal(getJarDetailPresentation(overBudgetJar, overBudgetJar.jars[0], "2026-09-22").status,
+  "over_budget", "overspending is not presented as a negative remaining budget");
+const history = getJarActivityGroups(monthly, "monthly");
+assert.ok(history.length >= 1);
+assert.ok(history.flatMap((group) => group.activities).some((item) => item.activity.kind === "spend" &&
+  item.sign === -1 && item.amount === 500_000));
+assert.ok(history.flatMap((group) => group.activities).some((item) => item.activity.kind === "release" &&
+  item.sign === -1 && item.context.startsWith("Về ")));
+const backdated = { ...monthly, transactions: monthly.transactions.map((item) =>
+  item.jarId === "monthly" ? { ...item, date: "2026-09-21" } : item) };
+assert.equal(getJarActivityGroups(backdated, "monthly").flatMap((group) => group.activities)
+  .find((item) => item.activity.kind === "spend")?.recordedLater, true,
+  "a backdated spend labels its recorded time instead of implying an occurrence time");
 
 console.log("Spending jars tests passed.");

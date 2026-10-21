@@ -261,7 +261,7 @@
 @media (max-width: 600px) {
   .spending-jars-page { gap: 1rem; padding-inline: 0.75rem; }
   .jars-header { grid-template-columns: 44px minmax(0, 1fr) auto; gap: 0.55rem; }
-  .jars-header p { display: none; }
+  .jars-header p:not(.jars-header-status) { display: none; }
   .jars-header .jars-primary { padding-inline: 0.65rem; font-size: 0.75rem; }
   .jars-summary { padding: 1rem; }
   .jars-accounts { padding: 1rem; }
@@ -275,4 +275,118 @@
   .jars-modal { width: 100%; max-width: none; max-height: calc(100dvh - env(safe-area-inset-top) - 12px); border-radius: 22px 22px 0 0; padding: 1.2rem 1rem calc(1rem + env(safe-area-inset-bottom)); }
   .jars-form-row { grid-template-columns: minmax(0, 1fr); }
   .jars-form-actions { position: sticky; bottom: calc(-1rem - env(safe-area-inset-bottom)); z-index: 1; display: grid; grid-template-columns: 1fr 1fr; background: var(--money-surface); padding: 0.75rem 0 calc(0.5rem + env(safe-area-inset-bottom)); }
+}
+
+/* The list and detail share one restrained hierarchy; budget and reserved cash stay separate. */
+.spending-jars-page { gap: 1rem; max-width: 860px; }
+.jars-create-button { min-width: 44px; }
+.jars-primary:disabled,
+.jars-summary-actions button:disabled { opacity: 0.48; cursor: not-allowed; }
+.jars-header :is(button, summary):focus-visible,
+.spending-jars-page :is(button, summary, input, select):focus-visible {
+  outline: 3px solid var(--money-primary); outline-offset: 2px;
+}
+.jar-header-menu { position: relative; }
+.jar-header-menu summary { display: grid; place-items: center; width: 44px; height: 44px; border: 1px solid var(--money-border); border-radius: 13px; background: var(--money-surface); cursor: pointer; list-style: none; }
+.jar-header-menu summary::-webkit-details-marker { display: none; }
+.jar-header-menu > div { position: absolute; z-index: 5; top: calc(100% + 0.4rem); right: 0; display: grid; min-width: 160px; border: 1px solid var(--money-border); border-radius: 14px; background: var(--money-surface); box-shadow: 0 12px 28px rgb(0 0 0 / 12%); padding: 0.35rem; }
+.jar-header-menu button { min-height: 44px; border: 0; border-radius: 9px; background: transparent; padding: 0.5rem 0.7rem; color: var(--money-text); text-align: left; }
+.jar-header-menu button:hover { background: var(--money-surface-muted); }
+.jar-header-menu button:last-child { color: var(--money-expense); }
+
+.jars-summary { gap: 0.85rem; }
+.jars-summary-main > span { color: var(--money-text-secondary); font-size: 0.82rem; }
+.jars-summary-breakdown { gap: 0.4rem; }
+.jars-summary-breakdown > span,
+.jars-summary-breakdown > button { display: grid; align-content: center; gap: 0.2rem; min-width: 0; min-height: 58px; border: 0; border-radius: 12px; background: transparent; padding: 0.5rem 0.35rem; color: var(--money-text-secondary); font: inherit; font-size: 0.77rem; text-align: left; }
+.jars-summary-breakdown > button { background: var(--money-warning-soft); padding-inline: 0.8rem; cursor: pointer; }
+.jars-summary-breakdown > button > span { display: inline-flex; align-items: center; gap: 0.3rem; }
+.jars-summary-breakdown strong { display: block; color: var(--money-text); font-size: clamp(0.95rem, 3vw, 1.2rem); }
+.jars-summary-breakdown > button strong { color: var(--money-warning); }
+.jars-summary-progress small { line-height: 1.45; }
+.jars-summary-warning { margin: 0; border-left: 3px solid var(--money-warning); padding: 0.2rem 0.6rem; color: var(--money-warning); font-size: 0.78rem; line-height: 1.45; }
+.jars-summary-empty { display: grid; gap: 0.25rem; border-top: 1px solid var(--money-border); padding-top: 0.7rem; color: var(--money-text-secondary); font-size: 0.81rem; }
+.jars-summary-empty p { margin: 0; }
+.jars-summary-empty button { display: inline-flex; align-items: center; gap: 0.25rem; justify-self: start; min-height: 44px; border: 0; background: transparent; padding: 0.2rem 0; color: var(--money-primary); font-size: 0.79rem; font-weight: 700; }
+.jars-summary-actions { display: flex; flex-wrap: wrap; gap: 0.6rem; }
+.jars-summary-actions > button { min-height: 44px; border: 1px solid var(--money-border); border-radius: 12px; background: var(--money-surface); padding: 0.6rem 0.9rem; color: var(--money-text); font-size: 0.83rem; font-weight: 700; }
+.jars-summary-actions > .jars-primary { border-color: var(--money-primary); background: var(--money-primary); color: var(--money-background); }
+.jars-summary .jars-accounts { border: 0; border-top: 1px solid var(--money-border); border-radius: 0; padding: 0.85rem 0 0; }
+.jars-summary .jars-account-grid { grid-template-columns: minmax(0, 1fr); }
+.jars-summary .jars-account-row { border-bottom: 1px solid var(--money-border); }
+
+.jars-filters { display: flex; gap: 0.35rem; overflow-x: auto; margin-bottom: 0.8rem; }
+.jars-filters button { flex: none; min-height: 44px; border: 1px solid var(--money-border); border-radius: 999px; background: var(--money-surface); padding: 0.45rem 0.75rem; color: var(--money-text-secondary); font-size: 0.78rem; }
+.jars-filters button.is-active { border-color: var(--money-primary); background: var(--money-primary-soft); color: var(--money-primary); font-weight: 700; }
+.jars-grid { grid-template-columns: minmax(0, 1fr); }
+.jar-card { gap: 0.55rem; box-shadow: none; }
+.jar-card-top { align-items: start; }
+.jar-card-identity { flex: 1; }
+.jar-card-main { display: grid; gap: 0.12rem; padding-block: 0.2rem; }
+.jar-card-main small { color: var(--money-text-secondary); font-size: 0.76rem; }
+.jar-card-main strong { color: var(--money-text); font-size: clamp(1.45rem, 4vw, 1.85rem); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.jar-card-foot { display: flex; align-items: center; justify-content: space-between; color: var(--money-text-secondary); font-size: 0.76rem; }
+.jar-card .jar-progress > span { background: var(--money-primary); }
+.jar-card.is-low .jar-progress > span { background: var(--money-warning); }
+.jar-card.is-empty .jar-progress > span { background: var(--money-expense); }
+.jar-card-deficit { margin-top: 0.15rem; }
+
+.jar-quick-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.5rem; }
+.jar-quick-actions button { min-width: 0; min-height: 48px; border: 1px solid var(--money-border); border-radius: 12px; background: var(--money-surface); padding: 0.55rem; color: var(--money-text); font-size: 0.81rem; font-weight: 700; }
+.jar-quick-actions .jars-primary { border-color: var(--money-primary); background: var(--money-primary); color: var(--money-background); }
+.jar-detail-tabs { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--money-border); border-radius: 13px; background: var(--money-surface); padding: 0.25rem; }
+.jar-detail-tabs button { min-height: 44px; border: 0; border-radius: 10px; background: transparent; color: var(--money-text-secondary); font-weight: 700; }
+.jar-detail-tabs button.is-active { background: var(--money-primary); color: var(--money-background); }
+.jar-detail-hero { display: grid; gap: 0.65rem; padding: 1.2rem; }
+.jar-detail-eyebrow { color: var(--money-text-secondary); font-size: 0.8rem; }
+.jar-detail-amount { color: var(--money-text); font-size: clamp(2rem, 6vw, 3rem); font-variant-numeric: tabular-nums; line-height: 1.12; overflow-wrap: anywhere; }
+.jar-detail-progress-label { margin: 0; }
+.jar-detail-hero .jar-detail-period { margin: 0; font-size: 0.79rem; }
+.jar-detail-hero .jar-detail-alert,
+.jar-funding .jar-detail-alert { margin: 0; border-radius: 10px; background: var(--money-warning-soft); padding: 0.6rem; color: var(--money-warning); font-size: 0.78rem; }
+.jar-funding,
+.jar-linked-labels,
+.jar-insights-panel,
+.jar-secondary-actions { min-width: 0; border: 1px solid var(--money-border); border-radius: 18px; background: var(--money-surface); padding: 1rem 1.15rem; }
+.jar-funding h2,
+.jar-linked-labels h2 { margin: 0 0 0.6rem; font-size: 0.95rem; }
+.jar-funding > div { display: flex; align-items: baseline; justify-content: space-between; gap: 0.6rem; min-height: 42px; border-top: 1px solid var(--money-border); padding: 0.6rem 0; font-size: 0.8rem; }
+.jar-funding > div strong { font-variant-numeric: tabular-nums; text-align: right; }
+.jar-funding > div.is-short strong { color: var(--money-expense); }
+.jar-funding > div.is-surplus strong { color: var(--money-primary); }
+.jar-funding > p,
+.jar-linked-labels p { margin: 0.45rem 0 0; color: var(--money-text-secondary); font-size: 0.79rem; line-height: 1.45; }
+.jar-sources h2 { font-size: 0.95rem; }
+.jar-sources > div { min-height: 48px; }
+.jar-insights-panel summary,
+.jar-secondary-actions summary { min-height: 34px; color: var(--money-primary); cursor: pointer; font-size: 0.83rem; font-weight: 700; }
+.jar-secondary-actions > div { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.5rem; }
+.jar-secondary-actions button { min-height: 44px; border: 1px solid var(--money-border); border-radius: 10px; background: var(--money-surface); padding: 0.5rem 0.7rem; color: var(--money-text); font-size: 0.78rem; }
+
+.jar-history h2 { margin: 0 0 0.6rem; font-size: 0.98rem; }
+.jar-history-group { margin-top: 0.75rem; }
+.jar-history-group h3 { margin: 0; border-bottom: 1px solid var(--money-border); padding: 0.55rem 0; color: var(--money-text-secondary); font-size: 0.8rem; }
+.jar-history-row { align-items: baseline; }
+.jar-history-main { min-width: 0; }
+.jar-history-row > strong { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.jar-history-row > strong.is-outflow { color: var(--money-expense); }
+.jar-history-row > strong.is-inflow { color: var(--money-primary); }
+
+.jars-modal-heading { display: flex; align-items: start; justify-content: space-between; gap: 0.6rem; }
+.jars-modal-heading button { display: grid; place-items: center; flex: none; width: 44px; height: 44px; border: 0; border-radius: 12px; background: var(--money-surface-muted); color: var(--money-text); }
+.jars-amount-label input { min-height: 58px; font-size: 1.5rem; font-weight: 750; font-variant-numeric: tabular-nums; }
+.jars-picker-option { min-height: 50px; border: 1px solid var(--money-border); border-radius: 11px; background: var(--money-surface); padding: 0.65rem 0.8rem; color: var(--money-text); text-align: left; }
+.jars-picker-option > span { margin-right: 0.65rem; }
+.jars-loading { margin: 0; border: 1px solid var(--money-border); border-radius: 16px; background: var(--money-surface); padding: 1.2rem; color: var(--money-text-secondary); font-size: 0.85rem; }
+.jar-history-actions button { min-height: 44px; padding-inline: 0.35rem; }
+
+@media (max-width: 600px) {
+  .jars-header h1 { font-size: 1.45rem; }
+  .jars-create-button { width: 44px; padding: 0; }
+  .jars-create-button span { display: none; }
+  .jars-summary-breakdown { gap: 0.25rem; }
+  .jar-card-top { flex-wrap: wrap; }
+  .jar-quick-actions { border: 1px solid var(--money-border); border-radius: 16px; background: var(--money-surface); padding: 0.4rem; }
+  .jar-history { padding-bottom: 1.5rem; }
+  .jars-modal { padding-top: 0.9rem; }
 }

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import {
   buildReconciliationLine,
   createReconciliationAdjustmentTransaction,
+  createReconciliationTransferTransaction,
   getAccountReconciliationBasis,
   getReconciliationTotals,
 } from "../src/features/account-reconciliation/accountReconciliationModel.ts";
@@ -151,5 +152,41 @@ assert.equal(
   }),
   null
 );
+
+const cash = { ...account, id: "cash", name: "Tiền mặt", openingBalance: 1_000_000 };
+const bank = { ...account, id: "bank", name: "BIDV", openingBalance: 500_000 };
+const transferCheck = { ...check, lines: [{
+  ...shortageLine,
+  difference: -100_000,
+  expectedBalance: 1_000_000,
+  actualBalance: 900_000,
+  reason: "internal_transfer",
+}] };
+const transferLine = transferCheck.lines[0];
+const transfer = createReconciliationTransferTransaction(
+  transferCheck, transferLine, cash.id, bank.id, "2026-07-22T12:10:00.000Z"
+);
+assert.equal(transfer?.type, "transfer");
+assert.equal(transfer?.purpose, "internal_transfer");
+assert.equal(transfer?.amount, 100_000);
+assert.equal(transfer?.date, transferCheck.date);
+assert.equal(transfer?.id, "reconciliation-transfer:check-1:cash");
+assert.equal(createReconciliationTransferTransaction(transferCheck, transferLine,
+  cash.id, bank.id)?.id, transfer?.id, "retries reuse one transaction ID");
+assert.equal(calculateAccountBalanceAtDate(cash, [transfer], transferCheck.date), 900_000);
+assert.equal(calculateAccountBalanceAtDate(bank, [transfer], transferCheck.date), 600_000);
+assert.equal(calculateAccountBalanceAtDate(cash, [transfer], transferCheck.date) +
+  calculateAccountBalanceAtDate(bank, [transfer], transferCheck.date), 1_500_000,
+"internal transfer preserves the total balance");
+assert.equal(createReconciliationTransferTransaction(transferCheck, transferLine,
+  bank.id, cash.id), null, "a shortage must be the source");
+assert.equal(createReconciliationTransferTransaction(transferCheck, transferLine,
+  cash.id, cash.id), null, "source and destination must differ");
+assert.equal(createReconciliationTransferTransaction(transferCheck, {
+  ...transferLine, adjustmentTransactionId: transfer.id,
+}, cash.id, bank.id), null, "an adjusted line cannot create another transfer");
+assert.equal(createReconciliationTransferTransaction(transferCheck, {
+  ...transferLine, accountId: bank.id, difference: 100_000,
+}, cash.id, bank.id)?.toAccountId, bank.id, "a surplus must be the destination");
 
 console.log("Account reconciliation tests passed.");

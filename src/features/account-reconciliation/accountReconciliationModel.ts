@@ -166,6 +166,39 @@ export function createReconciliationAdjustmentTransaction(
   };
 }
 
+export function createReconciliationTransferTransaction(
+  check: AccountReconciliation,
+  line: AccountReconciliationLine,
+  fromAccountId: string,
+  toAccountId: string,
+  now = new Date().toISOString()
+): AccountTransaction | null {
+  if (
+    line.reason !== "internal_transfer" ||
+    line.difference === 0 ||
+    line.adjustmentTransactionId ||
+    !fromAccountId ||
+    !toAccountId ||
+    fromAccountId === toAccountId ||
+    (line.difference < 0 && fromAccountId !== line.accountId) ||
+    (line.difference > 0 && toAccountId !== line.accountId)
+  ) return null;
+
+  return {
+    accountId: fromAccountId,
+    amount: Math.abs(line.difference),
+    category: "Chuyển nội bộ",
+    createdAt: now,
+    date: check.date,
+    id: `reconciliation-transfer:${check.id}:${line.accountId}`,
+    note: [line.note, `Kiểm kê ${check.date}`].filter(Boolean).join(" · "),
+    purpose: "internal_transfer",
+    toAccountId,
+    type: "transfer",
+    updatedAt: now,
+  };
+}
+
 export function getReconciliationTotals(lines: AccountReconciliationLine[]) {
   return lines.reduce(
     (summary, line) => ({

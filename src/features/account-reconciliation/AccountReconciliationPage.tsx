@@ -16,7 +16,7 @@ import {
   Trash2,
   WalletCards,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { getToday } from "../../utils/date";
 import {
   formatMoney,
@@ -33,6 +33,7 @@ import {
   RECONCILIATION_REASON_LABELS,
   buildReconciliationLine,
   createReconciliationAdjustmentTransaction,
+  createReconciliationTransferTransaction,
   getAccountReconciliationBasis,
   getReconciliationStatus,
   getReconciliationTotals,
@@ -54,6 +55,13 @@ type DraftLine = {
   actual: string;
   note: string;
   reason: ReconciliationReason;
+};
+
+type TransferDraft = {
+  accountId: string;
+  checkId: string;
+  fromAccountId: string;
+  toAccountId: string;
 };
 
 function formatDate(value: string) {
@@ -151,6 +159,8 @@ export function AccountReconciliationPage({
   const [editingCheckId, setEditingCheckId] = useState(
     initialCheck?.id ?? null
   );
+  const [transferDraft, setTransferDraft] = useState<TransferDraft | null>(null);
+  const transferSubmittingRef = useRef(false);
   const checkById = useMemo(
     () => new Map(checks.map((check) => [check.id, check])),
     [checks]
@@ -239,6 +249,7 @@ export function AccountReconciliationPage({
     setEditingCheckId(existing?.id ?? null);
     setDraftLines(createDraftLines(activeAccounts, existing));
     setGeneralNote(existing?.note ?? "");
+    setTransferDraft(null);
   }
 
   function updateDraft(accountId: string, patch: Partial<DraftLine>) {
@@ -334,10 +345,17 @@ export function AccountReconciliationPage({
 
     if (!line) return;
     if (line.reason === "internal_transfer") {
-      showAppToast(
-        "Khoản chuyển nội bộ cần ghi đủ tài khoản gửi và nhận trong Sổ tài khoản."
-      );
-      onOpenLedger();
+      if (activeAccounts.length < 2) {
+        showAppToast("Cần ít nhất hai tài khoản đang hoạt động để ghi chuyển tiền nội bộ.");
+        return;
+      }
+      setTransferDraft((current) => current?.checkId === check.id &&
+        current.accountId === accountId ? null : {
+          accountId,
+          checkId: check.id,
+          fromAccountId: line.difference < 0 ? accountId : "",
+          toAccountId: line.difference > 0 ? accountId : "",
+        });
       return;
     }
     if (line.reason === "unknown") {
@@ -377,12 +395,80 @@ export function AccountReconciliationPage({
     showSuccessToast("Đã tạo giao dịch điều chỉnh trong Sổ tài khoản.");
   }
 
+  function submitTransfer(event: React.FormEvent, check: AccountReconciliation,
+    accountId: string) {
+    event.preventDefault();
+    if (transferSubmittingRef.current || !transferDraft ||
+      transferDraft.checkId !== check.id || transferDraft.accountId !== accountId) return;
+    const line = check.lines.find((item) => item.accountId === accountId);
+    if (!line || line.adjustmentTransactionId) {
+      setTransferDraft(null);
+      return;
+    }
+    const from = activeAccounts.find((account) => account.id === transferDraft.fromAccountId);
+    const to = activeAccounts.find((account) => account.id === transferDraft.toAccountId);
+    if (!from || !to || from.id === to.id) {
+      showAppToast("Hãy chọn hai tài khoản khác nhau còn hoạt động.");
+      return;
+    }
+    const transaction = createReconciliationTransferTransaction(
+      check, line, from.id, to.id
+    );
+    if (!transaction) {
+      showAppToast(line.difference < 0
+        ? `Tài khoản gửi phải là ${line.accountName} vì số thực tế thấp hơn sổ.`
+        : `Tài khoản nhận phải là ${line.accountName} vì số thực tế cao hơn sổ.`);
+      return;
+    }
+    const existing = transactions.find((item) => item.id === transaction.id);
+    if (existing && (existing.type !== "transfer" ||
+      existing.accountId !== from.id || existing.toAccountId !== to.id ||
+      existing.amount !== transaction.amount || existing.date !== transaction.date)) {
+      showAppToast("Giao dịch kiểm kê này đã được ghi với thông tin khác. Hãy kiểm tra lại trước khi xử lý.");
+      return;
+    }
+    const similar = transactions.some((item) => item.id !== transaction.id &&
+      item.type === "transfer" && item.accountId === from.id &&
+      item.toAccountId === to.id && item.amount === transaction.amount &&
+      item.date === transaction.date);
+    if (similar && !confirm("Đã có giao dịch chuyển tiền giống hệt trong ngày này. Bạn vẫn muốn ghi thêm?")) return;
+
+    transferSubmittingRef.current = true;
+    try {
+      if (!existing) saveTransaction(transaction);
+      markLineAdjusted({
+        accountId,
+        adjustedAt: transaction.updatedAt,
+        checkId: check.id,
+        transactionId: transaction.id,
+      });
+      const counterpartId = line.difference < 0 ? to.id : from.id;
+      const counterpart = check.lines.find((item) => item.accountId === counterpartId);
+      if (counterpart && !counterpart.adjustmentTransactionId &&
+        counterpart.reason === "internal_transfer" &&
+        counterpart.difference === -line.difference) {
+        markLineAdjusted({
+          accountId: counterpartId,
+          adjustedAt: transaction.updatedAt,
+          checkId: check.id,
+          transactionId: transaction.id,
+        });
+      }
+      setTransferDraft(null);
+      showSuccessToast(`Đã ghi chuyển ${formatMoney(transaction.amount)} từ ${from.name} sang ${to.name}.`);
+    } catch (error) {
+      showAppToast(error instanceof Error ? error.message : "Không thể ghi giao dịch chuyển tiền.");
+    } finally {
+      transferSubmittingRef.current = false;
+    }
+  }
+
   function removeCheck(check: AccountReconciliation) {
     const hasAdjustment = check.lines.some(
       (line) => line.adjustmentTransactionId
     );
     const message = hasAdjustment
-      ? "Xóa lần kiểm kê này? Các giao dịch điều chỉnh đã tạo trong Sổ tài khoản vẫn được giữ."
+      ? "Xóa lần kiểm kê này? Các giao dịch đã tạo trong Sổ tài khoản vẫn được giữ."
       : `Xóa lần kiểm kê ngày ${formatDate(check.date)}?`;
 
     if (!confirm(message)) return;
@@ -570,7 +656,7 @@ export function AccountReconciliationPage({
                     <strong>
                       {hasActual ? formatSignedMoney(difference) : "Chưa nhập"}
                     </strong>
-                    {isAdjusted && <small>Đã điều chỉnh trong sổ</small>}
+                    {isAdjusted && <small>{savedLine?.reason === "internal_transfer" ? "Đã ghi chuyển tiền vào sổ" : "Đã điều chỉnh trong sổ"}</small>}
                   </div>
 
                   {hasActual && difference !== 0 && (
@@ -699,9 +785,46 @@ export function AccountReconciliationPage({
                       onClick={() => applyAdjustment(check, line.accountId)}
                       type="button"
                     >
-                      {canAdjust ? "Điều chỉnh sổ" : "Xử lý"}
+                      {canAdjust ? "Điều chỉnh sổ" : line.reason === "internal_transfer" ? "Ghi chuyển tiền" : "Xử lý"}
                       <ArrowRight aria-hidden="true" size={16} />
                     </button>
+                    {line.reason === "internal_transfer" &&
+                      transferDraft?.checkId === check.id &&
+                      transferDraft.accountId === line.accountId && (
+                        <form className="reconciliation-transfer-form"
+                          onSubmit={(event) => submitTransfer(event, check, line.accountId)}>
+                          <p>
+                            Ghi một lần chuyển {formatMoney(Math.abs(line.difference))} ngày {formatDate(check.date)}.
+                            {" "}{line.difference < 0 ? `${line.accountName} là tài khoản gửi.` : `${line.accountName} là tài khoản nhận.`}
+                          </p>
+                          <label className="reconciliation-field">
+                            <span>Tài khoản gửi</span>
+                            <select required value={transferDraft.fromAccountId}
+                              onChange={(event) => setTransferDraft((current) =>
+                                current ? { ...current, fromAccountId: event.target.value } : current)}>
+                              <option value="">Chọn tài khoản gửi</option>
+                              {activeAccounts.map((account) => (
+                                <option key={account.id} value={account.id}>{account.name}</option>
+                              ))}
+                            </select>
+                          </label>
+                          <label className="reconciliation-field">
+                            <span>Tài khoản nhận</span>
+                            <select required value={transferDraft.toAccountId}
+                              onChange={(event) => setTransferDraft((current) =>
+                                current ? { ...current, toAccountId: event.target.value } : current)}>
+                              <option value="">Chọn tài khoản nhận</option>
+                              {activeAccounts.map((account) => (
+                                <option key={account.id} value={account.id}>{account.name}</option>
+                              ))}
+                            </select>
+                          </label>
+                          <div className="reconciliation-transfer-actions">
+                            <button className="notification-secondary-button" onClick={() => setTransferDraft(null)} type="button">Hủy</button>
+                            <button className="notification-primary-button" type="submit">Lưu chuyển tiền</button>
+                          </div>
+                        </form>
+                      )}
                   </article>
                 );
               })}
