@@ -23,7 +23,7 @@ export function useSavings(data: SavingsData, dispatch: (command: SavingsCommand
   useEffect(() => {
     if (!schemaReady || !/đồng bộ|thiết bị/i.test(cloudStatus)) return;
     try { dispatch({ type: "refresh", today }); } catch { /* Ledger reports sync readiness. */ }
-  }, [cloudStatus, transactions, savingsRules, dispatch, schemaReady, today]);
+  }, [cloudStatus, transactions, savingsRules, savingsAllocations, dispatch, schemaReady, today]);
 
   return { ledger, onCommand };
 }

@@ -1,5 +1,6 @@
 import type { AccountLedgerData, AccountTransaction } from "../../account-ledger/accountLedgerModel.ts";
-import { calculateSavingsAmount, getSavingsAvailable, getSavingsIncome, savingsResultId,
+import { SAVINGS_ROUNDING_UNIT, calculateSavingsAmount, getSavingsAvailable, getSavingsIncome,
+  roundSavingsAmount, savingsResultId,
   type SavingsAllocation, type SavingsRule } from "../domain/savingsModel.ts";
 
 export type SavingsCommand =
@@ -14,6 +15,13 @@ export type SavingsCommand =
 
 function sample(rule: SavingsRule, random: () => number) {
   if (!rule.mode.startsWith("random_")) return undefined;
+  if (rule.mode === "random_amount") {
+    const lower = Math.ceil(Math.max(0, rule.minimum ?? 0) / SAVINGS_ROUNDING_UNIT);
+    const upper = Math.floor(Math.max(0, rule.maximum ?? 0) / SAVINGS_ROUNDING_UNIT);
+    if (upper < lower) return 0;
+    return (lower + Math.floor(Math.min(0.999999999, Math.max(0, random())) *
+      (upper - lower + 1))) * SAVINGS_ROUNDING_UNIT;
+  }
   const lower = Math.max(0, rule.minimum ?? 0);
   const upper = Math.max(lower, rule.maximum ?? lower);
   return lower + Math.floor(Math.min(0.999999999, Math.max(0, random())) * (upper - lower + 1));
@@ -30,6 +38,10 @@ export function validateSavingsRule(ledger: AccountLedgerData, rule: SavingsRule
       throw new Error("Khoảng ngẫu nhiên không hợp lệ.");
     if (rule.mode === "random_percentage" && (rule.maximum ?? 0) > 100)
       throw new Error("Phần trăm tối đa phải nhỏ hơn hoặc bằng 100.");
+    if (rule.mode === "random_amount" &&
+      Math.ceil((rule.minimum ?? 0) / SAVINGS_ROUNDING_UNIT) >
+        Math.floor((rule.maximum ?? 0) / SAVINGS_ROUNDING_UNIT))
+      throw new Error("Khoảng ngẫu nhiên phải chứa ít nhất một mức 1.000đ.");
   } else if (!Number.isFinite(rule.value) || rule.value <= 0 ||
     (rule.mode === "fixed" && !Number.isSafeInteger(rule.value)) ||
     (rule.mode === "percentage" && rule.value > 100))
@@ -37,6 +49,8 @@ export function validateSavingsRule(ledger: AccountLedgerData, rule: SavingsRule
   if (!Number.isFinite(rule.minimumRemaining) || rule.minimumRemaining < 0 ||
     (rule.dailyCap !== undefined && (!Number.isFinite(rule.dailyCap) || rule.dailyCap <= 0)))
     throw new Error("Giới hạn tiết kiệm không hợp lệ.");
+  if (rule.dailyCap !== undefined && rule.dailyCap < SAVINGS_ROUNDING_UNIT)
+    throw new Error("Mức tối đa mỗi ngày phải từ 1.000đ.");
   if (rule.destination.kind === "transfer") {
     const destinationAccountId = rule.destination.accountId;
     if (destinationAccountId === rule.sourceAccountId ||
@@ -65,23 +79,42 @@ function resultFor(ledger: AccountLedgerData, rule: SavingsRule, date: string,
 function commit(ledger: AccountLedgerData, result: SavingsAllocation, amount: number, now: string) {
   const rule = ledger.savingsRules?.find((item) => item.id === result.ruleId);
   if (!rule) throw new Error("Không tìm thấy quy tắc tiết kiệm.");
-  if (!Number.isFinite(amount) || amount <= 0 || !Number.isInteger(amount))
+  if (!Number.isFinite(amount) || amount <= 0 || !Number.isSafeInteger(amount))
     throw new Error("Số tiền tiết kiệm phải là số nguyên dương.");
-  if (rule.dailyCap !== undefined && amount > rule.dailyCap)
+  const roundedAmount = roundSavingsAmount(amount);
+  if (roundedAmount <= 0) throw new Error("Số tiền tiết kiệm tối thiểu là 1.000đ.");
+  if (rule.dailyCap !== undefined && roundedAmount > rule.dailyCap)
     throw new Error("Số tiền vượt mức tối đa tiết kiệm trong ngày.");
-  if (amount > Math.max(0, getSavingsAvailable(ledger, result.sourceAccountId) - rule.minimumRemaining))
+  if (roundedAmount > Math.max(0, getSavingsAvailable(ledger, result.sourceAccountId) - rule.minimumRemaining))
     throw new Error("Không đủ tiền khả dụng sau khi giữ lại mức tối thiểu.");
   const transactionId = result.destination.kind === "transfer" ? `saving-transfer:${result.id}` : undefined;
   const transaction: AccountTransaction | null = transactionId && result.destination.kind === "transfer"
     ? { id: transactionId, accountId: result.sourceAccountId, toAccountId: result.destination.accountId,
-      amount, category: "Tiết kiệm tự động", date: result.date, type: "transfer", purpose: "internal_transfer",
+      amount: roundedAmount, category: "Tiết kiệm tự động", date: result.date, type: "transfer", purpose: "internal_transfer",
       source: "savings", note: `Tiết kiệm theo quy tắc ${rule.name}`, createdAt: now, updatedAt: now }
     : null;
   return { ...ledger,
     transactions: transaction ? [transaction, ...ledger.transactions] : ledger.transactions,
     savingsAllocations: (ledger.savingsAllocations ?? []).map((item) => item.id === result.id
-      ? { ...item, amount, status: transaction ? "transferred" as const : "allocated" as const,
-        transactionId, manuallyAdjusted: amount !== result.amount, updatedAt: now } : item) };
+      ? { ...item, amount: roundedAmount, status: transaction ? "transferred" as const : "allocated" as const,
+        transactionId, manuallyAdjusted: roundedAmount !== result.amount, updatedAt: now } : item) };
+}
+
+function automaticAmount(ledger: AccountLedgerData, rule: SavingsRule, proposed: number) {
+  const available = Math.max(0, getSavingsAvailable(ledger, rule.sourceAccountId) - rule.minimumRemaining);
+  return Math.floor(Math.min(proposed, available) / SAVINGS_ROUNDING_UNIT) * SAVINGS_ROUNDING_UNIT;
+}
+
+function roundExistingReservation(ledger: AccountLedgerData, rule: SavingsRule,
+  result: SavingsAllocation) {
+  const nearest = roundSavingsAmount(result.amount);
+  if (nearest <= result.amount) return nearest > 0 ? nearest : result.amount;
+  const extra = nearest - result.amount;
+  if (nearest <= (rule.dailyCap ?? Infinity) &&
+    getSavingsAvailable(ledger, result.sourceAccountId) - rule.minimumRemaining >= extra)
+    return nearest;
+  const lower = Math.floor(result.amount / SAVINGS_ROUNDING_UNIT) * SAVINGS_ROUNDING_UNIT;
+  return lower > 0 ? lower : result.amount;
 }
 
 /** Pure ledger command: result and any transfer are saved in the same ledger revision. */
@@ -111,11 +144,18 @@ export function applySavingsCommand(ledger: AccountLedgerData, command: SavingsC
         const income = getSavingsIncome(next, rule, date);
         if (existing) {
           if (existing.incomeSignature === income.signature) {
-            if (existing.status === "proposed" && rule.execution === "automatic" && !rule.paused &&
+            const rounded = existing.status === "proposed"
+              ? calculateSavingsAmount(rule, income.base, existing.sampledValue)
+              : existing.status === "allocated" && existing.amount % SAVINGS_ROUNDING_UNIT !== 0
+                ? roundExistingReservation(next, rule, existing) : existing.amount;
+            const current = rounded !== existing.amount
+              ? { ...existing, amount: rounded, updatedAt: now } : existing;
+            if (current !== existing) next = { ...next, savingsAllocations: (next.savingsAllocations ?? [])
+              .map((item) => item.id === existing.id ? current : item) };
+            if (current.status === "proposed" && rule.execution === "automatic" && !rule.paused &&
               (rule.cadence === "per_income" || date < command.today)) {
-              const amount = Math.min(existing.amount,
-                Math.max(0, getSavingsAvailable(next, rule.sourceAccountId) - rule.minimumRemaining));
-              if (amount > 0) next = commit(next, existing, amount, now);
+              const amount = automaticAmount(next, rule, current.amount);
+              if (amount > 0) next = commit(next, current, amount, now);
             }
             continue;
           }
@@ -132,8 +172,7 @@ export function applySavingsCommand(ledger: AccountLedgerData, command: SavingsC
             item.id === existing.id ? updated : item) };
           if (updated.status === "proposed" && rule.execution === "automatic" && !rule.paused &&
             (rule.cadence === "per_income" || date < command.today)) {
-            const amount = Math.min(updated.amount,
-              Math.max(0, getSavingsAvailable(next, rule.sourceAccountId) - rule.minimumRemaining));
+            const amount = automaticAmount(next, rule, updated.amount);
             if (amount > 0) next = commit(next, updated, amount, now);
           }
           continue;
@@ -143,8 +182,7 @@ export function applySavingsCommand(ledger: AccountLedgerData, command: SavingsC
         if (!result) continue;
         next = { ...next, savingsAllocations: [...(next.savingsAllocations ?? []), result] };
         if (rule.execution === "automatic" && (rule.cadence === "per_income" || date < command.today)) {
-          const amount = Math.min(result.amount,
-            Math.max(0, getSavingsAvailable(next, rule.sourceAccountId) - rule.minimumRemaining));
+          const amount = automaticAmount(next, rule, result.amount);
           if (amount > 0) next = commit(next, result, amount, now);
         }
       }

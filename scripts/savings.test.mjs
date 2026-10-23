@@ -34,6 +34,16 @@ const refresh = (ledger, date = today, random = () => 0.5) =>
 assert.equal(calculateSavingsAmount(rule(), 400_000), 80_000);
 assert.equal(calculateSavingsAmount(rule({ dailyCap: 50_000 }), 400_000), 50_000);
 assert.equal(calculateSavingsAmount(rule({ mode: "fixed", value: 15_000 }), 400_000), 15_000);
+assert.equal(calculateSavingsAmount(rule({ value: 26 }), 417_000), 108_000,
+  "108.420đ rounds down to 108.000đ");
+assert.equal(calculateSavingsAmount(rule({ value: 50 }), 217_000), 109_000,
+  "108.500đ rounds up to 109.000đ");
+assert.equal(calculateSavingsAmount(rule({ value: 50 }), 216_999), 108_000,
+  "a half-đ calculation must not be rounded twice");
+assert.equal(calculateSavingsAmount(rule({ mode: "fixed", value: 108_420 }), 400_000), 108_000);
+assert.equal(calculateSavingsAmount(rule({ mode: "fixed", value: 108_500 }), 400_000), 109_000);
+assert.equal(calculateSavingsAmount(rule({ value: 50, dailyCap: 108_500 }), 217_000), 108_000,
+  "rounding must not exceed a daily cap");
 assert.equal(refresh(save({ ...base(), transactions: [] })).savingsAllocations.length, 0,
   "no income must not create a result");
 
@@ -41,7 +51,19 @@ let ledger = refresh(save(base()));
 assert.equal(ledger.savingsAllocations.length, 1);
 assert.equal(ledger.savingsAllocations[0].amount, 80_000);
 assert.equal(refresh(ledger), ledger, "refresh must not duplicate or rewrite a stable result");
+assert.equal(refresh({ ...ledger, savingsAllocations: ledger.savingsAllocations.map((item) =>
+  ({ ...item, amount: 80_420 })) }).savingsAllocations[0].amount, 80_000,
+"an older unconfirmed proposal adopts the rounded amount");
 const allocated = applySavingsCommand(ledger, { type: "confirm", resultId: "saving:rule:2026-10-23" }, now);
+assert.equal(refresh({ ...allocated, savingsAllocations: allocated.savingsAllocations.map((item) =>
+  ({ ...item, amount: 108_420 })) }).savingsAllocations[0].amount, 108_000,
+"an older reserved amount is rounded without creating an expense or transfer");
+assert.equal(refresh({ ...allocated, savingsAllocations: allocated.savingsAllocations.map((item) =>
+  ({ ...item, amount: 108_500 })) }).savingsAllocations[0].amount, 109_000);
+assert.equal(refresh({ ...allocated, savingsRules: [rule({ minimumRemaining: 391_400 })],
+  savingsAllocations: allocated.savingsAllocations.map((item) =>
+    ({ ...item, amount: 108_500 })) }).savingsAllocations[0].amount, 108_000,
+"an older reservation must round down when rounding up would consume protected cash");
 assert.equal(allocated.transactions.length, 1, "reservation is not an expense transaction");
 assert.equal(getSavingsReserved(allocated), 80_000);
 assert.equal(getSavingsHeldAmount(allocated), 80_000, "allocated savings is hidden from displayed balances");
@@ -55,16 +77,27 @@ assert.equal(getFinancialPosition(allocated).totalBalance, 500_000);
 assert.equal(getLedgerSummary(allocated.accounts, allocated.transactions, "2026-10").expense, 0);
 assert.throws(() => applySavingsCommand(allocated, { type: "confirm", resultId: "saving:rule:2026-10-23" }),
   /đã được xử lý/, "replaying confirmation must not duplicate");
-assert.throws(() => applySavingsCommand(ledger, { type: "confirm", resultId: "saving:rule:2026-10-23", amount: 500_001 }),
+assert.throws(() => applySavingsCommand(ledger, { type: "confirm", resultId: "saving:rule:2026-10-23", amount: 500_500 }),
   /Không đủ tiền/, "savings cannot exceed available money");
 assert.throws(() => applySavingsCommand(refresh(save(base(), rule({ minimumRemaining: 450_000 }))),
   { type: "confirm", resultId: "saving:rule:2026-10-23" }), /Không đủ tiền/);
+assert.equal(applySavingsCommand(ledger,
+  { type: "confirm", resultId: "saving:rule:2026-10-23", amount: 108_420 }, now)
+  .savingsAllocations[0].amount, 108_000, "manual confirmation uses the same rounding rule");
+assert.equal(applySavingsCommand(ledger,
+  { type: "confirm", resultId: "saving:rule:2026-10-23", amount: 108_500 }, now)
+  .savingsAllocations[0].amount, 109_000);
 
 const transferRule = rule({ destination: { kind: "transfer", accountId: target } });
 const transferred = applySavingsCommand(refresh(save(base(), transferRule)),
   { type: "confirm", resultId: "saving:rule:2026-10-23" }, now);
 assert.equal(transferred.transactions.length, 2);
 assert.equal(transferred.transactions[0].type, "transfer");
+assert.equal(refresh({ ...transferred, transactions: transferred.transactions.map((item) =>
+  item.type === "transfer" ? { ...item, amount: 80_420 } : item),
+  savingsAllocations: transferred.savingsAllocations.map((item) =>
+    ({ ...item, amount: 80_420 })) }).savingsAllocations[0].amount, 80_420,
+"historical bank transfers must retain the amount actually moved");
 assert.equal(calculateAccountBalance(transferred.accounts.find((item) => item.id === source), transferred.transactions), 420_000);
 assert.equal(calculateAccountBalance(transferred.accounts.find((item) => item.id === target), transferred.transactions), 80_000);
 assert.equal(getFinancialPosition(transferred).totalBalance, 500_000, "transfer cannot change total assets");
@@ -98,6 +131,10 @@ assert.equal(refresh(structuredClone(randomLedger), today, () => 0.99).savingsAl
 const randomMoney = refresh(save(base(), rule({ mode: "random_amount", value: 0,
   minimum: 10_000, maximum: 20_000 })), today, () => 0);
 assert.equal(randomMoney.savingsAllocations[0].amount, 10_000);
+const randomThousands = refresh(save(base(), rule({ mode: "random_amount", value: 0,
+  minimum: 108_420, maximum: 109_500 })), today, () => 0);
+assert.equal(randomThousands.savingsAllocations[0].sampledValue, 109_000,
+  "random money only samples whole thousands inside the configured interval");
 
 const net = base();
 net.transactions.push({ id: "work", type: "expense", source: "manual", purpose: "daily_expense",
@@ -128,6 +165,10 @@ assert.equal(refresh(nextDay, "2026-10-24"), nextDay);
 const perIncome = refresh(save(base(), rule({ cadence: "per_income", execution: "automatic" })));
 assert.equal(perIncome.savingsAllocations[0].status, "allocated");
 assert.equal(perIncome.savingsAllocations.length, 1);
+const limited = refresh(save(base(), rule({ cadence: "per_income", execution: "automatic",
+  minimumRemaining: 420_500 })));
+assert.equal(limited.savingsAllocations[0].amount, 79_000,
+  "automatic execution rounds down when available money is below the proposal");
 const skipped = applySavingsCommand(ledger, { type: "skip", resultId: "saving:rule:2026-10-23" }, now);
 assert.equal(refresh(skipped).savingsAllocations[0].status, "skipped", "skip today is sticky");
 const paused = applySavingsCommand(save(base()), { type: "pause_rule", ruleId: "rule", paused: true }, now);

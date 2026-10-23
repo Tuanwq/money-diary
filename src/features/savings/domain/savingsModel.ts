@@ -102,12 +102,21 @@ export function getSavingsIncome(ledger: AccountLedgerData, rule: SavingsRule, d
   return { income, workCosts, base: Math.max(0, income - workCosts), signature };
 }
 
+export const SAVINGS_ROUNDING_UNIT = 1_000;
+
+/** Round proposed/confirmed savings to whole thousands of đồng. */
+export function roundSavingsAmount(amount: number) {
+  return Math.round(amount / SAVINGS_ROUNDING_UNIT) * SAVINGS_ROUNDING_UNIT;
+}
+
 export function calculateSavingsAmount(rule: SavingsRule, base: number, sampledValue?: number) {
   if (base <= 0) return 0;
   const value = sampledValue ?? rule.value;
   const raw = rule.mode === "percentage" || rule.mode === "random_percentage"
-    ? Math.round(base * value / 100) : Math.round(value);
-  return Math.max(0, Math.min(raw, rule.dailyCap ?? Infinity));
+    ? base * value / 100 : value;
+  const cap = rule.dailyCap === undefined ? Infinity
+    : Math.floor(rule.dailyCap / SAVINGS_ROUNDING_UNIT) * SAVINGS_ROUNDING_UNIT;
+  return Math.max(0, Math.min(roundSavingsAmount(raw), cap));
 }
 
 export function getSavingsReserved(ledger: Pick<AccountLedgerData, "savingsAllocations">, accountId?: string) {
