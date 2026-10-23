@@ -28,6 +28,8 @@ import {
   type FinancialAccount,
   type FinancialAccountType,
 } from "../account-ledger/accountLedgerModel";
+import type { SavingsAllocation } from "../savings/domain/savingsModel.ts";
+import { getSavingsHeldByAccount } from "../savings/domain/savingsBalance.ts";
 import {
   ACCOUNT_RECONCILIATION_FOCUS_DATE_SESSION_KEY,
   RECONCILIATION_REASON_LABELS,
@@ -35,6 +37,7 @@ import {
   createReconciliationAdjustmentTransaction,
   createReconciliationTransferTransaction,
   getAccountReconciliationBasis,
+  getReconciliationSavingsAmountForLine,
   getReconciliationStatus,
   getReconciliationTotals,
   type AccountReconciliation,
@@ -108,6 +111,7 @@ export function AccountReconciliationPage({
   saveAccount,
   saveCheck,
   saveTransaction,
+  savingsAllocations,
   transactions,
 }: {
   accounts: FinancialAccount[];
@@ -124,6 +128,7 @@ export function AccountReconciliationPage({
   saveAccount: (account: FinancialAccount) => void;
   saveCheck: (check: AccountReconciliation) => void;
   saveTransaction: (transaction: AccountTransaction) => void;
+  savingsAllocations: SavingsAllocation[];
   transactions: AccountTransaction[];
 }) {
   const [initialFocusDate] = useState(() => {
@@ -168,26 +173,36 @@ export function AccountReconciliationPage({
   const selectedCheck = editingCheckId
     ? checkById.get(editingCheckId)
     : undefined;
+  const savingsHeldAtDate = useMemo(() => getSavingsHeldByAccount(
+    { transactions, savingsAllocations }, selectedDate
+  ), [transactions, savingsAllocations, selectedDate]);
   const reconciliationBases = useMemo(
     () =>
       Object.fromEntries(
         activeAccounts.map((account) => [
           account.id,
-          getAccountReconciliationBasis(account, transactions, selectedDate),
+          getAccountReconciliationBasis(account, transactions, selectedDate,
+            savingsHeldAtDate.get(account.id) ?? 0),
         ])
       ) as Record<string, ReturnType<typeof getAccountReconciliationBasis>>,
-    [activeAccounts, selectedDate, transactions]
+    [activeAccounts, selectedDate, transactions, savingsHeldAtDate]
   );
+  const reconciliationSavings = useMemo(() => Object.fromEntries(activeAccounts.map((account) => {
+    const savedLine = selectedCheck?.lines.find((line) => line.accountId === account.id);
+    return [account.id, getReconciliationSavingsAmountForLine(savedLine,
+      reconciliationBases[account.id].savingsAmount, selectedDate, getToday())];
+  })) as Record<string, number>, [activeAccounts, selectedCheck, reconciliationBases, selectedDate]);
   const expectedBalances = useMemo(
     () =>
       Object.fromEntries(
-        activeAccounts.map((account) => [
-          account.id,
-          selectedCheck?.lines.find((line) => line.accountId === account.id)
-            ?.expectedBalance ?? reconciliationBases[account.id].expectedBalance,
-        ])
+        activeAccounts.map((account) => {
+          const savedLine = selectedCheck?.lines.find((line) => line.accountId === account.id);
+          return [account.id, savedLine
+            ? savedLine.expectedBalance - (reconciliationSavings[account.id] - (savedLine.savingsAmount ?? 0))
+            : reconciliationBases[account.id].expectedBalance];
+        })
       ) as Record<string, number>,
-    [activeAccounts, reconciliationBases, selectedCheck]
+    [activeAccounts, reconciliationBases, reconciliationSavings, selectedCheck]
   );
   const draftSummary = useMemo(() => {
     const lines = activeAccounts.flatMap((account) => {
@@ -301,6 +316,7 @@ export function AccountReconciliationPage({
         expectedBalance: expectedBalances[account.id] ?? 0,
         bookBalance: previousLine ? previousLine.bookBalance : reconciliationBases[account.id].bookBalance,
         externalAmount: previousLine ? previousLine.externalAmount : reconciliationBases[account.id].externalAmount,
+        savingsAmount: reconciliationSavings[account.id],
         note: draft.note,
         reason: draft.reason,
       });
@@ -551,7 +567,8 @@ export function AccountReconciliationPage({
               <h2>Nhập số dư thực tế</h2>
               <p>
                 Bỏ trống tài khoản chưa muốn kiểm kê. Tiền thực có dự kiến =
-                số dư Sổ tài khoản trừ tiền còn ở ngoài vào ngày đã chọn.
+                số dư Sổ tài khoản trừ tiền còn ở ngoài và phần đã dành riêng vào ngày đã chọn.
+                Hãy nhập số tiền thực tế có thể dùng sau các khoản này.
               </p>
             </div>
             <label className="reconciliation-date-field">
@@ -603,6 +620,7 @@ export function AccountReconciliationPage({
               const basis = reconciliationBases[account.id];
               const bookBalance = savedLine?.bookBalance ?? basis.bookBalance;
               const externalAmount = savedLine?.externalAmount ?? basis.externalAmount;
+              const savingsAmount = reconciliationSavings[account.id];
               const hasSavedBasis = !savedLine ||
                 (savedLine.bookBalance !== undefined && savedLine.externalAmount !== undefined);
               const isAdjusted = Boolean(
@@ -626,6 +644,7 @@ export function AccountReconciliationPage({
                       {hasSavedBasis ? (
                         <small>
                           Sổ {formatMoney(bookBalance)} − tiền ở ngoài {formatMoney(externalAmount)}
+                          {(savingsAmount ?? 0) > 0 ? " · Đã trừ phần dành riêng" : ""}
                         </small>
                       ) : (
                         <small>Giữ nguyên số dự kiến của lần kiểm kê cũ.</small>

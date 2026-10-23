@@ -30,6 +30,7 @@ export type AccountReconciliationLine = {
   expectedBalance: number;
   bookBalance?: number;
   externalAmount?: number;
+  savingsAmount?: number;
   note: string;
   reason: ReconciliationReason;
 };
@@ -79,15 +80,33 @@ export function calculateReconciliationDifference(
 export function getAccountReconciliationBasis(
   account: FinancialAccount,
   transactions: AccountTransaction[],
-  date: string
+  date: string,
+  savingsAmount = 0
 ) {
   const bookBalance = calculateAccountBalanceAtDate(account, transactions, date);
   const externalAmount = calculateAccountExternalAmountAtDate(account, date);
   return {
     bookBalance,
     externalAmount,
-    expectedBalance: bookBalance - externalAmount,
+    savingsAmount,
+    expectedBalance: bookBalance - externalAmount - savingsAmount,
   };
+}
+
+/** Upgrade an unadjusted check from today without rewriting older or already resolved checks. */
+export function getReconciliationSavingsAmountForLine(
+  line: AccountReconciliationLine | undefined,
+  currentSavingsAmount: number,
+  checkDate: string,
+  today: string
+) {
+  if (!line) return currentSavingsAmount;
+  if (line.savingsAmount !== undefined) return line.savingsAmount;
+  if (checkDate === today && !line.adjustmentTransactionId &&
+    line.bookBalance !== undefined && line.externalAmount !== undefined &&
+    line.expectedBalance === line.bookBalance - line.externalAmount)
+    return currentSavingsAmount;
+  return 0;
 }
 
 export function getReconciliationStatus(difference: number) {
@@ -102,6 +121,7 @@ export function buildReconciliationLine({
   expectedBalance,
   bookBalance,
   externalAmount,
+  savingsAmount,
   note = "",
   reason = "unknown",
 }: {
@@ -110,6 +130,7 @@ export function buildReconciliationLine({
   expectedBalance: number;
   bookBalance?: number;
   externalAmount?: number;
+  savingsAmount?: number;
   note?: string;
   reason?: ReconciliationReason;
 }): AccountReconciliationLine {
@@ -124,6 +145,7 @@ export function buildReconciliationLine({
     expectedBalance,
     ...(bookBalance !== undefined ? { bookBalance } : {}),
     ...(externalAmount !== undefined ? { externalAmount } : {}),
+    ...(savingsAmount !== undefined ? { savingsAmount } : {}),
     note: note.trim(),
     reason,
   };

@@ -10,11 +10,12 @@ export function isSavedSavingsResult(item: SavingsAllocation) {
 }
 
 /** The visible deduction belongs to the source for a reserve, or the destination for a transfer. */
-export function getSavingsHeldByAccount(ledger: SavingsBalanceLedger) {
-  const transfers = new Map(ledger.transactions.map((item) => [item.id, item]));
+export function getSavingsHeldByAccount(ledger: SavingsBalanceLedger, asOfDate?: string) {
+  const transfers = new Map(ledger.transactions.filter((item) => !asOfDate || item.date <= asOfDate)
+    .map((item) => [item.id, item]));
   const held = new Map<string, number>();
   for (const item of ledger.savingsAllocations ?? []) {
-    if (!isSavedSavingsResult(item)) continue;
+    if (!isSavedSavingsResult(item) || (asOfDate && item.date > asOfDate)) continue;
     let accountId = item.sourceAccountId;
     if (item.destination.kind === "transfer") {
       const transfer = item.transactionId ? transfers.get(item.transactionId) : undefined;

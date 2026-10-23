@@ -4,11 +4,13 @@ import {
   createReconciliationAdjustmentTransaction,
   createReconciliationTransferTransaction,
   getAccountReconciliationBasis,
+  getReconciliationSavingsAmountForLine,
   getReconciliationTotals,
 } from "../src/features/account-reconciliation/accountReconciliationModel.ts";
 import {
   calculateAccountBalanceAtDate,
 } from "../src/features/account-ledger/accountLedgerModel.ts";
+import { getSavingsHeldByAccount } from "../src/features/savings/domain/savingsBalance.ts";
 
 const account = {
   createdAt: "2026-07-01T00:00:00.000Z",
@@ -87,11 +89,13 @@ const accountWithOutsideMoney = {
 assert.deepEqual(getAccountReconciliationBasis(accountWithOutsideMoney, transactions, "2026-07-22"), {
   bookBalance: 250_000,
   externalAmount: 60_000,
+  savingsAmount: 0,
   expectedBalance: 190_000,
 });
 assert.deepEqual(getAccountReconciliationBasis(accountWithOutsideMoney, transactions, "2026-07-23"), {
   bookBalance: 750_000,
   externalAmount: 40_000,
+  savingsAmount: 0,
   expectedBalance: 710_000,
 });
 assert.equal(getAccountReconciliationBasis(accountWithOutsideMoney, transactions, "2026-07-19").externalAmount, 0);
@@ -102,6 +106,41 @@ const physicalLine = buildReconciliationLine({
 });
 assert.equal(physicalLine.difference, 0, "outside money is not a reconciliation shortfall");
 assert.equal(physicalLine.externalAmount, 60_000, "save the basis for historical checks");
+
+const savingsTransfer = { id: "saving-transfer:one", type: "transfer", accountId: "bank",
+  toAccountId: account.id, amount: 15_000, date: "2026-07-21" };
+const savingsAllocations = [
+  { id: "reserve", date: "2026-07-21", status: "allocated", amount: 20_000,
+    sourceAccountId: account.id, destination: { kind: "allocation" } },
+  { id: "transfer", date: "2026-07-21", status: "transferred", amount: 15_000,
+    sourceAccountId: "bank", destination: { kind: "transfer", accountId: account.id },
+    transactionId: savingsTransfer.id },
+  { id: "future", date: "2026-07-23", status: "allocated", amount: 30_000,
+    sourceAccountId: account.id, destination: { kind: "allocation" } },
+];
+const savingsTransactions = [...transactions, savingsTransfer];
+const savingsAtDate = getSavingsHeldByAccount({ transactions: savingsTransactions, savingsAllocations }, "2026-07-22");
+assert.equal(savingsAtDate.get(account.id), 35_000,
+  "reconciliation hides both reserved and transferred savings held in this account");
+assert.equal(savingsAtDate.get("bank") ?? 0, 0,
+  "a transfer has already reduced the source account and must not be deducted twice");
+const savingsBasis = getAccountReconciliationBasis(accountWithOutsideMoney, savingsTransactions,
+  "2026-07-22", savingsAtDate.get(account.id));
+assert.deepEqual(savingsBasis, { bookBalance: 265_000, externalAmount: 60_000,
+  savingsAmount: 35_000, expectedBalance: 170_000 });
+assert.equal(buildReconciliationLine({ account: accountWithOutsideMoney, actualBalance: 170_000,
+  ...savingsBasis }).difference, 0, "saving money alone must not become a reconciliation shortage");
+assert.equal(getSavingsHeldByAccount({ transactions: savingsTransactions, savingsAllocations },
+  "2026-07-20").get(account.id) ?? 0, 0, "future savings cannot change an earlier check");
+const oldSavedLine = buildReconciliationLine({ account: accountWithOutsideMoney,
+  actualBalance: 205_000, expectedBalance: 205_000, bookBalance: 265_000, externalAmount: 60_000 });
+assert.equal(getReconciliationSavingsAmountForLine(oldSavedLine, 35_000, "2026-07-22", "2026-07-22"),
+  35_000, "today's unadjusted legacy check adopts the savings deduction");
+assert.equal(getReconciliationSavingsAmountForLine(oldSavedLine, 35_000, "2026-07-22", "2026-07-23"),
+  0, "historical checks keep their saved expected balance");
+assert.equal(getReconciliationSavingsAmountForLine({ ...oldSavedLine, adjustmentTransactionId: "adjusted" },
+  35_000, "2026-07-22", "2026-07-22"), 0,
+"an adjustment that was already posted must not be recalculated");
 
 const surplusLine = buildReconciliationLine({
   account,

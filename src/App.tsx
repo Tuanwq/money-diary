@@ -3555,6 +3555,7 @@ if (route.kind === "daymark") {
               saveAccount={saveAccount}
               saveCheck={saveAccountReconciliation}
               saveTransaction={saveAccountTransaction}
+              savingsAllocations={savingsAllocations}
               transactions={accountTransactions}
             />
           )}
