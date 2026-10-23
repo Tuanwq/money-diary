@@ -15,6 +15,7 @@
     "test:account-external": "node --experimental-strip-types scripts/accountExternal.test.mjs",
     "test:debt": "node --experimental-strip-types scripts/debtModel.test.mjs",
     "test:spending-jars": "node --experimental-strip-types scripts/spendingJars.test.mjs",
+    "test:savings": "node --experimental-strip-types scripts/savings.test.mjs",
     "test:photo-finance": "node --experimental-strip-types scripts/photoFinance.test.mjs",
     "test:app-toast": "node --experimental-strip-types scripts/appToast.test.mjs",
     "test:reconciliation": "node --experimental-strip-types scripts/accountReconciliation.test.mjs",

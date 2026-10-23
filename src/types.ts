@@ -98,6 +98,7 @@ export type Page =
   | "home"
   | "photoJournal"
   | "spendingJars"
+  | "savings"
   | "goals"
   | "entry"
   | "closeDay"

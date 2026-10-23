@@ -5,6 +5,7 @@ import {
   FileClock,
   FileText,
   LogOut,
+  PiggyBank,
   RefreshCcw,
   Scale,
   Settings,
@@ -26,6 +27,7 @@ type MoneyMoreSheetProps = {
   onLogout: () => void;
   onOpenAnalytics: () => void;
   onOpenAccountLedger: () => void;
+  onOpenSavings: () => void;
   onOpenAccountReconciliation: () => void;
   onOpenBalanceChecks: () => void;
   onOpenChangeLog: () => void;
@@ -47,6 +49,7 @@ export function MoneyMoreSheet({
   onLogout,
   onOpenAnalytics,
   onOpenAccountLedger,
+  onOpenSavings,
   onOpenAccountReconciliation,
   onOpenBalanceChecks,
   onOpenChangeLog,
@@ -71,6 +74,7 @@ export function MoneyMoreSheet({
       label: "Sổ tài khoản",
       onClick: onOpenAccountLedger,
     },
+    { icon: PiggyBank, label: "Tiết kiệm", onClick: onOpenSavings },
     {
       icon: Scale,
       label: "Kiểm kê tài khoản",

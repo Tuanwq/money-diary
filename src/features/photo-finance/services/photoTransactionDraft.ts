@@ -20,6 +20,7 @@ export function buildPhotoTransaction(input: {
   date: string;
   time: string;
   note: string;
+  isWorkExpense?: boolean;
   now: string;
 }): AccountTransaction {
   const activeAccount = (id?: string) => input.accounts.some(
@@ -51,6 +52,7 @@ export function buildPhotoTransaction(input: {
     date: input.date,
     occurredAt: vietnamOccurredAt(input.date, input.time),
     note: input.note.trim(),
+    isWorkExpense: input.type === "expense" ? input.isWorkExpense : undefined,
     source: input.existing ? input.existing.source : "photo_finance",
     createdAt: input.existing?.createdAt ?? input.now,
     updatedAt: input.now,

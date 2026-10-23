@@ -11,7 +11,7 @@ import type { JarCommand } from "../../spending-jars/services/jarService.ts";
 
 export function PhotoCaptureSheet({ accounts, categories, onCategoryCommand, jars, jarActivities, transactions, onJarCommand,
   existing, initialDate, isOpen, ownerId,
-  repository, dayHasPhotos, onClose, onSaved, onSaveTransaction, onStartNew, formKey }: {
+  repository, dayHasPhotos, onClose, onSaved, onSaveTransaction, onStartNew, onUploadBusyChange, formKey }: {
   accounts: FinancialAccount[]; existing?: AccountTransaction;
   categories: TransactionCategory[]; onCategoryCommand: (command: CategoryCommand) => void;
   jars: SpendingJar[]; jarActivities: JarActivity[]; transactions: AccountTransaction[];
@@ -22,6 +22,7 @@ export function PhotoCaptureSheet({ accounts, categories, onCategoryCommand, jar
   onClose: () => void; onSaved: (transactionId: string, date: string, attachment?: PhotoAttachment) => void;
   onSaveTransaction: (transaction: AccountTransaction) => void;
   onStartNew: () => void;
+  onUploadBusyChange: (busy: boolean) => void;
   formKey: number;
 }) {
   usePhotoDialog(isOpen, onClose);
@@ -38,7 +39,8 @@ export function PhotoCaptureSheet({ accounts, categories, onCategoryCommand, jar
         transactions={transactions} onJarCommand={onJarCommand} existing={existing} initialDate={initialDate}
         key={`${existing?.id ?? "new"}-${formKey}`} ownerId={ownerId} repository={repository}
         dayHasPhotos={dayHasPhotos}
-        onSaved={onSaved} onSaveTransaction={onSaveTransaction} onStartNew={onStartNew} />
+        onSaved={onSaved} onSaveTransaction={onSaveTransaction} onStartNew={onStartNew}
+        onUploadBusyChange={onUploadBusyChange} />
     </section>
   </div>, document.body);
 }

@@ -26,6 +26,7 @@ type PhotoJournalPageProps = {
   onDeleteTransaction: (transactionId: string) => void;
   onSaveTransaction: (transaction: AccountTransaction) => void;
   onJarCommand: (command: JarCommand) => void;
+  onUploadBusyChange: (busy: boolean) => void;
   transactions: AccountTransaction[];
 };
 
@@ -44,6 +45,7 @@ export function PhotoJournalPage({
   onDeleteTransaction,
   onSaveTransaction,
   onJarCommand,
+  onUploadBusyChange,
   transactions,
 }: PhotoJournalPageProps) {
   return (
@@ -82,6 +84,7 @@ export function PhotoJournalPage({
         onDeleteTransaction={onDeleteTransaction}
         onSaveTransaction={onSaveTransaction}
         onJarCommand={onJarCommand}
+        onUploadBusyChange={onUploadBusyChange}
         transactions={transactions}
       />
     </div>

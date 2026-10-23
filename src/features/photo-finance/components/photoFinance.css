@@ -205,3 +205,5 @@
 .photo-finance-jar-link label{display:grid;gap:5px;font-size:12px;font-weight:700;color:var(--pf-text)}
 .photo-finance-jar-link select{min-width:0;width:100%;min-height:42px;padding:8px;border:1px solid var(--pf-line);border-radius:9px;background:var(--pf-card);color:var(--pf-text)}
 .photo-finance-jar-link small{color:var(--pf-muted);line-height:1.4}
+.photo-finance-work-cost{display:flex;align-items:center;gap:9px;padding:8px 12px;color:var(--pf-muted);font-size:12px;line-height:1.4}
+.photo-finance-work-cost input{width:17px;height:17px;accent-color:#71c987;flex:none}

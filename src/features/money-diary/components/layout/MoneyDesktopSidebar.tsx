@@ -10,6 +10,7 @@ import {
   House,
   LogOut,
   PackagePlus,
+  PiggyBank,
   RefreshCcw,
   Scale,
   Settings,
@@ -90,6 +91,8 @@ export function MoneyDesktopSidebar({
       label: "Hũ chi tiêu",
       onClick: () => navigateTo("spendingJars"),
     },
+    { active: currentPage === "savings", icon: PiggyBank, label: "Tiết kiệm",
+      onClick: () => navigateTo("savings") },
     {
       active: currentPage === "goals",
       icon: Goal,

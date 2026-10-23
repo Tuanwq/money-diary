@@ -1,4 +1,4 @@
-import type { AccountTransaction } from "../../account-ledger/accountLedgerModel.ts";
+import { isSavingsTransfer, type AccountTransaction } from "../../account-ledger/accountLedgerModel.ts";
 import type { DailyEntry, ExpenseEntry } from "../../../types.ts";
 import { getExpenseTotal, getTotalEntryMoney } from "../../../utils/entries.ts";
 import type { PhotoAttachment } from "../types/photoFinance.ts";
@@ -29,7 +29,7 @@ export function buildStoryTimeline(date: string, transactions: AccountTransactio
   }
   return [
     ...transactions.filter((transaction) => {
-      if (transaction.date !== date ||
+      if (isSavingsTransfer(transaction) || transaction.date !== date ||
         !(isIndependentReportingTransaction(transaction) || transaction.type === "transfer")) return false;
       if (transaction.jarActivityId) {
         if (seenJarActivities.has(transaction.jarActivityId)) return false;

@@ -70,6 +70,8 @@ export type BackupSourceData = {
     jarActivities?: import("../spending-jars/domain/jarModel.ts").JarActivity[];
     categories?: import("../account-ledger/accountLedgerModel.ts").TransactionCategory[];
     debts?: import("../account-ledger/debtModel.ts").Debt[];
+    savingsRules?: import("../savings/domain/savingsModel.ts").SavingsRule[];
+    savingsAllocations?: import("../savings/domain/savingsModel.ts").SavingsAllocation[];
   };
   automation: {
     logs: AutomationRunLog[];
@@ -303,6 +305,8 @@ function normalizeSnapshot(snapshot: BackupSnapshot): BackupSnapshot {
         categories: Array.isArray(source.accounts?.categories)
           ? source.accounts.categories : undefined,
         debts: Array.isArray(source.accounts?.debts) ? source.accounts.debts : [],
+        savingsRules: Array.isArray(source.accounts?.savingsRules) ? source.accounts.savingsRules : [],
+        savingsAllocations: Array.isArray(source.accounts?.savingsAllocations) ? source.accounts.savingsAllocations : [],
       },
       automation: {
         logs: Array.isArray(source.automation?.logs)

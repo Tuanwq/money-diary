@@ -1,0 +1,74 @@
+.savings-page { max-width: 1120px; margin: 0 auto; padding: clamp(18px, 3vw, 36px); color: #19382d; }
+.savings-page-header { display: flex; align-items: center; gap: 16px; margin-bottom: 24px; }
+.savings-page-header > div { flex: 1; min-width: 0; }
+.savings-page-header small, .savings-dialog-head small { color: #608171; font-size: .7rem; font-weight: 700; letter-spacing: .1em; }
+.savings-page-header h1, .savings-dialog h2 { margin: 2px 0; color: #172f26; }
+.savings-page-header p { margin: 0; color: #65776d; }
+.savings-back, .savings-quiet-button, .savings-primary-button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 42px; border-radius: 12px; padding: 9px 15px; font: inherit; font-weight: 650; cursor: pointer; }
+.savings-back, .savings-quiet-button { background: #fff; color: #19382d; border: 1px solid #d5e2d9; }
+.savings-back { width: 44px; padding: 0; }
+.savings-primary-button { background: #204b38; color: #fff; border: 1px solid #204b38; }
+.savings-primary-button:disabled { opacity: .5; cursor: not-allowed; }
+.savings-text-button { background: transparent; color: #285a42; border: 0; font: inherit; font-weight: 650; cursor: pointer; padding: 6px; }
+.savings-summary-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 18px; }
+.savings-summary-grid > section, .savings-panel { background: #fff; border: 1px solid #d8e5da; border-radius: 20px; box-shadow: 0 6px 20px rgba(24, 53, 38, .035); }
+.savings-summary-grid > section { display: flex; flex-direction: column; gap: 8px; padding: 20px; min-width: 0; }
+.savings-summary-grid small, .savings-summary-grid span { color: #61796a; }
+.savings-summary-grid strong { font-size: clamp(1.1rem, 2vw, 1.6rem); overflow-wrap: anywhere; }
+.savings-summary-grid progress { width: 100%; height: 8px; accent-color: #4b8062; }
+.savings-panel { padding: 20px; margin-bottom: 16px; }
+.savings-section-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.savings-section-heading h2, .savings-section-heading > span:first-child { display: inline-flex; align-items: center; gap: 9px; margin: 0; font-size: 1.05rem; font-weight: 750; }
+.savings-section-heading > span:last-child { color: #6b8171; }
+.savings-rule-row, .savings-history-row { padding: 15px 0; border-top: 1px solid #e8eee9; }
+.savings-rule-row { display: flex; align-items: center; justify-content: space-between; gap: 15px; }
+.savings-rule-row > div:first-child, .savings-history-main > div { display: flex; flex-direction: column; gap: 5px; }
+.savings-rule-row small, .savings-history-main small { color: #6b8171; line-height: 1.4; }
+.savings-row-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.savings-row-actions input { width: 135px; min-height: 42px; border: 1px solid #d5e2d9; border-radius: 12px; padding: 8px 12px; font: inherit; }
+.savings-history-main { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 8px; }
+.savings-history-amount { white-space: nowrap; color: #275941; }
+.savings-history-filters { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; padding: 12px 0 16px; }
+.savings-history-filters label { display: grid; gap: 5px; min-width: 0; font-size: .78rem; font-weight: 650; color: #607569; }
+.savings-history-filters select { width: 100%; min-width: 0; min-height: 42px; padding: 8px 10px; border: 1px solid #d5e2d9; border-radius: 11px; background: #fff; color: #19382d; font: inherit; font-size: .9rem; }
+.savings-history-details { margin: 4px 0 12px; color: #557062; }
+.savings-history-details summary { width: fit-content; cursor: pointer; font-size: .83rem; font-weight: 650; }
+.savings-history-details dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px 18px; margin: 11px 0 0; padding: 12px; background: #f4f8f4; border-radius: 12px; }
+.savings-history-details dl > div { display: flex; justify-content: space-between; gap: 10px; min-width: 0; font-size: .82rem; }
+.savings-history-details dt { color: #667d6c; }
+.savings-history-details dd { margin: 0; font-weight: 650; color: #254b37; text-align: right; }
+.savings-empty { color: #687e6f; margin: 12px 0 2px; }
+.savings-error { padding: 12px 14px; border: 1px solid #e8bdb7; border-radius: 12px; background: #fff3f0; color: #a3392e; }
+.savings-today-card { margin: 0 0 18px; padding: 20px; }
+.savings-today-message { color: #63796a; margin: 8px 0 16px; }
+.savings-today-numbers { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 12px 0 16px; }
+.savings-today-numbers > div { display: flex; flex-direction: column; gap: 5px; }
+.savings-today-numbers small { color: #65796b; }
+.savings-today-numbers strong { font-size: 1.15rem; color: #204b38; }
+.savings-card-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.savings-dialog-backdrop { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 18px; background: rgba(15, 29, 22, .46); }
+.savings-dialog { width: min(680px, 100%); max-height: min(88dvh, 850px); overflow: auto; background: #fff; border-radius: 22px; padding: 24px; box-shadow: 0 20px 65px rgba(13, 33, 21, .2); }
+.savings-dialog-head { display: flex; justify-content: space-between; gap: 12px; align-items: start; margin-bottom: 18px; }
+.savings-rule-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.savings-field { display: flex; flex-direction: column; gap: 7px; color: #345544; font-size: .9rem; font-weight: 650; min-width: 0; }
+.savings-field input, .savings-field select { width: 100%; min-height: 46px; border: 1px solid #d5e2d9; border-radius: 12px; padding: 10px 12px; background: #fff; color: #203b2c; font: inherit; }
+.savings-full { grid-column: 1 / -1; }
+.savings-range { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.savings-form-actions { display: flex; justify-content: flex-end; gap: 9px; padding-top: 5px; }
+@media (max-width: 650px) {
+  .savings-page { padding: 16px 16px 105px; }
+  .savings-page-header { flex-wrap: wrap; }
+  .savings-page-header > .savings-primary-button { margin-left: auto; }
+  .savings-summary-grid { grid-template-columns: 1fr 1fr; }
+  .savings-summary-grid > section:last-child { grid-column: 1 / -1; }
+  .savings-panel { padding: 16px; }
+  .savings-rule-row { align-items: flex-start; flex-direction: column; }
+  .savings-dialog-backdrop { align-items: flex-end; padding: 0; }
+  .savings-dialog { width: 100%; max-height: 90dvh; border-radius: 22px 22px 0 0; padding: 22px 18px max(22px, env(safe-area-inset-bottom)); }
+  .savings-rule-form { grid-template-columns: 1fr; }
+  .savings-full { grid-column: 1; }
+  .savings-today-numbers { grid-template-columns: 1fr 1fr; }
+  .savings-history-filters, .savings-history-details dl { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .savings-history-main { align-items: flex-start; }
+  .savings-history-amount { font-size: .98rem; }
+}

@@ -5,7 +5,7 @@ import { PHOTO_FINANCE_BUCKET, PHOTO_FINANCE_SOURCE_TYPE,
 import { processPhoto, type ProcessedPhoto } from "./photoImageProcessor.ts";
 import { photoFinanceErrorMessage, retryPhotoOperation } from "./photoFinanceErrors.ts";
 import { createSignedPhotoCache } from "./signedPhotoCache.ts";
-import { uploadProcessedPhotoImages } from "./photoUploadService.ts";
+import { photoUploadModeForSize, uploadProcessedPhotoImages } from "./photoUploadService.ts";
 
 type AttachmentRow = {
   id: string; owner_id: string; source_type: string; source_id: string;
@@ -48,11 +48,11 @@ export function createPhotoAttachmentRepository(client: SupabaseClient = supabas
   });
   return {
     async prepare(ownerId: string) {
-      await requireOwner(client, ownerId);
-      if (readyOwner === ownerId && Date.now() < readyUntil) return;
       if (preparing?.ownerId === ownerId) return preparing.promise;
       const promise = (async () => {
         try {
+          await requireOwner(client, ownerId);
+          if (readyOwner === ownerId && Date.now() < readyUntil) return;
           await unwrap(() => client.from("money_diary_financial_attachments")
             .select("id").eq("owner_id", ownerId).limit(1));
           readyOwner = ownerId;
@@ -120,7 +120,7 @@ export function createPhotoAttachmentRepository(client: SupabaseClient = supabas
         await uploadProcessedPhotoImages(image, storagePath, thumbnailPath,
           (path, bytes) => storage.upload(path, bytes,
             { contentType: "image/jpeg", upsert: true }),
-          image.display.size + image.thumbnail.size <= 1_000_000 ? "parallel" : "sequential");
+          photoUploadModeForSize(image.display.size + image.thumbnail.size));
         const data = await unwrap(() => client.from("money_diary_financial_attachments")
           .upsert({ id, owner_id: ownerId, source_type: PHOTO_FINANCE_SOURCE_TYPE,
             source_id: transactionId, storage_path: storagePath,

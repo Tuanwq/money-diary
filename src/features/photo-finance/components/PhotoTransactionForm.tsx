@@ -21,7 +21,7 @@ type Repository = ReturnType<typeof createPhotoAttachmentRepository>;
 
 export function PhotoTransactionForm({ accounts, categories, onCategoryCommand, jars, jarActivities, transactions, onJarCommand,
   existing, initialDate, ownerId,
-  repository, dayHasPhotos, onSaved, onSaveTransaction, onStartNew }: {
+  repository, dayHasPhotos, onSaved, onSaveTransaction, onStartNew, onUploadBusyChange }: {
   accounts: FinancialAccount[];
   categories: TransactionCategory[];
   onCategoryCommand: (command: CategoryCommand) => void;
@@ -35,6 +35,7 @@ export function PhotoTransactionForm({ accounts, categories, onCategoryCommand, 
   onSaved: (transactionId: string, date: string, attachment?: PhotoAttachment) => void;
   onSaveTransaction: (transaction: AccountTransaction) => void;
   onStartNew: () => void;
+  onUploadBusyChange: (busy: boolean) => void;
 }) {
   const now = new Date();
   const activeAccounts = accounts.filter((account) => !account.archivedAt);
@@ -58,6 +59,7 @@ export function PhotoTransactionForm({ accounts, categories, onCategoryCommand, 
   const [jarSourceId, setJarSourceId] = useState("");
   const [toAccountId, setToAccountId] = useState(existing?.toAccountId ?? "");
   const [note, setNote] = useState(existing?.note ?? "");
+  const [isWorkExpense, setIsWorkExpense] = useState(existing?.isWorkExpense ?? false);
   const [date, setDate] = useState(existing?.date ?? initialDate ?? vietnamFinancialDate(now));
   const [time, setTime] = useState(existing?.occurredAt
     ? vietnamFinancialTime(new Date(existing.occurredAt)) : vietnamFinancialTime(now));
@@ -66,12 +68,14 @@ export function PhotoTransactionForm({ accounts, categories, onCategoryCommand, 
   } | null>(null);
   const [savedId, setSavedId] = useState<string | null>(null);
   const [working, setWorking] = useState(false);
+  const [retryingPhoto, setRetryingPhoto] = useState(false);
   const [preparingPhoto, setPreparingPhoto] = useState(false);
   const [error, setError] = useState("");
   const lockRef = useRef(false);
   const photoSelectionRef = useRef(0);
   const processingRef = useRef<AbortController | null>(null);
   useEffect(() => () => { processingRef.current?.abort(); }, []);
+  useEffect(() => () => onUploadBusyChange(false), [onUploadBusyChange]);
   useEffect(() => () => {
     if (selectedPhoto?.previewUrl) URL.revokeObjectURL(selectedPhoto.previewUrl);
   }, [selectedPhoto]);
@@ -97,15 +101,17 @@ export function PhotoTransactionForm({ accounts, categories, onCategoryCommand, 
     photoSelectionRef.current = selection;
     setError("");
     setPreparingPhoto(true);
-    setSelectedPhoto({ file: next, previewUrl: "" });
+    // Show the camera image immediately while Safari decodes and compresses it.
+    const rawPreviewUrl = URL.createObjectURL(next);
+    setSelectedPhoto({ file: next, previewUrl: rawPreviewUrl });
+    // The storage check is independent of image decoding and can run while the
+    // user enters the amount. submit() joins the same in-flight request.
+    if (ownerId) void repository.prepare(ownerId).catch(() => undefined);
     try {
-      const processed = await processPhoto(next, controller.signal);
+      const processed = await processPhoto(next, controller.signal, rawPreviewUrl);
       if (!controller.signal.aborted && photoSelectionRef.current === selection) {
         const previewUrl = URL.createObjectURL(processed.display);
         setSelectedPhoto({ file: next, previewUrl, processed });
-        // Check Storage/database access while the user enters the amount.
-        // submit() joins this request instead of paying the latency afterward.
-        if (ownerId) void repository.prepare(ownerId).catch(() => undefined);
       }
     } catch (cause) {
       if (!controller.signal.aborted && photoSelectionRef.current === selection)
@@ -128,6 +134,8 @@ export function PhotoTransactionForm({ accounts, categories, onCategoryCommand, 
     event.preventDefault();
     if (lockRef.current) return;
     lockRef.current = true;
+    onUploadBusyChange(true);
+    setRetryingPhoto(Boolean(savedId));
     setWorking(true);
     setError("");
     try {
@@ -147,7 +155,7 @@ export function PhotoTransactionForm({ accounts, categories, onCategoryCommand, 
       const transaction = savedId || selectedJar ? null : buildPhotoTransaction({
         id: transactionId, accounts, existing, type: kind, amount: value,
         accountId, toAccountId, category, categoryId: activeCategoryId || undefined,
-        purpose: effectivePurpose, date, time, note,
+        purpose: effectivePurpose, date, time, note, isWorkExpense,
         now: new Date().toISOString(),
       });
 
@@ -158,7 +166,8 @@ export function PhotoTransactionForm({ accounts, categories, onCategoryCommand, 
       if (selectedJar && !savedId) {
         onJarCommand({ kind: "spend", id: activityId, now: new Date().toISOString(),
           jarId: selectedJar.id, amount: value, accountId: jarSourceId || undefined,
-          date, category, note, purpose: effectivePurpose === "goal_allocation" ? "goal_allocation" : "daily_expense",
+          date, category, note, isWorkExpense,
+          purpose: effectivePurpose === "goal_allocation" ? "goal_allocation" : "daily_expense",
           occurredAt: new Date(`${date}T${time}:00+07:00`).toISOString() });
         setSavedId(transactionId);
       } else if (transaction) {
@@ -174,7 +183,7 @@ export function PhotoTransactionForm({ accounts, categories, onCategoryCommand, 
       onSaved(transactionId, date, attachment);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Không lưu được khoảnh khắc.");
-    } finally { lockRef.current = false; setWorking(false); }
+    } finally { lockRef.current = false; setWorking(false); onUploadBusyChange(false); }
   }
 
   const inputProps = {
@@ -321,9 +330,14 @@ export function PhotoTransactionForm({ accounts, categories, onCategoryCommand, 
           ? "Cần ít nhất hai tài khoản đang hoạt động để chuyển tiền."
           : "Chuyển giữa các tài khoản của bạn; không tính vào thu, chi hoặc tiến độ mục tiêu."}</small>
       </div>}
+      {kind === "expense" && <label className="photo-finance-work-cost">
+        <input type="checkbox" disabled={!canEdit} checked={isWorkExpense}
+          onChange={(event) => setIsWorkExpense(event.target.checked)} />
+        Chi phí phục vụ công việc (trừ khỏi thu nhập ròng khi tiết kiệm)
+      </label>}
     </>}
 
-    {savedId && <p className="photo-finance-retry" role="status">Giao dịch đã lưu một lần. Nút bên dưới chỉ tải lại ảnh.
+    {savedId && !working && <p className="photo-finance-retry" role="status">Giao dịch đã lưu một lần. Nút bên dưới chỉ tải lại ảnh.
       <button onClick={onStartNew} type="button">Tạo khoảnh khắc khác</button></p>}
     <PopupNotice message={error} />
 
@@ -339,7 +353,7 @@ export function PhotoTransactionForm({ accounts, categories, onCategoryCommand, 
     {showCategoryManager && <TransactionCategoryManager categories={categories} transactions={transactions}
       onCommand={onCategoryCommand} onClose={() => setShowCategoryManager(false)} />}
     {(working || preparingPhoto) && <p className="photo-finance-working" role="status">
-      {preparingPhoto ? "Đang tối ưu ảnh..." : savedId ? "Đang tải ảnh lại..." : "Đang tải ảnh riêng tư..."}
+      {preparingPhoto ? "Đang tối ưu ảnh..." : retryingPhoto ? "Đang tải ảnh lại..." : "Đang tải ảnh riêng tư..."}
     </p>}
   </form>;
 }

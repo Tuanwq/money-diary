@@ -8,6 +8,8 @@ import { RecentTransactions } from "../features/money-diary/components/dashboard
 import { buildDashboardJarFlow, buildManagerOverview } from "../features/money-diary/utils/managerDashboardSelectors";
 import { useMemo } from "react";
 import type { AccountTransaction } from "../features/account-ledger/accountLedgerModel";
+import type { AccountLedgerData } from "../features/account-ledger/accountLedgerModel";
+import { SavingsTodayCard } from "../features/savings/components/SavingsTodayCard.tsx";
 import type { JarActivity } from "../features/spending-jars/domain/jarModel.ts";
 import { getFinancialPosition } from "../features/spending-jars/domain/financialPosition.ts";
 import type { MainGoalProgressSummary } from "../features/goals/domain/mainGoalProgress";
@@ -27,6 +29,7 @@ type HomePageProps = {
   actualMoney: number;
   spendableMoney: number;
   financialPosition: ReturnType<typeof getFinancialPosition>;
+  savingsLedger: AccountLedgerData;
   jarActivities: JarActivity[];
   balanceChecks: BalanceCheckEntry[];
   cloudLoadError: string | null;
@@ -60,6 +63,7 @@ export function HomePage({
   actualMoney,
   spendableMoney,
   financialPosition,
+  savingsLedger,
   jarActivities,
   balanceChecks,
   cloudLoadError,
@@ -117,6 +121,9 @@ export function HomePage({
         onOpenJournal={onOpenJournal}
         spendableMoney={spendableMoney}
       />
+
+      {isSelectedToday && <SavingsTodayCard ledger={savingsLedger} date={todayString}
+        onOpen={() => navigateTo("savings")} />}
 
       <MainGoalCard name={mainGoalName} onOpenGoals={openGoal} summary={mainGoal} />
 

@@ -5,6 +5,8 @@ import { useAccountLedger } from "./features/account-ledger/useAccountLedger";
 import { selectTrustedLegacyBudgets } from "./features/account-ledger/ledgerStorageScope.ts";
 import { getLedgerSummary } from "./features/account-ledger/accountLedgerModel";
 import type { AccountTransaction } from "./features/account-ledger/accountLedgerModel.ts";
+import { useSavings } from "./features/savings/hooks/useSavings.ts";
+import { getSavingsHeldAmount } from "./features/savings/domain/savingsModel.ts";
 import { calculateActualAvailableBalance } from "./features/account-ledger/accountExternalModel.ts";
 import { getFinancialPosition } from "./features/spending-jars/domain/financialPosition.ts";
 import { deleteAccountTransactionWithPhotos } from "./features/photo-finance/services/photoTransactionService.ts";
@@ -208,6 +210,9 @@ const LazySpendingJarsPage = lazy(() =>
   import("./features/spending-jars/pages/SpendingJarsPage").then((module) => ({
     default: module.SpendingJarsPage,
   }))
+);
+const LazySavingsPage = lazy(() =>
+  import("./features/savings/pages/SavingsPage").then((module) => ({ default: module.SavingsPage }))
 );
 
 function LazyRouteFallback() {
@@ -656,6 +661,7 @@ export default function App() {
   const { page, goalId, goalScreen, navigateTo, returnFromPhotoJournal, resetMoneyNavigation } =
     useAppNavigation();
   const [photoCaptureIntent, setPhotoCaptureIntent] = useState<string | null>(null);
+  const [photoUploadBusy, setPhotoUploadBusy] = useState(false);
   const [ledgerEditIntent, setLedgerEditIntent] = useState<string | null>(null);
   const consumeLedgerEditIntent = useCallback(() => setLedgerEditIntent(null), []);
   const actionReturnLocationRef = useRef<ActionReturnLocation | null>(null);
@@ -712,6 +718,10 @@ export default function App() {
     categories: transactionCategories,
     dispatchExternal,
     dispatchDebt,
+    dispatchSavings,
+    savingsSchemaReady,
+    savingsRules,
+    savingsAllocations,
     debts,
     jars,
     jarActivities,
@@ -723,7 +733,7 @@ export default function App() {
     saveTransaction: saveAccountTransaction,
     transactions: accountTransactions,
   } = useAccountLedger(cloudDataUserId, selectTrustedLegacyBudgets(cloudDataUserId,
-    isMoneyCloudSyncEnabled, remoteLegacyBudgets, goals.expenseBudgets));
+    isMoneyCloudSyncEnabled, remoteLegacyBudgets, goals.expenseBudgets), photoUploadBusy);
   function openLedgerTransaction(transaction: AccountTransaction) {
     setLedgerEditIntent(transaction.id);
     navigateTo("accounts");
@@ -774,6 +784,8 @@ export default function App() {
         expenses,
         financialAccounts,
         debts,
+        savingsRules,
+        savingsAllocations,
         jars,
         jarActivities,
         transactionCategories,
@@ -793,6 +805,8 @@ export default function App() {
       expenses,
       financialAccounts,
       debts,
+      savingsRules,
+      savingsAllocations,
       jars,
       jarActivities,
       transactionCategories,
@@ -1158,7 +1172,9 @@ async function restoreBackup(
       snapshot.data.accounts.jars ?? [],
       snapshot.data.accounts.jarActivities ?? [],
       snapshot.data.accounts.categories,
-      snapshot.data.accounts.debts ?? []
+      snapshot.data.accounts.debts ?? [],
+      snapshot.data.accounts.savingsRules ?? [],
+      snapshot.data.accounts.savingsAllocations ?? []
     );
     replaceReconciliationState(
       snapshot.data.accounts.reconciliations ?? []
@@ -1205,7 +1221,21 @@ async function restoreBackup(
     createCloseDayForm()
   );
 
-  const todayString = getToday();
+  const [todayString, setTodayString] = useState(getToday);
+  useEffect(() => {
+    const refreshDay = () => setTodayString((previous) => {
+      const current = getToday();
+      return previous === current ? previous : current;
+    });
+    window.addEventListener("focus", refreshDay);
+    document.addEventListener("visibilitychange", refreshDay);
+    const timer = window.setInterval(refreshDay, 60_000);
+    return () => {
+      window.removeEventListener("focus", refreshDay);
+      document.removeEventListener("visibilitychange", refreshDay);
+      window.clearInterval(timer);
+    };
+  }, []);
   const isSelectedToday = selectedDate === todayString;
   const selectedDateObject = toDate(selectedDate);
 
@@ -1582,19 +1612,24 @@ const balanceChartTitle =
     ? `Từ ngày bắt đầu hành trình: ${currentGoalStartDate}`
     : `${balanceChartDays} ngày gần nhất`;
 
+const savingsHeld = getSavingsHeldAmount({ transactions: accountTransactions, savingsAllocations });
 const actualMoney = getLedgerSummary(
   financialAccounts, accountTransactions, todayString.slice(0, 7)
-).totalBalance;
+).totalBalance - savingsHeld;
 const spendableMoney = calculateActualAvailableBalance({
   accounts: financialAccounts,
   transactions: accountTransactions,
   jars,
   jarActivities,
   updatedAt: "",
-});
+}) - savingsHeld;
 const financialPosition = useMemo(() => getFinancialPosition({
+  accounts: financialAccounts, transactions: accountTransactions, jars, jarActivities, savingsAllocations,
+}), [financialAccounts, accountTransactions, jars, jarActivities, savingsAllocations]);
+const { ledger: savingsLedger, onCommand: handleSavingsCommand } = useSavings({
   accounts: financialAccounts, transactions: accountTransactions, jars, jarActivities,
-}), [financialAccounts, accountTransactions, jars, jarActivities]);
+  savingsRules, savingsAllocations,
+}, dispatchSavings, todayString, savingsSchemaReady, accountLedgerCloudStatus);
 
 const mainGoalProgress = useMemo(
   () => buildMainGoalProgress({
@@ -3480,6 +3515,7 @@ if (route.kind === "daymark") {
               debts={debts}
               jars={jars}
               jarActivities={jarActivities}
+              savingsAllocations={savingsAllocations}
               onJarCommand={dispatchJar}
               archiveAccount={archiveAccount}
               cloudStatus={accountLedgerCloudStatus}
@@ -3528,6 +3564,7 @@ if (route.kind === "daymark") {
               legacyMoneyToolsVisible={legacyMoneyToolsVisible}
               spendableMoney={spendableMoney}
               financialPosition={financialPosition}
+              savingsLedger={savingsLedger}
               jarActivities={jarActivities}
               balanceChecks={balanceChecks}
               cloudLoadError={cloudLoadError}
@@ -3574,12 +3611,13 @@ if (route.kind === "daymark") {
               onDeleteTransaction={deleteAccountTransaction}
               onSaveTransaction={saveAccountTransaction}
               onJarCommand={dispatchJar}
+              onUploadBusyChange={setPhotoUploadBusy}
               transactions={accountTransactions}
             />
           )}
           {page === "spendingJars" && (
             <LazySpendingJarsPage
-              ledger={{ accounts: financialAccounts, transactions: accountTransactions, jars, jarActivities }}
+              ledger={{ accounts: financialAccounts, transactions: accountTransactions, jars, jarActivities, savingsAllocations }}
               cloudStatus={accountLedgerCloudStatus}
               onBack={() => navigateTo("home")}
               onCommand={dispatchJar}
@@ -3591,6 +3629,11 @@ if (route.kind === "daymark") {
                   cloudDataUserId, deleteAccountTransaction);
               }}
             />
+          )}
+          {page === "savings" && (
+            <LazySavingsPage ledger={savingsLedger} goals={goals.subGoals} today={todayString}
+              onBack={() => navigateTo("home")} onCommand={handleSavingsCommand}
+              schemaReady={savingsSchemaReady} />
           )}
           {page === "goals" && (
             <LazyGoalsPage

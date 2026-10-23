@@ -31,6 +31,7 @@ const moneyPagePaths: Record<Page, string> = {
   home: "/money",
   photoJournal: "/money/photo-journal",
   spendingJars: "/money/spending-jars",
+  savings: "/money/savings",
   hub: "/money/hub",
   settings: "/money/settings",
 };
@@ -126,6 +127,7 @@ export function getMoneyStateFromPath(pathname: string): AppHistoryState {
     return { page: "photoJournal", goalScreen: "menu" };
   }
   if (segment === "spending-jars") return { page: "spendingJars", goalScreen: "menu" };
+  if (segment === "savings") return { page: "savings", goalScreen: "menu" };
   if (segment === "hub") return { page: "hub", goalScreen: "menu" };
   if (segment === "settings") return { page: "settings", goalScreen: "menu" };
 

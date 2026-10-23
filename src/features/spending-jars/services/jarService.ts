@@ -15,7 +15,7 @@ export type JarCommand =
   | ({ kind: "transfer"; jarId: string; toJarId: string; accountId: string; amount: number } & Context)
   | ({ kind: "spend"; jarId: string; amount: number; accountId?: string; date: string;
       category: string; note: string; purpose: "daily_expense" | "goal_allocation";
-      activityId?: string; occurredAt?: string } & Context)
+      activityId?: string; occurredAt?: string; isWorkExpense?: boolean } & Context)
   | ({ kind: "refund"; jarId: string; accountId: string; amount: number; date: string;
       note: string; purpose?: "daily_expense" | "goal_allocation" } & Context)
   | ({ kind: "delete_spend"; jarId: string; activityId: string } & Context)
@@ -198,6 +198,7 @@ export function applyJarCommand(ledger: JarLedger, command: JarCommand): JarLedg
       return { id, accountId: line.accountId, amount: line.amount, category: command.category.trim(),
         date: command.date, note: command.note.trim(), type: "expense",
         purpose: command.purpose as TransactionPurpose, source: "spending_jar",
+        isWorkExpense: command.isWorkExpense ?? oldTransactions.get(id)?.isWorkExpense,
         jarId: jar.id, jarActivityId: activityId,
         occurredAt: command.occurredAt ?? oldTransactions.get(id)?.occurredAt,
         createdAt: oldTransactions.get(id)?.createdAt ?? command.now, updatedAt: command.now };

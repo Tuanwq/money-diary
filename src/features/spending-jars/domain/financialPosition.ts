@@ -1,6 +1,9 @@
 import { calculateAccountBalance } from "../../account-ledger/accountLedgerModel.ts";
 import { calculateAccountExternalAmount } from "../../account-ledger/accountExternalModel.ts";
 import { getJarView, type JarLedger } from "./jarModel.ts";
+import type { SavingsAllocation } from "../../savings/domain/savingsModel.ts";
+
+type PositionLedger = JarLedger & { savingsAllocations?: SavingsAllocation[] };
 
 export type AccountBudgetPosition = {
   accountId: string;
@@ -9,6 +12,7 @@ export type AccountBudgetPosition = {
   outside: number;
   liquid: number;
   reserved: number;
+  savingsReserved: number;
   unallocated: number;
   allocationCapacity: number;
   shortfall: number;
@@ -17,7 +21,7 @@ export type AccountBudgetPosition = {
 };
 
 /** One read model for Dashboard, Accounts and Jars; reservations never add assets. */
-export function getFinancialPosition(ledger: JarLedger) {
+export function getFinancialPosition(ledger: PositionLedger) {
   const reservedByAccount = new Map<string, number>();
   const jarsByAccount = new Map<string, AccountBudgetPosition["jars"]>();
   for (const jar of ledger.jars) {
@@ -35,12 +39,16 @@ export function getFinancialPosition(ledger: JarLedger) {
       const outside = calculateAccountExternalAmount(account);
       const liquid = Math.max(0, balance - outside);
       const reserved = reservedByAccount.get(account.id) ?? 0;
+      const savingsReserved = (ledger.savingsAllocations ?? []).filter((item) =>
+        (item.status === "allocated" || (item.status === "needs_recalculation" && item.previousStatus === "allocated")) &&
+        item.sourceAccountId === account.id)
+        .reduce((sum, item) => sum + item.amount, 0);
       const eligibility = account.budgetEligibility ?? "needs_review";
       const jars = jarsByAccount.get(account.id) ?? [];
       return { accountId: account.id, name: account.name, balance, outside, liquid,
-        reserved, unallocated: liquid - reserved,
-        allocationCapacity: eligibility === "eligible" ? Math.max(0, liquid - reserved) : 0,
-        shortfall: Math.max(0, reserved - liquid), eligibility, jars };
+        reserved, savingsReserved, unallocated: liquid - reserved - savingsReserved,
+        allocationCapacity: eligibility === "eligible" ? Math.max(0, liquid - reserved - savingsReserved) : 0,
+        shortfall: Math.max(0, reserved + savingsReserved - liquid), eligibility, jars };
     });
   const totalBalance = accounts.reduce((sum, account) => sum + account.balance, 0);
   const outside = accounts.reduce((sum, account) => sum + account.outside, 0);
@@ -53,6 +61,7 @@ export function getFinancialPosition(ledger: JarLedger) {
     outside,
     liquid: Math.max(0, totalBalance - outside),
     reserved: accounts.reduce((sum, account) => sum + account.reserved, 0) + orphanedReserved,
+    savingsReserved: accounts.reduce((sum, account) => sum + account.savingsReserved, 0),
     orphanedReserved,
     unallocated: accounts.reduce((sum, account) => sum + account.unallocated, 0) - orphanedReserved,
     allocationCapacity: accounts.reduce((sum, account) => sum + account.allocationCapacity, 0),
@@ -62,14 +71,15 @@ export function getFinancialPosition(ledger: JarLedger) {
 }
 
 /** Historical shortfalls remain readable; new writes must not deepen them. */
-export function assertReservationCoverageAfterLedgerChange(before: JarLedger, after: JarLedger) {
+export function assertReservationCoverageAfterLedgerChange(before: PositionLedger, after: PositionLedger) {
   const beforePosition = getFinancialPosition(before);
   const afterPosition = getFinancialPosition(after);
   if (afterPosition.orphanedReserved > beforePosition.orphanedReserved)
     throw new Error("Không thể ẩn tài khoản đang giữ tiền trong hũ.");
-  const previous = new Map(beforePosition.accounts.map((account) => [account.accountId, account.shortfall]));
+  const previous = new Map(beforePosition.accounts.map((account) =>
+    [account.accountId, Math.max(0, account.reserved - account.liquid)]));
   for (const account of afterPosition.accounts) {
-    if (account.shortfall > (previous.get(account.accountId) ?? 0))
+    if (Math.max(0, account.reserved - account.liquid) > (previous.get(account.accountId) ?? 0))
       throw new Error(`Tài khoản ${account.name} không đủ tiền thực có cho các hũ. Hãy giải phóng hoặc chuyển phần đã dành trước.`);
   }
 }

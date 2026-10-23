@@ -38,6 +38,7 @@ export type JarLedger = {
   transactions: AccountTransaction[];
   jars: SpendingJar[];
   jarActivities: JarActivity[];
+  savingsAllocations?: import("../../savings/domain/savingsModel.ts").SavingsAllocation[];
 };
 
 export type JarSource = { accountId: string; amount: number };
@@ -150,7 +151,10 @@ export function getAccountAvailableToAllocate(ledger: JarLedger, accountId: stri
   if (!account) return 0;
   if (account.budgetEligibility !== "eligible") return 0;
   return Math.max(0, calculateAccountBalance(account, ledger.transactions) -
-    calculateAccountExternalAmount(account) - getAccountAllocation(ledger, accountId));
+    calculateAccountExternalAmount(account) - getAccountAllocation(ledger, accountId) -
+    (ledger.savingsAllocations ?? []).filter((item) => item.sourceAccountId === accountId &&
+      (item.status === "allocated" || (item.status === "needs_recalculation" && item.previousStatus === "allocated")))
+      .reduce((sum, item) => sum + item.amount, 0));
 }
 
 /** Deterministic, additive migration: legacy budgets stay untouched for recovery. */

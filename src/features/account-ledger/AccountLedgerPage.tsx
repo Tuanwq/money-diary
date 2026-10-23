@@ -25,6 +25,7 @@ import { getToday } from "../../utils/date";
 import { getJarView, suggestJar, type JarActivity, type JarLedger, type SpendingJar } from
   "../spending-jars/domain/jarModel.ts";
 import { getFinancialPosition } from "../spending-jars/domain/financialPosition.ts";
+import { getSavingsHeldAmount } from "../savings/domain/savingsModel.ts";
 import type { JarCommand } from "../spending-jars/services/jarService.ts";
 import {
   formatMoney,
@@ -38,6 +39,7 @@ import {
   calculateAccountBalance,
   getDefaultTransactionPurpose,
   getLedgerSummary,
+  isSavingsTransfer,
   type AccountTransaction,
   type AccountTransactionType,
   type TransactionPurpose,
@@ -266,6 +268,7 @@ function TransactionForm({
   const category = type === "transfer" ? "Chuyển nội bộ" :
     categories.find((item) => item.id === activeCategoryId)?.name ?? "";
   const [note, setNote] = useState(transaction?.note ?? "");
+  const [isWorkExpense, setIsWorkExpense] = useState(transaction?.isWorkExpense ?? false);
   const [purpose, setPurpose] = useState<TransactionPurpose | "">(
     transaction?.purpose ?? (transaction ? "" : getDefaultTransactionPurpose(type))
   );
@@ -320,7 +323,8 @@ function TransactionForm({
       if (selectedJar) {
         onJarCommand({ kind: "spend", id: crypto.randomUUID(), now, jarId: selectedJar.id,
           accountId: jarSourceId || undefined, amount: parsedAmount, date, category,
-          note: note.trim(), purpose: effectivePurpose === "goal_allocation" ? "goal_allocation" : "daily_expense" });
+          note: note.trim(), isWorkExpense,
+          purpose: effectivePurpose === "goal_allocation" ? "goal_allocation" : "daily_expense" });
         onClose();
         return;
       }
@@ -334,6 +338,7 @@ function TransactionForm({
         date,
         id: transaction?.id ?? crypto.randomUUID(),
         note: note.trim(),
+        isWorkExpense: type === "expense" ? isWorkExpense : undefined,
         purpose: effectivePurpose,
         // Preserve ambiguous legacy provenance when editing old rows.
         source: transaction ? transaction.source : "manual",
@@ -511,6 +516,12 @@ function TransactionForm({
             <small>Khoản chi sẽ trừ tiền thật ở từng tài khoản nguồn.</small>
           </label>}
 
+          {type === "expense" && <label className="ledger-field ledger-field-wide ledger-work-cost">
+            <span><input type="checkbox" checked={isWorkExpense}
+              onChange={(event) => setIsWorkExpense(event.target.checked)} /> Chi phí phục vụ công việc</span>
+            <small>Chỉ khoản được đánh dấu mới bị trừ khỏi thu nhập ròng khi tính tiết kiệm.</small>
+          </label>}
+
           <label className="ledger-field ledger-field-wide">
             <span>Ghi chú</span>
             <textarea
@@ -550,6 +561,7 @@ export function AccountLedgerPage({
   onCategoryCommand,
   jars,
   jarActivities,
+  savingsAllocations,
   onJarCommand,
   onExternalCommand,
   onDebtCommand,
@@ -572,6 +584,7 @@ export function AccountLedgerPage({
   onCategoryCommand: (command: CategoryCommand) => void;
   jars: SpendingJar[];
   jarActivities: JarActivity[];
+  savingsAllocations?: import("../savings/domain/savingsModel.ts").SavingsAllocation[];
   onJarCommand: (command: JarCommand) => void;
   onExternalCommand: (command: AccountExternalCommand) => void;
   onDebtCommand: (command: DebtCommand) => void;
@@ -623,12 +636,15 @@ export function AccountLedgerPage({
     const ledger = { accounts, transactions, jars, jarActivities, updatedAt: "" };
     return { actual: calculateActualAvailableBalance(ledger), external: calculateTotalExternalAmount(ledger) };
   }, [accounts, transactions, jars, jarActivities]);
-  const financialPosition = useMemo(() => getFinancialPosition({ accounts, transactions, jars, jarActivities }),
-    [accounts, transactions, jars, jarActivities]);
+  const financialPosition = useMemo(() => getFinancialPosition({ accounts, transactions, jars, jarActivities, savingsAllocations }),
+    [accounts, transactions, jars, jarActivities, savingsAllocations]);
+  const savingsHeld = useMemo(() => getSavingsHeldAmount({ transactions, savingsAllocations }),
+    [transactions, savingsAllocations]);
   const filteredTransactions = useMemo(() => {
     const normalizedSearch = search.trim().toLocaleLowerCase("vi-VN");
 
     return [...transactions]
+      .filter((transaction) => !isSavingsTransfer(transaction))
       .filter((transaction) => transaction.date.startsWith(monthFilter))
       .filter(
         (transaction) =>
@@ -771,11 +787,11 @@ export function AccountLedgerPage({
       <section className="account-ledger-summary has-availability" aria-label="Tóm tắt sổ tài khoản">
         <div className="is-balance">
           <span>Tổng số dư</span>
-          <strong>{formatMoney(summary.totalBalance)}</strong>
+          <strong>{formatMoney(summary.totalBalance - savingsHeld)}</strong>
         </div>
         <div className="is-actual">
-          <span>Tiền thực tế có</span>
-          <strong>{formatMoney(availability.actual)}</strong>
+          <span>Tổng tiền hiện có</span>
+          <strong>{formatMoney(availability.actual - savingsHeld)}</strong>
           <small>{availability.external > 0 ? `Sau khi trừ ${formatMoney(availability.external)} đang ở ngoài` : "Có thể dùng ngay"}</small>
         </div>
         <div>
@@ -1078,7 +1094,7 @@ export function AccountLedgerPage({
           categories={categories}
           transactions={transactions}
           onCategoryCommand={onCategoryCommand}
-          jarLedger={{ accounts, transactions, jars, jarActivities }}
+          jarLedger={{ accounts, transactions, jars, jarActivities, savingsAllocations }}
           onJarCommand={onJarCommand}
           onClose={() => setShowTransactionForm(false)}
           onSave={saveTransaction}

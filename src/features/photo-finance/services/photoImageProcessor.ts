@@ -15,7 +15,7 @@ export function isIosPhotoEnvironment(userAgent = typeof navigator === "undefine
 
 export function photoProcessingProfile(ios: boolean) {
   return ios
-    ? { displayEdge: 1440, thumbnailEdge: 256, displayQuality: 0.72, thumbnailQuality: 0.6 }
+    ? { displayEdge: 1280, thumbnailEdge: 256, displayQuality: 0.7, thumbnailQuality: 0.6 }
     : { displayEdge: 1600, thumbnailEdge: 320, displayQuality: 0.78, thumbnailQuality: 0.65 };
 }
 
@@ -43,14 +43,17 @@ function renderImage(image: ImageBitmap | HTMLImageElement | HTMLCanvasElement, 
   return { canvas, width, height };
 }
 
-async function decodePhoto(file: File, preferBitmap: boolean): Promise<{ image: ImageBitmap | HTMLImageElement; dispose: () => void }> {
+async function decodePhoto(file: File, preferBitmap: boolean, sourceUrl?: string): Promise<{
+  image: ImageBitmap | HTMLImageElement; dispose: () => void;
+}> {
   if (preferBitmap && typeof createImageBitmap === "function") {
     try {
       const bitmap = await createImageBitmap(file);
       return { image: bitmap, dispose: () => bitmap.close() };
     } catch { /* Fallback for browsers/codecs without createImageBitmap support. */ }
   }
-  const url = URL.createObjectURL(file);
+  const url = sourceUrl ?? URL.createObjectURL(file);
+  const dispose = () => { if (!sourceUrl) URL.revokeObjectURL(url); };
   const image = new Image();
   try {
     await new Promise<void>((resolve, reject) => {
@@ -58,12 +61,12 @@ async function decodePhoto(file: File, preferBitmap: boolean): Promise<{ image: 
       image.onerror = () => reject(new Error("Không đọc được ảnh. Hãy thử JPG hoặc chọn ảnh khác."));
       image.src = url;
     });
-    return { image, dispose: () => URL.revokeObjectURL(url) };
-  } catch (error) { URL.revokeObjectURL(url); throw error; }
+    return { image, dispose };
+  } catch (error) { dispose(); throw error; }
 }
 
 /** Re-encodes into two small files; no money/category/note is painted on pixels. */
-export async function processPhoto(file: File, signal?: AbortSignal): Promise<ProcessedPhoto> {
+export async function processPhoto(file: File, signal?: AbortSignal, sourceUrl?: string): Promise<ProcessedPhoto> {
   if (!ACCEPTED_TYPES.has(file.type))
     throw new Error("Chỉ nhận ảnh JPG, PNG, WebP hoặc HEIC/HEIF.");
   if (file.size === 0 || file.size > MAX_INPUT_BYTES)
@@ -77,7 +80,7 @@ export async function processPhoto(file: File, signal?: AbortSignal): Promise<Pr
     try { return await processInWorker(file, signal); }
     catch { signal?.throwIfAborted(); /* Use canvas for unsupported browsers/codecs. */ }
   }
-  const decoded = await decodePhoto(file, !ios);
+  const decoded = await decodePhoto(file, !ios, sourceUrl);
   const canvases: HTMLCanvasElement[] = [];
   let disposed = false;
   try {

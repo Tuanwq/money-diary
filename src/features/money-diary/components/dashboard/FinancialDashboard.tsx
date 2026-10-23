@@ -32,9 +32,10 @@ export function FinancialDashboard({
   spendableMoney: number;
 }) {
   const [tab, setTab] = useState<DashboardTab>(readDashboardTab);
-  const unallocated = spendableMoney - financialPosition.reserved;
-  const allocatedPercent = spendableMoney > 0
-    ? Math.min(100, Math.round(financialPosition.reserved / spendableMoney * 100))
+  const availableNow = spendableMoney;
+  const unallocated = availableNow - financialPosition.reserved;
+  const allocatedPercent = availableNow > 0
+    ? Math.min(100, Math.round(financialPosition.reserved / availableNow * 100))
     : 0;
 
   function selectTab(next: DashboardTab) {
@@ -48,7 +49,7 @@ export function FinancialDashboard({
         <span><WalletCards aria-hidden="true" size={17} /> Tổng tiền hiện có (có thể dùng ngay)</span>
         <button type="button" onClick={onOpenAccounts}>Xem tài khoản <ArrowRight size={16} /></button>
       </div>
-      <strong id="manager-balance-title">{formatMoney(spendableMoney)}</strong>
+      <strong id="manager-balance-title">{formatMoney(availableNow)}</strong>
       <p>Trên tổng số dư {formatMoney(actualMoney)} trong Sổ tài khoản.</p>
 
       <div className="manager-dashboard-tabs" role="tablist" aria-label="Chế độ Dashboard tài chính" data-horizontal-gesture>

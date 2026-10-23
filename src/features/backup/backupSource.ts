@@ -52,6 +52,8 @@ export type MoneyBackupState = {
   jarActivities: import("../spending-jars/domain/jarModel.ts").JarActivity[];
   transactionCategories: TransactionCategory[];
   debts: import("../account-ledger/debtModel.ts").Debt[];
+  savingsRules: import("../savings/domain/savingsModel.ts").SavingsRule[];
+  savingsAllocations: import("../savings/domain/savingsModel.ts").SavingsAllocation[];
   goals: Goals;
 };
 
@@ -79,6 +81,8 @@ export function buildBackupSourceData(
       jarActivities: moneyState.jarActivities,
       categories: moneyState.transactionCategories,
       debts: moneyState.debts,
+      savingsRules: moneyState.savingsRules,
+      savingsAllocations: moneyState.savingsAllocations,
       reconciliations: moneyState.accountReconciliations,
       transactions: moneyState.accountTransactions,
     },

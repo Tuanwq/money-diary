@@ -175,6 +175,7 @@ export function MoneyPageShell({
         onLogout={onLogout}
         onOpenAnalytics={onOpenAnalytics}
         onOpenAccountLedger={onOpenAccountLedger}
+        onOpenSavings={() => navigateTo("savings")}
         onOpenAccountReconciliation={onOpenAccountReconciliation}
         onOpenBalanceChecks={() => navigateTo("balanceChecks")}
         onOpenChangeLog={onOpenChangeLog}

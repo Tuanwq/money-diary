@@ -6,6 +6,12 @@ type Upload = (path: string, bytes: ArrayBuffer) =>
 
 type UploadMode = "sequential" | "parallel";
 
+// Most compressed camera images fit under this limit. Two short requests can
+// overlap without making Safari hold multiple large uploads in memory.
+export function photoUploadModeForSize(totalBytes: number): UploadMode {
+  return totalBytes <= 2_000_000 ? "parallel" : "sequential";
+}
+
 /** Stable paths and upsert make network retries safe in either upload mode. */
 export async function uploadProcessedPhotoImages(
   image: ProcessedPhoto,

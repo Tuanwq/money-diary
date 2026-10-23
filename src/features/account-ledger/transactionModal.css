@@ -33,6 +33,10 @@
 .ledger-transaction-modal .ledger-field input[type="date"] {
   min-width: 0;
 }
+.ledger-transaction-modal .ledger-work-cost input[type="checkbox"] {
+  width: 17px; height: 17px; min-height: 0; margin-right: 7px; accent-color: #527d5e;
+  vertical-align: middle;
+}
 
 .ledger-transaction-modal .ledger-money-input {
   padding-right: 0.85rem;

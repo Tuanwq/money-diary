@@ -10,7 +10,8 @@ import { createSignedPhotoCache } from "../src/features/photo-finance/services/s
 import { formatMoneyInput, parseMoneyInput } from "../src/utils/money.ts";
 import { isIosPhotoEnvironment, photoProcessingProfile, processPhoto } from
   "../src/features/photo-finance/services/photoImageProcessor.ts";
-import { uploadProcessedPhotoImages } from "../src/features/photo-finance/services/photoUploadService.ts";
+import { photoUploadModeForSize, uploadProcessedPhotoImages } from
+  "../src/features/photo-finance/services/photoUploadService.ts";
 import {
   buildDailyFinancialSummaries, formatCalendarNet, getCalendarDates,
   getCalendarPhotoStack, getDailyFinancialSummary, groupPhotoAttachmentsByDay,
@@ -164,6 +165,12 @@ test("small photo files upload together and a retry waits for both requests to s
   callbacks.get("owner/photo/thumbnail.jpg").resolve({ error: null });
   await assert.rejects(request, /Invalid image/);
   assert.equal(settled, true);
+});
+
+test("typical compressed iPhone photos upload concurrently, large photos stay sequential", () => {
+  assert.equal(photoUploadModeForSize(1_500_000), "parallel");
+  assert.equal(photoUploadModeForSize(2_000_000), "parallel");
+  assert.equal(photoUploadModeForSize(2_000_001), "sequential");
 });
 
 test("iOS photo profile avoids a large upload while preserving a readable display image", () => {

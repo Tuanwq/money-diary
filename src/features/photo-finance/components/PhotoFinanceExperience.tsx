@@ -20,7 +20,8 @@ import { PhotoGalleryGrid } from "./PhotoGalleryGrid.tsx";
 import "./photoFinance.css";
 
 export function PhotoFinanceExperience({ accounts, categories, onCategoryCommand, jars, jarActivities, entries, expenses, ownerId,
-  captureIntent, onCaptureIntentConsumed, onDeleteTransaction, onSaveTransaction, onJarCommand, transactions }: {
+  captureIntent, onCaptureIntentConsumed, onDeleteTransaction, onSaveTransaction, onJarCommand,
+  onUploadBusyChange, transactions }: {
   captureIntent: string | null;
   onCaptureIntentConsumed: () => void;
   accounts: FinancialAccount[];
@@ -30,6 +31,7 @@ export function PhotoFinanceExperience({ accounts, categories, onCategoryCommand
   onDeleteTransaction: (transactionId: string) => void;
   onSaveTransaction: (transaction: AccountTransaction) => void;
   onJarCommand: (command: JarCommand) => void;
+  onUploadBusyChange: (busy: boolean) => void;
   transactions: AccountTransaction[];
 }) {
   const photos = usePhotoFinance(ownerId);
@@ -164,6 +166,6 @@ export function PhotoFinanceExperience({ accounts, categories, onCategoryCommand
       repository={photos.repository} dayHasPhotos={dayHasPhotos}
       onClose={closeCapture} onSaved={photoSaved}
       onStartNew={() => { setEditing(undefined); setFormKey((value) => value + 1); }}
-      onSaveTransaction={onSaveTransaction} />
+      onSaveTransaction={onSaveTransaction} onUploadBusyChange={onUploadBusyChange} />
   </div>;
 }

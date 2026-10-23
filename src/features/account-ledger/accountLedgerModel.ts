@@ -51,18 +51,25 @@ export type AccountTransaction = {
   type: AccountTransactionType;
   updatedAt: string;
   /** Photo Finance owns this transaction; legacy diary amounts are never written for it. */
-  source?: "photo_finance" | "spending_jar" | "manual" | "debt";
+  source?: "photo_finance" | "spending_jar" | "manual" | "debt" | "savings";
   /** A jar expense/refund belongs to one activity; several rows may share its activity ID. */
   jarId?: string;
   jarActivityId?: string;
   /** Money returned from a prior expense; increases balance but is not earned income. */
   reversesExpense?: boolean;
+  /** Explicit work cost for net-income savings rules; categories are never inferred. */
+  isWorkExpense?: boolean;
   occurredAt?: string;
 };
 
 export function isExpenseReversal(transaction: AccountTransaction): boolean {
   return transaction.type === "income" && transaction.source === "spending_jar" &&
     (transaction.reversesExpense === true || transaction.id.startsWith("jar-refund:"));
+}
+
+/** Savings transfers remain in the ledger for balance accounting, but have their own history. */
+export function isSavingsTransfer(transaction: AccountTransaction): boolean {
+  return transaction.source === "savings" || transaction.id.startsWith("saving-transfer:");
 }
 
 export type AccountLedgerData = {
@@ -72,6 +79,8 @@ export type AccountLedgerData = {
   jarActivities: import("../spending-jars/domain/jarModel.ts").JarActivity[];
   categories?: TransactionCategory[];
   debts?: import("./debtModel.ts").Debt[];
+  savingsRules?: import("../savings/domain/savingsModel.ts").SavingsRule[];
+  savingsAllocations?: import("../savings/domain/savingsModel.ts").SavingsAllocation[];
   updatedAt: string;
 };
 
@@ -179,6 +188,8 @@ export function createDefaultLedger(): AccountLedgerData {
     jarActivities: [],
     categories: undefined,
     debts: [],
+    savingsRules: [],
+    savingsAllocations: [],
     updatedAt: now,
   };
 }
@@ -250,7 +261,7 @@ export function getLedgerSummary(
       0
     ),
     transfer: monthTransactions
-      .filter((transaction) => transaction.type === "transfer")
+      .filter((transaction) => transaction.type === "transfer" && !isSavingsTransfer(transaction))
       .reduce((sum, transaction) => sum + transaction.amount, 0),
   };
 }

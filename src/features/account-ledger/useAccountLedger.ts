@@ -15,6 +15,8 @@ import { applyCategoryCommand, linkTransactionCategory, migrateTransactionCatego
 import { applyAccountExternalCommand, assertExternalCoverageAfterLedgerChange,
   calculateAccountExternalAmount, type AccountExternalCommand } from "./accountExternalModel.ts";
 import { applyDebtCommand, getDebtRemaining, type DebtCommand } from "./debtModel.ts";
+import { applySavingsCommand, type SavingsCommand } from "../savings/services/savingsService.ts";
+import { assertSavingsCoverageAfterLedgerChange, getSavingsReserved } from "../savings/domain/savingsModel.ts";
 import {
   ACCOUNT_LEDGER_STORAGE_KEY,
   createDefaultLedger,
@@ -58,13 +60,16 @@ function loadLocalLedger(userId?: string) {
       ...parsed, jars: Array.isArray(parsed.jars) ? parsed.jars : [],
       jarActivities: Array.isArray(parsed.jarActivities) ? parsed.jarActivities : [],
       debts: Array.isArray(parsed.debts) ? parsed.debts : [],
+      savingsRules: Array.isArray(parsed.savingsRules) ? parsed.savingsRules : [],
+      savingsAllocations: Array.isArray(parsed.savingsAllocations) ? parsed.savingsAllocations : [],
     } : createDefaultLedger();
   } catch {
     return createDefaultLedger();
   }
 }
 
-export function useAccountLedger(userId?: string, legacyBudgets: ExpenseBudget[] = EMPTY_LEGACY_BUDGETS) {
+export function useAccountLedger(userId?: string, legacyBudgets: ExpenseBudget[] = EMPTY_LEGACY_BUDGETS,
+  photoUploadBusy = false) {
   const [ledger, setLedger] = useState<AccountLedgerData>(() => loadLocalLedger(userId));
   const [ledgerOwner, setLedgerOwner] = useState(userId ?? null);
   const [cloudStatus, setCloudStatus] = useState("Đang lưu trên thiết bị");
@@ -72,6 +77,7 @@ export function useAccountLedger(userId?: string, legacyBudgets: ExpenseBudget[]
   const [jarSchemaReady, setJarSchemaReady] = useState(true);
   const [categorySchemaReady, setCategorySchemaReady] = useState(true);
   const [debtSchemaReady, setDebtSchemaReady] = useState(true);
+  const [savingsSchemaReady, setSavingsSchemaReady] = useState(true);
   const [legacyRecovery, setLegacyRecovery] = useState<{
     userId: string; accounts: number; transactions: number; jars: number;
   } | null>(null);
@@ -83,6 +89,8 @@ export function useAccountLedger(userId?: string, legacyBudgets: ExpenseBudget[]
   const latestLedgerRef = useRef(ledger);
   const ownerRef = useRef(userId ?? null);
   const saveChainRef = useRef<Promise<void>>(Promise.resolve());
+  const photoUploadBusyRef = useRef(photoUploadBusy);
+  useEffect(() => { photoUploadBusyRef.current = photoUploadBusy; }, [photoUploadBusy]);
 
   useEffect(() => {
     if (ownerRef.current === (userId ?? null)) return;
@@ -115,6 +123,9 @@ export function useAccountLedger(userId?: string, legacyBudgets: ExpenseBudget[]
 
       return () => window.clearTimeout(timeout);
     }
+    // Large ledger reads compete with the camera upload on mobile networks.
+    // Resume the normal revision check as soon as the photo finishes.
+    if (photoUploadBusy) return;
 
     let active = true;
     const timeout = window.setTimeout(async () => {
@@ -143,13 +154,24 @@ export function useAccountLedger(userId?: string, legacyBudgets: ExpenseBudget[]
 
       let { data, error } = await supabase
         .from("money_diary_account_ledgers")
-        .select("accounts, transactions, jars, jar_activities, categories, debts, updated_at")
+        .select("accounts, transactions, jars, jar_activities, categories, debts, savings_rules, savings_allocations, updated_at")
         .eq("user_id", userId)
         .maybeSingle();
 
       if (!active) return;
 
       let schemaAvailable = true;
+      let savingsSchemaAvailable = true;
+      if (error && /savings_rules|savings_allocations/i.test(error.message)) {
+        savingsSchemaAvailable = false;
+        const fallback = await supabase.from("money_diary_account_ledgers")
+          .select("accounts, transactions, jars, jar_activities, categories, debts, updated_at")
+          .eq("user_id", userId).maybeSingle();
+        if (!active) return;
+        data = fallback.data as typeof data;
+        error = fallback.error;
+        setSavingsSchemaReady(false);
+      } else setSavingsSchemaReady(true);
       if (error && /debts/i.test(error.message)) {
         setDebtSchemaReady(false);
         setCloudReady(false);
@@ -194,6 +216,8 @@ export function useAccountLedger(userId?: string, legacyBudgets: ExpenseBudget[]
             jarActivities: (data.jar_activities ?? []) as AccountLedgerData["jarActivities"],
             categories: (data.categories ?? []) as AccountLedgerData["categories"],
             debts: (data.debts ?? []) as AccountLedgerData["debts"],
+            savingsRules: (data.savings_rules ?? []) as AccountLedgerData["savingsRules"],
+            savingsAllocations: (data.savings_allocations ?? []) as AccountLedgerData["savingsAllocations"],
             updatedAt: data.updated_at,
           }
         : null;
@@ -203,6 +227,11 @@ export function useAccountLedger(userId?: string, legacyBudgets: ExpenseBudget[]
         return;
       }
       const localLedger = latestLedgerRef.current;
+      if (!savingsSchemaAvailable && (localLedger.savingsRules?.length || localLedger.savingsAllocations?.length)) {
+        setCloudReady(false);
+        setCloudStatus("Tiết kiệm chưa đồng bộ · cần áp dụng migration Supabase trước khi tải bản cloud");
+        return;
+      }
       const pending = pendingRef.current?.userId === userId ? pendingRef.current : null;
       baseUpdatedAtRef.current = cloudLedger?.updatedAt ?? null;
       loadedUserRef.current = userId;
@@ -270,7 +299,7 @@ export function useAccountLedger(userId?: string, legacyBudgets: ExpenseBudget[]
       active = false;
       window.clearTimeout(timeout);
     };
-  }, [userId, retryIndex]);
+  }, [userId, retryIndex, photoUploadBusy]);
 
   const retrySync = useCallback(() => {
     setCloudReady(false);
@@ -280,10 +309,10 @@ export function useAccountLedger(userId?: string, legacyBudgets: ExpenseBudget[]
   useEffect(() => {
     if (!userId) return;
     const refresh = () => {
-      if (document.visibilityState === "visible" &&
+      if (!photoUploadBusy && document.visibilityState === "visible" &&
         ((cloudReady && !dirtyRef.current) || /chưa thể|lỗi/i.test(cloudStatus))) retrySync();
     };
-    const resumeOnline = () => retrySync();
+    const resumeOnline = () => { if (!photoUploadBusy) retrySync(); };
     document.addEventListener("visibilitychange", refresh);
     window.addEventListener("focus", refresh);
     window.addEventListener("online", resumeOnline);
@@ -294,7 +323,7 @@ export function useAccountLedger(userId?: string, legacyBudgets: ExpenseBudget[]
       window.removeEventListener("online", resumeOnline);
       window.clearInterval(interval);
     };
-  }, [cloudReady, cloudStatus, userId, retrySync]);
+  }, [cloudReady, cloudStatus, userId, retrySync, photoUploadBusy]);
 
   const useCloudVersion = useCallback(() => {
     if (!userId) return;
@@ -308,14 +337,15 @@ export function useAccountLedger(userId?: string, legacyBudgets: ExpenseBudget[]
   }, [retrySync, userId]);
 
   useEffect(() => {
-    if (!userId || !cloudReady || !jarSchemaReady || !categorySchemaReady || !debtSchemaReady || !dirtyRef.current) return;
+    if (!userId || !cloudReady || !jarSchemaReady || !categorySchemaReady || !debtSchemaReady ||
+      !dirtyRef.current || photoUploadBusy) return;
 
     const timeout = window.setTimeout(() => {
       // Serialize writes and compare the remote revision. A stale device must
       // never bring back a jar removed by another device.
       saveChainRef.current = saveChainRef.current.catch(() => undefined).then(async () => {
         const current = latestLedgerRef.current;
-        if (!dirtyRef.current || loadedUserRef.current !== userId ||
+        if (photoUploadBusyRef.current || !dirtyRef.current || loadedUserRef.current !== userId ||
           pendingRef.current?.userId !== userId) return;
         setCloudStatus("Đang lưu sổ tài khoản...");
         const payload = {
@@ -325,6 +355,8 @@ export function useAccountLedger(userId?: string, legacyBudgets: ExpenseBudget[]
           jar_activities: current.jarActivities,
           categories: current.categories ?? [],
           debts: current.debts ?? [],
+          ...(savingsSchemaReady ? { savings_rules: current.savingsRules ?? [],
+            savings_allocations: current.savingsAllocations ?? [] } : {}),
           updated_at: current.updatedAt,
         };
         const expected = baseUpdatedAtRef.current;
@@ -364,7 +396,8 @@ export function useAccountLedger(userId?: string, legacyBudgets: ExpenseBudget[]
     }, 300);
 
     return () => window.clearTimeout(timeout);
-  }, [cloudReady, jarSchemaReady, categorySchemaReady, debtSchemaReady, ledger, userId]);
+  }, [cloudReady, jarSchemaReady, categorySchemaReady, debtSchemaReady, savingsSchemaReady,
+    ledger, userId, photoUploadBusy]);
 
   const updateLedger = useCallback(
     (
@@ -372,7 +405,8 @@ export function useAccountLedger(userId?: string, legacyBudgets: ExpenseBudget[]
         AccountLedgerData,
         "accounts" | "transactions"
       >,
-      allowExternalShortfall = false
+      allowExternalShortfall = false,
+      allowSavingsRecalculation = false
     ) => {
       const current = latestLedgerRef.current;
       if (ownerRef.current !== (userId ?? null))
@@ -381,6 +415,7 @@ export function useAccountLedger(userId?: string, legacyBudgets: ExpenseBudget[]
       if (!allowExternalShortfall) {
         assertExternalCoverageAfterLedgerChange(current, next);
         assertReservationCoverageAfterLedgerChange(current, next);
+        if (!allowSavingsRecalculation) assertSavingsCoverageAfterLedgerChange(current, next);
       }
       // Persist the pending marker first. A local write that succeeds without
       // this marker could otherwise be replaced by an older cloud revision.
@@ -441,6 +476,14 @@ export function useAccountLedger(userId?: string, legacyBudgets: ExpenseBudget[]
     if (next !== current) updateLedger(() => next);
   }, [cloudReady, debtSchemaReady, updateLedger, userId]);
 
+  const dispatchSavings = useCallback((command: SavingsCommand) => {
+    if (userId && (!cloudReady || !savingsSchemaReady || loadedUserRef.current !== userId))
+      throw new Error("Tiết kiệm chưa sẵn sàng đồng bộ. Hãy áp dụng migration Supabase hoặc thử lại.");
+    const current = latestLedgerRef.current;
+    const next = applySavingsCommand(current, command);
+    if (next !== current) updateLedger(() => next);
+  }, [cloudReady, savingsSchemaReady, updateLedger, userId]);
+
   const saveAccount = useCallback(
     (account: FinancialAccount) => {
       updateLedger((current) => ({
@@ -465,6 +508,12 @@ export function useAccountLedger(userId?: string, legacyBudgets: ExpenseBudget[]
         throw new Error("Tài khoản còn khoản công nợ chưa tất toán. Hãy xử lý khoản nợ trước khi ẩn.");
       if (getAccountAllocation(latestLedgerRef.current, accountId) > 0)
         throw new Error("Tài khoản còn tiền trong hũ. Hãy giải phóng hoặc chuyển phần phân bổ trước khi ẩn.");
+      if (getSavingsReserved(latestLedgerRef.current, accountId) > 0)
+        throw new Error("Tài khoản còn tiền dành riêng cho tiết kiệm. Hãy giải phóng trước khi ẩn.");
+      if (latestLedgerRef.current.savingsRules?.some((rule) => !rule.deletedAt && !rule.paused &&
+        (rule.sourceAccountId === accountId ||
+          (rule.destination.kind === "transfer" && rule.destination.accountId === accountId))))
+        throw new Error("Tài khoản đang được dùng bởi quy tắc tiết kiệm. Hãy tạm dừng hoặc sửa quy tắc trước khi ẩn.");
       const now = new Date().toISOString();
 
       updateLedger((current) => ({
@@ -485,6 +534,13 @@ export function useAccountLedger(userId?: string, legacyBudgets: ExpenseBudget[]
         throw new Error("Giao dịch từ hũ cần được sửa trong chi tiết hũ để giữ đúng nguồn tiền.");
       if (transaction.type === "debt" || latestLedgerRef.current.transactions.some((item) => item.id === transaction.id && item.debtId))
         throw new Error("Giao dịch công nợ cần được sửa trong chi tiết khoản nợ.");
+      if (latestLedgerRef.current.savingsAllocations?.some((item) => item.transactionId === transaction.id))
+        throw new Error("Giao dịch tiết kiệm cần được điều chỉnh trong trang Tiết kiệm.");
+      const old = latestLedgerRef.current.transactions.find((item) => item.id === transaction.id);
+      const recalculatesSavings = Boolean(old && (old.type === "income" || old.isWorkExpense ||
+        transaction.type === "income" || transaction.isWorkExpense) &&
+        latestLedgerRef.current.savingsAllocations?.some((item) => item.date === old.date &&
+          item.sourceAccountId === old.accountId && item.status !== "skipped"));
       updateLedger((current) => ({
         accounts: current.accounts,
         transactions: current.transactions.some(
@@ -494,16 +550,26 @@ export function useAccountLedger(userId?: string, legacyBudgets: ExpenseBudget[]
               item.id === transaction.id ? linkTransactionCategory(transaction, current.categories ?? []) : item
             )
           : [linkTransactionCategory(transaction, current.categories ?? []), ...current.transactions],
-      }));
+      }), false, recalculatesSavings);
     },
     [updateLedger]
   );
 
   const deleteTransaction = useCallback(
     (transactionId: string) => {
+      const old = latestLedgerRef.current.transactions.find((item) => item.id === transactionId);
+      const affected = old?.jarActivityId
+        ? latestLedgerRef.current.transactions.filter((item) => item.jarActivityId === old.jarActivityId)
+        : old ? [old] : [];
+      const recalculatesSavings = affected.some((transaction) =>
+        (transaction.type === "income" || transaction.isWorkExpense) &&
+        latestLedgerRef.current.savingsAllocations?.some((item) => item.date === transaction.date &&
+          item.sourceAccountId === transaction.accountId && item.status !== "skipped"));
       updateLedger((current) => {
         const target = current.transactions.find((item) => item.id === transactionId);
         if (target?.debtId) throw new Error("Hãy hoàn tác giao dịch trong chi tiết khoản công nợ.");
+        if (current.savingsAllocations?.some((item) => item.transactionId === transactionId))
+          throw new Error("Hãy điều chỉnh khoản chuyển trong trang Tiết kiệm.");
         const groupId = target?.jarActivityId;
         return {
           accounts: current.accounts,
@@ -513,7 +579,7 @@ export function useAccountLedger(userId?: string, legacyBudgets: ExpenseBudget[]
             ? current.jarActivities.filter((item) => item.id !== groupId)
             : current.jarActivities,
         };
-      });
+      }, false, recalculatesSavings);
     },
     [updateLedger]
   );
@@ -521,8 +587,10 @@ export function useAccountLedger(userId?: string, legacyBudgets: ExpenseBudget[]
   const replaceLedger = useCallback(
     (accounts: FinancialAccount[], transactions: AccountTransaction[],
       jars: AccountLedgerData["jars"] = [], jarActivities: AccountLedgerData["jarActivities"] = [],
-      categories?: AccountLedgerData["categories"], debts: AccountLedgerData["debts"] = []) => {
-      updateLedger(() => ({ accounts, transactions, jars, jarActivities, categories, debts }), true);
+      categories?: AccountLedgerData["categories"], debts: AccountLedgerData["debts"] = [],
+      savingsRules: AccountLedgerData["savingsRules"] = [], savingsAllocations: AccountLedgerData["savingsAllocations"] = []) => {
+      updateLedger(() => ({ accounts, transactions, jars, jarActivities, categories, debts,
+        savingsRules, savingsAllocations }), true);
     },
     [updateLedger]
   );
@@ -562,6 +630,10 @@ export function useAccountLedger(userId?: string, legacyBudgets: ExpenseBudget[]
     dispatchCategory,
     dispatchExternal,
     dispatchDebt,
+    dispatchSavings,
+    savingsSchemaReady: !userId || savingsSchemaReady,
+    savingsRules: ledgerOwner === (userId ?? null) ? ledger.savingsRules ?? [] : [],
+    savingsAllocations: ledgerOwner === (userId ?? null) ? ledger.savingsAllocations ?? [] : [],
     debts: ledgerOwner === (userId ?? null) ? ledger.debts ?? [] : [],
     dispatchJar,
     jars: ledgerOwner === (userId ?? null) ? ledger.jars : [],
