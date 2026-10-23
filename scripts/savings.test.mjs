@@ -7,6 +7,7 @@ import { assertSavingsCoverageAfterLedgerChange, calculateSavingsAmount, filterS
   getSavingsAvailable, getSavingsHeldAmount, getSavingsReserved } from
   "../src/features/savings/domain/savingsModel.ts";
 import { applySavingsCommand } from "../src/features/savings/services/savingsService.ts";
+import { getSavingsHeldByAccount } from "../src/features/savings/domain/savingsBalance.ts";
 import { filterHistoryLedgerTransactions } from "../src/features/history/historyLedgerModel.ts";
 import { buildStoryTimeline } from "../src/features/photo-finance/services/dayStoryModel.ts";
 
@@ -67,6 +68,12 @@ assert.equal(refresh({ ...allocated, savingsRules: [rule({ minimumRemaining: 391
 assert.equal(allocated.transactions.length, 1, "reservation is not an expense transaction");
 assert.equal(getSavingsReserved(allocated), 80_000);
 assert.equal(getSavingsHeldAmount(allocated), 80_000, "allocated savings is hidden from displayed balances");
+assert.equal(getSavingsHeldByAccount(allocated).get(source), 80_000,
+  "reserved money is hidden from its source account card");
+assert.equal(allocated.accounts.reduce((sum, account) => sum + calculateAccountBalance(account, allocated.transactions) -
+  (getSavingsHeldByAccount(allocated).get(account.id) ?? 0), 0),
+getLedgerSummary(allocated.accounts, allocated.transactions, "2026-10").totalBalance - getSavingsHeldAmount(allocated),
+"displayed account cards must add up to the displayed total");
 assert.equal(getSavingsHeldAmount(applySavingsCommand(allocated,
   { type: "release", resultId: "saving:rule:2026-10-23" }, now)), 0,
 "released savings becomes visible again");
@@ -102,6 +109,17 @@ assert.equal(calculateAccountBalance(transferred.accounts.find((item) => item.id
 assert.equal(calculateAccountBalance(transferred.accounts.find((item) => item.id === target), transferred.transactions), 80_000);
 assert.equal(getFinancialPosition(transferred).totalBalance, 500_000, "transfer cannot change total assets");
 assert.equal(getSavingsHeldAmount(transferred), 80_000, "transferred savings is hidden once, despite remaining an asset");
+assert.equal(getSavingsHeldByAccount(transferred).get(source) ?? 0, 0,
+  "the source account was already reduced by the transfer");
+assert.equal(getSavingsHeldByAccount(transferred).get(target), 80_000,
+  "transferred savings is hidden from the receiving account card");
+assert.equal(getFinancialPosition(transferred).accounts.find((item) => item.accountId === target).unallocated, 0,
+  "transferred savings cannot be offered for jar allocation again");
+assert.equal(getAccountAvailableToAllocate(transferred, target), 0,
+  "jar commands also exclude transferred savings from the receiving account");
+assert.equal(transferred.accounts.reduce((sum, account) => sum + calculateAccountBalance(account, transferred.transactions) -
+  (getSavingsHeldByAccount(transferred).get(account.id) ?? 0), 0),
+getLedgerSummary(transferred.accounts, transferred.transactions, "2026-10").totalBalance - getSavingsHeldAmount(transferred));
 assert.equal(getSavingsHeldAmount({ ...transferred, transactions: transferred.transactions.slice(1) }), 0,
   "missing transfer cannot hide money without an accounting entry");
 assert.equal(getLedgerSummary(transferred.accounts, transferred.transactions, "2026-10").totalBalance -

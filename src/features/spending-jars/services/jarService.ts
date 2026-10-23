@@ -1,5 +1,6 @@
 import { calculateAccountBalance, type AccountTransaction, type TransactionPurpose } from "../../account-ledger/accountLedgerModel.ts";
 import { calculateAccountExternalAmount } from "../../account-ledger/accountExternalModel.ts";
+import { getSavingsHeldByAccount } from "../../savings/domain/savingsBalance.ts";
 import { getAccountAvailableToAllocate, getJarBudgetView, getJarView, type JarActivity, type JarLedger,
   type JarSource, type SpendingJar } from "../domain/jarModel.ts";
 import { getToday } from "../../../utils/date.ts";
@@ -90,10 +91,12 @@ export function planJarSpend(ledger: JarLedger, jarId: string, amount: number, a
   let needed = amount;
   const sources = accountId ? view.sources.filter((item) => item.accountId === accountId) : view.sources;
   const lines: JarSource[] = [];
+  const savingsHeld = getSavingsHeldByAccount(ledger);
   for (const source of sources) {
     const account = getActiveAccount(ledger, source.accountId);
     const available = Math.min(source.amount, Math.max(0,
-      calculateAccountBalance(account, ledger.transactions) - calculateAccountExternalAmount(account)));
+      calculateAccountBalance(account, ledger.transactions) - calculateAccountExternalAmount(account) -
+      (savingsHeld.get(account.id) ?? 0)));
     const take = Math.min(needed, available);
     if (take > 0) lines.push({ accountId: source.accountId, amount: take });
     needed -= take;

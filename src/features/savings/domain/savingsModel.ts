@@ -1,6 +1,8 @@
 import { calculateAccountBalance, isExpenseReversal, type AccountLedgerData } from "../../account-ledger/accountLedgerModel.ts";
 import { calculateAccountExternalAmount } from "../../account-ledger/accountExternalModel.ts";
 import { getFinancialPosition } from "../../spending-jars/domain/financialPosition.ts";
+import { isSavedSavingsResult } from "./savingsBalance.ts";
+export { getSavingsHeldAmount, isSavedSavingsResult } from "./savingsBalance.ts";
 
 export type SavingsMode = "percentage" | "fixed" | "random_amount" | "random_percentage";
 export type SavingsRule = {
@@ -57,12 +59,6 @@ export type SavingsHistoryFilters = {
   destination?: "allocation" | "transfer";
 };
 
-export function isSavedSavingsResult(item: SavingsAllocation) {
-  return item.status === "allocated" || item.status === "transferred" ||
-    (item.status === "needs_recalculation" &&
-      (item.previousStatus === "allocated" || item.previousStatus === "transferred"));
-}
-
 export function filterSavingsHistory(items: SavingsAllocation[], filters: SavingsHistoryFilters) {
   return items.filter((item) =>
     (!filters.month || item.date.startsWith(filters.month)) &&
@@ -70,17 +66,6 @@ export function filterSavingsHistory(items: SavingsAllocation[], filters: Saving
     (!filters.destination || item.destination.kind === filters.destination) &&
     (!filters.status || (filters.status === "saved"
       ? isSavedSavingsResult(item) : item.status === filters.status)));
-}
-
-/** Display projection only: transfers remain internal transfers in the financial ledger. */
-export function getSavingsHeldAmount(ledger: Pick<AccountLedgerData, "savingsAllocations" | "transactions">) {
-  const transactionIds = new Set(ledger.transactions.map((item) => item.id));
-  return (ledger.savingsAllocations ?? []).reduce((sum, item) => {
-    if (!isSavedSavingsResult(item)) return sum;
-    if (item.destination.kind === "transfer" &&
-      (!item.transactionId || !transactionIds.has(item.transactionId))) return sum;
-    return sum + item.amount;
-  }, 0);
 }
 
 export function savingsResultId(ruleId: string, date: string) {

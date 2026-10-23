@@ -1,6 +1,7 @@
 import type { AccountTransaction, FinancialAccount } from "../../account-ledger/accountLedgerModel.ts";
 import { calculateAccountBalance, isExpenseReversal } from "../../account-ledger/accountLedgerModel.ts";
 import { calculateAccountExternalAmount } from "../../account-ledger/accountExternalModel.ts";
+import { getSavingsHeldByAccount } from "../../savings/domain/savingsBalance.ts";
 import type { ExpenseBudget } from "../../../types.ts";
 
 export type SpendingJar = {
@@ -152,9 +153,7 @@ export function getAccountAvailableToAllocate(ledger: JarLedger, accountId: stri
   if (account.budgetEligibility !== "eligible") return 0;
   return Math.max(0, calculateAccountBalance(account, ledger.transactions) -
     calculateAccountExternalAmount(account) - getAccountAllocation(ledger, accountId) -
-    (ledger.savingsAllocations ?? []).filter((item) => item.sourceAccountId === accountId &&
-      (item.status === "allocated" || (item.status === "needs_recalculation" && item.previousStatus === "allocated")))
-      .reduce((sum, item) => sum + item.amount, 0));
+    (getSavingsHeldByAccount(ledger).get(accountId) ?? 0));
 }
 
 /** Deterministic, additive migration: legacy budgets stay untouched for recovery. */

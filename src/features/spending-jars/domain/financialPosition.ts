@@ -2,6 +2,7 @@ import { calculateAccountBalance } from "../../account-ledger/accountLedgerModel
 import { calculateAccountExternalAmount } from "../../account-ledger/accountExternalModel.ts";
 import { getJarView, type JarLedger } from "./jarModel.ts";
 import type { SavingsAllocation } from "../../savings/domain/savingsModel.ts";
+import { getSavingsHeldByAccount } from "../../savings/domain/savingsBalance.ts";
 
 type PositionLedger = JarLedger & { savingsAllocations?: SavingsAllocation[] };
 
@@ -23,6 +24,7 @@ export type AccountBudgetPosition = {
 /** One read model for Dashboard, Accounts and Jars; reservations never add assets. */
 export function getFinancialPosition(ledger: PositionLedger) {
   const reservedByAccount = new Map<string, number>();
+  const savingsHeldByAccount = getSavingsHeldByAccount(ledger);
   const jarsByAccount = new Map<string, AccountBudgetPosition["jars"]>();
   for (const jar of ledger.jars) {
     if (jar.status !== "active") continue;
@@ -39,10 +41,7 @@ export function getFinancialPosition(ledger: PositionLedger) {
       const outside = calculateAccountExternalAmount(account);
       const liquid = Math.max(0, balance - outside);
       const reserved = reservedByAccount.get(account.id) ?? 0;
-      const savingsReserved = (ledger.savingsAllocations ?? []).filter((item) =>
-        (item.status === "allocated" || (item.status === "needs_recalculation" && item.previousStatus === "allocated")) &&
-        item.sourceAccountId === account.id)
-        .reduce((sum, item) => sum + item.amount, 0);
+      const savingsReserved = savingsHeldByAccount.get(account.id) ?? 0;
       const eligibility = account.budgetEligibility ?? "needs_review";
       const jars = jarsByAccount.get(account.id) ?? [];
       return { accountId: account.id, name: account.name, balance, outside, liquid,

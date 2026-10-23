@@ -837,6 +837,7 @@ export function AccountLedgerPage({
             const balance = calculateAccountBalance(account, transactions);
             const external = calculateAccountExternalAmount(account);
             const budgetRow = financialPosition.accounts.find((item) => item.accountId === account.id);
+            const savingsDeduction = budgetRow?.savingsReserved ?? 0;
 
             return (
               <article
@@ -860,10 +861,10 @@ export function AccountLedgerPage({
                     <small>{ACCOUNT_TYPE_LABELS[account.type]}</small>
                     <strong>{account.name}</strong>
                   </span>
-                  <b>{formatMoney(balance)}</b>
+                  <b>{formatMoney(balance - savingsDeduction)}</b>
                 </button>
                 <div className="account-external-breakdown">
-                  <span>Thực có <strong>{formatMoney(calculateAccountActualAvailable(account, transactions))}</strong></span>
+                  <span>Thực có <strong>{formatMoney(Math.max(0, calculateAccountActualAvailable(account, transactions) - savingsDeduction))}</strong></span>
                   {external > 0 && <span className="is-outside">Đang ở ngoài <strong>{formatMoney(external)}</strong></span>}
                   <span>Đã dành trong hũ <strong>{formatMoney(budgetRow?.reserved ?? 0)}</strong></span>
                   <span>Chưa dành cho hũ <strong>{formatMoney(budgetRow?.unallocated ?? 0)}</strong></span>
