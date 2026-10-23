@@ -566,9 +566,9 @@ export function AccountReconciliationPage({
             <div>
               <h2>Nhập số dư thực tế</h2>
               <p>
-                Bỏ trống tài khoản chưa muốn kiểm kê. Tiền thực có dự kiến =
-                số dư Sổ tài khoản trừ tiền còn ở ngoài và phần đã dành riêng vào ngày đã chọn.
-                Hãy nhập số tiền thực tế có thể dùng sau các khoản này.
+                Bỏ trống tài khoản chưa muốn kiểm kê. Số dư dự kiến của mỗi tài khoản
+                đã là số có thể dùng sau khi trừ tiền còn ở ngoài vào ngày đã chọn.
+                Hãy nhập số tiền thực tế bạn có thể dùng.
               </p>
             </div>
             <label className="reconciliation-date-field">
@@ -620,7 +620,7 @@ export function AccountReconciliationPage({
               const basis = reconciliationBases[account.id];
               const bookBalance = savedLine?.bookBalance ?? basis.bookBalance;
               const externalAmount = savedLine?.externalAmount ?? basis.externalAmount;
-              const savingsAmount = reconciliationSavings[account.id];
+              const visibleBookBalance = bookBalance - (reconciliationSavings[account.id] ?? 0);
               const hasSavedBasis = !savedLine ||
                 (savedLine.bookBalance !== undefined && savedLine.externalAmount !== undefined);
               const isAdjusted = Boolean(
@@ -643,8 +643,7 @@ export function AccountReconciliationPage({
                       </small>
                       {hasSavedBasis ? (
                         <small>
-                          Sổ {formatMoney(bookBalance)} − tiền ở ngoài {formatMoney(externalAmount)}
-                          {(savingsAmount ?? 0) > 0 ? " · Đã trừ phần dành riêng" : ""}
+                          Sổ {formatMoney(visibleBookBalance)} − tiền ở ngoài {formatMoney(externalAmount)}
                         </small>
                       ) : (
                         <small>Giữ nguyên số dự kiến của lần kiểm kê cũ.</small>
