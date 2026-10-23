@@ -499,6 +499,82 @@
   font-variant-numeric: tabular-nums;
 }
 
+.analytics-expense-other-trigger {
+  margin-top: 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 0.55rem;
+  background: var(--surface);
+  color: var(--primary-text);
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.4rem 0.6rem;
+}
+
+.analytics-expense-other-trigger:hover,
+.analytics-expense-other-trigger[aria-expanded="true"] {
+  background: var(--primary-soft);
+}
+
+.analytics-expense-other-trigger:focus-visible,
+.analytics-expense-other-popover button:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.analytics-expense-other-popover {
+  position: fixed;
+  z-index: 1100;
+  overflow-y: auto;
+  border: 1px solid var(--border-strong);
+  border-radius: 0.8rem;
+  background: var(--surface);
+  box-shadow: 0 14px 35px rgba(23, 32, 27, 0.18);
+  color: var(--text-primary);
+  padding: 0.75rem;
+}
+
+.analytics-expense-other-popover__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.6rem;
+  padding-bottom: 0.55rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.analytics-expense-other-popover__header > div {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.analytics-expense-other-popover__header strong { font-size: 0.85rem; }
+.analytics-expense-other-popover__header small { color: var(--text-secondary); font-size: 0.7rem; }
+
+.analytics-expense-other-popover__header button {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border-radius: 0.4rem;
+  color: var(--text-secondary);
+  padding: 0.2rem;
+}
+
+.analytics-expense-other-popover__list > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.15rem 0.4rem;
+  padding: 0.55rem 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.73rem;
+}
+
+.analytics-expense-other-popover__list > div:last-child { border-bottom: 0; padding-bottom: 0; }
+.analytics-expense-other-popover__list span { grid-row: span 2; align-self: center; overflow-wrap: anywhere; }
+.analytics-expense-other-popover__list strong,
+.analytics-expense-other-popover__list small { text-align: right; font-variant-numeric: tabular-nums; }
+.analytics-expense-other-popover__list small { color: var(--text-secondary); }
+
 .analytics-goal-list,
 .analytics-account-list {
   display: grid;

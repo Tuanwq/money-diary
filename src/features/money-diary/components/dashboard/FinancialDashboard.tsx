@@ -46,11 +46,14 @@ export function FinancialDashboard({
   return (
     <section className="manager-balance-card manager-financial-dashboard" aria-labelledby="manager-balance-title">
       <div className="manager-balance-heading">
-        <span><WalletCards aria-hidden="true" size={17} /> Tổng tiền hiện có (có thể dùng ngay)</span>
+        <span>{tab === "allocation" ? <CookingPot aria-hidden="true" size={17} /> : <WalletCards aria-hidden="true" size={17} />}
+          {tab === "allocation" ? " Tiền còn trong hũ" : " Tổng tiền hiện có (có thể dùng ngay)"}</span>
         <button type="button" onClick={onOpenAccounts}>Xem tài khoản <ArrowRight size={16} /></button>
       </div>
-      <strong id="manager-balance-title">{formatMoney(availableNow)}</strong>
-      <p>Trên tổng số dư {formatMoney(actualMoney)} trong Sổ tài khoản.</p>
+      <strong id="manager-balance-title">{formatMoney(tab === "allocation" ? financialPosition.reserved : availableNow)}</strong>
+      <p>{tab === "allocation"
+        ? "Tổng số tiền còn lại trong các hũ đang dùng."
+        : `Trên tổng số dư ${formatMoney(actualMoney)} trong Sổ tài khoản.`}</p>
 
       <div className="manager-dashboard-tabs" role="tablist" aria-label="Chế độ Dashboard tài chính" data-horizontal-gesture>
         <button id="manager-tab-overview" type="button" role="tab" aria-selected={tab === "overview"}

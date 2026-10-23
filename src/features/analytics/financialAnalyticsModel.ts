@@ -17,6 +17,7 @@ import {
   addDaysToDateString,
   formatDateShort,
   getDateString,
+  getWeekStart,
   toDate,
 } from "../../utils/date";
 import {
@@ -41,8 +42,10 @@ import { buildAnalyticsDataQuality,
   type AnalyticsDataQuality } from "./analyticsDataQuality.ts";
 
 export type AnalyticsPeriod =
+  | "3d"
   | "7d"
   | "30d"
+  | "thisWeek"
   | "thisMonth"
   | "90d"
   | "all"
@@ -124,6 +127,7 @@ export type FinancialAnalyticsModel = {
   dataQuality: AnalyticsDataQuality;
   dailyPoints: AnalyticsDailyPoint[];
   expenseCategories: AnalyticsExpenseCategory[];
+  otherExpenseCategories: Array<Pick<AnalyticsExpenseCategory, "name" | "percentage" | "value">>;
   incomeBreakdown: Array<{ name: string; value: number }>;
   goals: AnalyticsGoalItem[];
   mainGoalSummary: MainGoalProgressSummary;
@@ -362,19 +366,24 @@ function buildExpenseCategories(
     .map(([name, value]) => ({ name, value }))
     .sort((a, b) => b.value - a.value);
   const visible = sorted.slice(0, 5);
-  const remaining = sorted
-    .slice(5)
-    .reduce((total, item) => total + item.value, 0);
+  const otherCategories = sorted.slice(5);
+  const remaining = otherCategories.reduce((total, item) => total + item.value, 0);
 
   if (remaining > 0) visible.push({ name: "Nhãn khác", value: remaining });
 
   const total = visible.reduce((sum, item) => sum + item.value, 0);
 
-  return visible.map((item, index) => ({
-    ...item,
-    color: EXPENSE_COLORS[index % EXPENSE_COLORS.length],
-    percentage: total > 0 ? Math.round((item.value / total) * 100) : 0,
-  }));
+  return {
+    categories: visible.map((item, index) => ({
+      ...item,
+      color: EXPENSE_COLORS[index % EXPENSE_COLORS.length],
+      percentage: total > 0 ? Math.round((item.value / total) * 100) : 0,
+    })),
+    otherCategories: otherCategories.map((item) => ({
+      ...item,
+      percentage: total > 0 ? Math.round((item.value / total) * 100) : 0,
+    })),
+  };
 }
 
 function buildWeekdayPerformance(points: AnalyticsDailyPoint[]) {
@@ -518,11 +527,19 @@ export function buildAnalyticsDateRange({
     };
   }
 
-  const days = period === "7d" ? 7 : period === "90d" ? 90 : 30;
+  if (period === "thisWeek") {
+    return {
+      fromDate: getWeekStart(toDate(today)),
+      label: "Tuần này",
+      toDate: today,
+    };
+  }
+
+  const days = period === "3d" ? 3 : period === "7d" ? 7 : period === "90d" ? 90 : 30;
 
   return {
     fromDate: addDaysToDateString(today, -(days - 1)),
-    label: `${days} ngày gần nhất`,
+    label: period === "3d" ? "3 ngày gần đây" : `${days} ngày gần nhất`,
     toDate: today,
   };
 }
@@ -588,6 +605,7 @@ export function buildFinancialAnalyticsModel(
     { name: "Tiền nhận · Nhật ký", value: totals.received },
     ...[...incomeByCategory].map(([name, value]) => ({ name, value })),
   ].filter((item) => item.value !== 0);
+  const expenseBreakdown = buildExpenseCategories(input.expenses, input.transactions, input.range);
 
   return {
     accounts,
@@ -601,7 +619,8 @@ export function buildFinancialAnalyticsModel(
     completedGoals: input.completedGoals.length,
     dataQuality,
     dailyPoints,
-    expenseCategories: buildExpenseCategories(input.expenses, input.transactions, input.range),
+    expenseCategories: expenseBreakdown.categories,
+    otherExpenseCategories: expenseBreakdown.otherCategories,
     incomeBreakdown,
     goals: buildGoals(input.goals, mainGoalSummary),
     mainGoalSummary,

@@ -50,6 +50,7 @@ import {
   type AnalyticsMetric,
   type AnalyticsPeriod,
 } from "./financialAnalyticsModel";
+import { OtherExpensePopover } from "./OtherExpensePopover.tsx";
 import "./FinancialAnalyticsPage.css";
 
 type FinancialAnalyticsPageProps = {
@@ -76,7 +77,9 @@ type KpiDefinition = {
 };
 
 const PERIOD_OPTIONS: Array<{ label: string; value: AnalyticsPeriod }> = [
+  { label: "3 ngày gần đây", value: "3d" },
   { label: "7 ngày", value: "7d" },
+  { label: "Tuần này", value: "thisWeek" },
   { label: "30 ngày", value: "30d" },
   { label: "Tháng này", value: "thisMonth" },
   { label: "90 ngày", value: "90d" },
@@ -585,6 +588,7 @@ export function FinancialAnalyticsPage({
                   </div>
                 ))}
               </div>
+              <OtherExpensePopover categories={model.otherExpenseCategories} />
             </>
           ) : (
             <ChartEmptyState message="Chưa có chi tiêu trong khoảng này." />
