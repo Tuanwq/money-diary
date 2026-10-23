@@ -24,23 +24,32 @@ export function LedgerDayGroups({ transactions, accounts, jars = [], onView }: {
         const next = new Set(current); if (next.has(group.date)) next.delete(group.date); else next.add(group.date);
         return next;
       })} type="button">
-        <span className="ledger-day-card__heading"><strong>{formatReportDate(group.date)}</strong><small>{group.count} giao dịch</small></span>
-        <span className="ledger-day-card__summary">
-          <span className="is-income">Thu {formatMoney(group.income)}</span>
-          <span className="is-expense">Chi {formatMoney(group.expense)}</span>
-          <strong className={group.net < 0 ? "is-expense" : "is-income"}>Ròng {group.net < 0 ? "−" : "+"}{formatMoney(Math.abs(group.net))}</strong>
+        <span className="ledger-day-card__topline">
+          <span className="ledger-day-card__heading"><strong>{formatReportDate(group.date)}</strong><small>{group.count} giao dịch</small></span>
+          <span className="ledger-day-card__view">{expanded ? "Thu gọn" : "Xem chi tiết"}<ChevronDown aria-hidden="true" size={17} /></span>
         </span>
-        <span className="ledger-day-card__view">{expanded ? "Thu gọn" : "Xem chi tiết"}<ChevronDown aria-hidden="true" size={17} /></span>
+        <span className="ledger-day-card__summary">
+          <span className="ledger-day-card__metric ledger-day-card__metric--income"><small>Tổng thu</small><strong>{formatMoney(group.income)}</strong></span>
+          <span className="ledger-day-card__metric ledger-day-card__metric--expense"><small>Tổng chi</small><strong>{formatMoney(group.expense)}</strong></span>
+          <span className={`ledger-day-card__metric ledger-day-card__metric--net ${group.net < 0 ? "is-expense" : "is-income"}`}><small>Chênh lệch</small><strong>{group.net < 0 ? "−" : "+"}{formatMoney(Math.abs(group.net))}</strong></span>
+        </span>
       </button>
       {expanded && <div className="ledger-day-card__items">{group.transactions.map((item) => {
         const place = item.type === "transfer" ? `${accountName(item.accountId)} → ${accountName(item.toAccountId)}` : accountName(item.accountId);
         const jar = jars.find((candidate) => candidate.id === item.jarId);
         return <button className="ledger-day-card__item" key={item.id} onClick={() => onView(item)} type="button">
-          <span><strong>{item.note || item.category || (item.type === "transfer" ? "Chuyển nội bộ" : "Giao dịch")}</strong>
-            <small>{new Date(item.occurredAt ?? item.createdAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })} · {item.type === "income" ? "Thu" : item.type === "expense" ? "Chi" : "Chuyển"} · {place}{jar ? ` · ${jar.name}` : ""}</small>
-            {item.category && <small>Nhãn: {item.category}</small>}</span>
-          <b className={item.type === "expense" ? "is-expense" : item.type === "income" ? "is-income" : "is-transfer"}>
-            {item.type === "expense" ? "−" : item.type === "income" ? "+" : "↔ "}{formatMoney(item.amount)}</b>
+          <span className="ledger-day-card__item-topline">
+            <strong>{item.note || item.category || (item.type === "transfer" ? "Chuyển nội bộ" : "Giao dịch")}</strong>
+            <b className={item.type === "expense" ? "is-expense" : item.type === "income" ? "is-income" : "is-transfer"}>
+              {item.type === "expense" ? "−" : item.type === "income" ? "+" : "↔ "}{formatMoney(item.amount)}</b>
+          </span>
+          <span className="ledger-day-card__item-details">
+            <span className="ledger-day-card__item-detail"><small>Thời gian</small><strong>{new Date(item.occurredAt ?? item.createdAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}</strong></span>
+            <span className="ledger-day-card__item-detail"><small>Loại</small><strong className={item.type === "expense" ? "is-expense" : item.type === "income" ? "is-income" : "is-transfer"}>{item.type === "income" ? "Thu" : item.type === "expense" ? "Chi" : "Chuyển"}</strong></span>
+            <span className="ledger-day-card__item-detail ledger-day-card__item-detail--account"><small>{item.type === "transfer" ? "Từ → đến" : "Tài khoản"}</small><strong>{place}</strong></span>
+            {jar && <span className="ledger-day-card__item-detail"><small>Hũ chi tiêu</small><strong>{jar.name}</strong></span>}
+            {item.category && <span className="ledger-day-card__item-detail"><small>Nhãn</small><strong>{item.category}</strong></span>}
+          </span>
         </button>;
       })}</div>}
     </article>;
