@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ArrowLeft, PiggyBank, Plus, Settings2 } from "lucide-react";
+import { ArrowLeft, Eye, EyeOff, PiggyBank, Plus, Settings2 } from "lucide-react";
 import type { AccountLedgerData } from "../../account-ledger/accountLedgerModel.ts";
 import type { SubGoal } from "../../../types.ts";
 import { formatMoney, formatMoneyInput, parseMoneyInput } from "../../../utils/money.ts";
@@ -27,6 +27,8 @@ export function SavingsPage({ ledger, goals, today, onBack, onCommand, schemaRea
   const [amounts, setAmounts] = useState<Record<string, string>>({});
   const [error, setError] = useState("");
   const [filters, setFilters] = useState<SavingsHistoryFilters>({});
+  const [totalVisible, setTotalVisible] = useState(false);
+  const [monthVisible, setMonthVisible] = useState(false);
   const activeRules = (ledger.savingsRules ?? []).filter((item) => !item.deletedAt);
   const history = [...(ledger.savingsAllocations ?? [])].sort((a, b) => b.date.localeCompare(a.date) || b.updatedAt.localeCompare(a.updatedAt));
   const visibleHistory = filterSavingsHistory(history, filters);
@@ -56,8 +58,18 @@ export function SavingsPage({ ledger, goals, today, onBack, onCommand, schemaRea
       <button type="button" className="savings-primary-button" onClick={() => setEditing("new")} disabled={!schemaReady}><Plus size={17} /> Tạo quy tắc</button></header>
     {!schemaReady && <p className="savings-error" role="alert">Tiết kiệm chưa đồng bộ. Cần áp dụng migration Supabase trước khi tạo quy tắc.</p>}
     {error && <p className="savings-error" role="alert">{error}</p>}
-    <div className="savings-summary-grid"><section><small>Đã đưa vào tiết kiệm</small><strong>{formatMoney(summary.total)}</strong></section>
-      <section><small>Tháng này</small><strong>{formatMoney(summary.month)}</strong></section>
+    <div className="savings-summary-grid"><section><div className="savings-summary-heading">
+        <small>Đã đưa vào tiết kiệm</small>
+        <button type="button" className="savings-visibility-button" aria-label={totalVisible ? "Ẩn tổng tiền tiết kiệm" : "Hiện tổng tiền tiết kiệm"}
+          aria-pressed={totalVisible} onClick={() => setTotalVisible((visible) => !visible)}>
+          {totalVisible ? <EyeOff aria-hidden="true" size={19} /> : <Eye aria-hidden="true" size={19} />}
+        </button></div><strong>{totalVisible ? formatMoney(summary.total) : "•••••• ₫"}</strong></section>
+      <section><div className="savings-summary-heading">
+        <small>Tháng này</small>
+        <button type="button" className="savings-visibility-button" aria-label={monthVisible ? "Ẩn tiền tiết kiệm tháng này" : "Hiện tiền tiết kiệm tháng này"}
+          aria-pressed={monthVisible} onClick={() => setMonthVisible((visible) => !visible)}>
+          {monthVisible ? <EyeOff aria-hidden="true" size={19} /> : <Eye aria-hidden="true" size={19} />}
+        </button></div><strong>{monthVisible ? formatMoney(summary.month) : "•••••• ₫"}</strong></section>
       <section><small>Mục tiêu liên kết gần nhất</small>{linkedGoal ? <><strong>{linkedGoal.goal.name}</strong>
         <span>{formatMoney(linkedGoal.saved)} / {formatMoney(linkedGoal.goal.target)}</span>
         <progress value={Math.min(linkedGoal.saved, linkedGoal.goal.target)} max={linkedGoal.goal.target} /></>
