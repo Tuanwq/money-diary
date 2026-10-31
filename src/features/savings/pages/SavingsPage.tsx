@@ -22,16 +22,22 @@ const STATUS: Record<string, string> = {
   proposed: "Chờ xác nhận", allocated: "Đã dành riêng", transferred: "Đã chuyển",
   skipped: "Đã bỏ qua", needs_recalculation: "Cần tính lại",
 };
+const HISTORY_PAGE_SIZE = 10;
 export function SavingsPage({ ledger, goals, today, onBack, onCommand, schemaReady }: Props) {
   const [editing, setEditing] = useState<SavingsRule | "new" | null>(null);
   const [amounts, setAmounts] = useState<Record<string, string>>({});
   const [error, setError] = useState("");
   const [filters, setFilters] = useState<SavingsHistoryFilters>({});
+  const [historyPage, setHistoryPage] = useState(1);
   const [totalVisible, setTotalVisible] = useState(false);
   const [monthVisible, setMonthVisible] = useState(false);
   const activeRules = (ledger.savingsRules ?? []).filter((item) => !item.deletedAt);
   const history = [...(ledger.savingsAllocations ?? [])].sort((a, b) => b.date.localeCompare(a.date) || b.updatedAt.localeCompare(a.updatedAt));
   const visibleHistory = filterSavingsHistory(history, filters);
+  const historyPageCount = Math.max(1, Math.ceil(visibleHistory.length / HISTORY_PAGE_SIZE));
+  const currentHistoryPage = Math.min(historyPage, historyPageCount);
+  const pagedHistory = visibleHistory.slice((currentHistoryPage - 1) * HISTORY_PAGE_SIZE,
+    currentHistoryPage * HISTORY_PAGE_SIZE);
   const accountsById = new Map(ledger.accounts.map((account) => [account.id, account.name]));
   const summary = (() => {
     const completed = history.filter(isSavedSavingsResult);
@@ -50,6 +56,10 @@ export function SavingsPage({ ledger, goals, today, onBack, onCommand, schemaRea
     try { setError(""); onCommand(command); } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Chưa xử lý được tiết kiệm.");
     }
+  }
+  function changeFilters(next: (old: SavingsHistoryFilters) => SavingsHistoryFilters) {
+    setFilters(next);
+    setHistoryPage(1);
   }
 
   return <div className="savings-page">
@@ -86,27 +96,27 @@ export function SavingsPage({ ledger, goals, today, onBack, onCommand, schemaRea
         </article>)}</div>}</section>
     <section className="savings-panel"><div className="savings-section-heading"><h2><PiggyBank size={19} /> Lịch sử tiết kiệm</h2><span>{visibleHistory.length}/{history.length} khoản</span></div>
       <div className="savings-history-filters" aria-label="Bộ lọc lịch sử tiết kiệm">
-        <label>Thời gian<select value={filters.month ?? ""} onChange={(event) => setFilters((old) => ({ ...old, month: event.target.value || undefined }))}>
+        <label>Thời gian<select value={filters.month ?? ""} onChange={(event) => changeFilters((old) => ({ ...old, month: event.target.value || undefined }))}>
           <option value="">Tất cả</option><option value={today.slice(0, 7)}>Tháng này</option>
           {[...new Set(history.map((item) => item.date.slice(0, 7)))].filter((month) => month !== today.slice(0, 7))
             .map((month) => <option value={month} key={month}>{month}</option>)}
         </select></label>
-        <label>Trạng thái<select value={filters.status ?? ""} onChange={(event) => setFilters((old) => ({ ...old,
+        <label>Trạng thái<select value={filters.status ?? ""} onChange={(event) => changeFilters((old) => ({ ...old,
           status: event.target.value as SavingsHistoryFilters["status"] || undefined }))}>
           <option value="">Tất cả</option><option value="saved">Đã tiết kiệm</option><option value="proposed">Chờ xác nhận</option>
           <option value="needs_recalculation">Cần tính lại</option><option value="skipped">Đã bỏ qua</option>
         </select></label>
-        <label>Quy tắc<select value={filters.ruleId ?? ""} onChange={(event) => setFilters((old) => ({ ...old, ruleId: event.target.value || undefined }))}>
-          <option value="">Tất cả</option>{(ledger.savingsRules ?? []).map((rule) => <option value={rule.id} key={rule.id}>{rule.name}</option>)}
+        <label>Quy tắc<select value={filters.ruleId ?? ""} onChange={(event) => changeFilters((old) => ({ ...old, ruleId: event.target.value || undefined }))}>
+          <option value="">Tất cả</option><option value="jar-rollover">Tiền dư hũ</option>{(ledger.savingsRules ?? []).map((rule) => <option value={rule.id} key={rule.id}>{rule.name}</option>)}
         </select></label>
-        <label>Cách tiết kiệm<select value={filters.destination ?? ""} onChange={(event) => setFilters((old) => ({ ...old,
+        <label>Cách tiết kiệm<select value={filters.destination ?? ""} onChange={(event) => changeFilters((old) => ({ ...old,
           destination: event.target.value as SavingsHistoryFilters["destination"] || undefined }))}>
           <option value="">Tất cả</option><option value="allocation">Dành riêng</option><option value="transfer">Chuyển tài khoản</option>
         </select></label>
       </div>
       {history.length === 0 ? <p className="savings-empty">Chưa có khoản tiết kiệm. Ngày không có thu nhập sẽ không tạo đề xuất.</p>
         : visibleHistory.length === 0 ? <p className="savings-empty">Không có khoản tiết kiệm phù hợp bộ lọc.</p>
-        : <div className="savings-history-list">{visibleHistory.map((item) => {
+        : <><div className="savings-history-list">{pagedHistory.map((item) => {
           const rule = ledger.savingsRules?.find((candidate) => candidate.id === item.ruleId);
           const income = rule ? getSavingsIncome(ledger, rule, item.date) : null;
           const incomeAmount = item.incomeAmount ?? income?.income ?? 0;
@@ -116,11 +126,20 @@ export function SavingsPage({ ledger, goals, today, onBack, onCommand, schemaRea
           const rate = item.ruleMode === "percentage" || item.ruleMode === "random_percentage"
             ? `${item.ruleValue ?? item.sampledValue ?? rule?.value ?? 0}%` : null;
           return <article className="savings-history-row" key={item.id}><div className="savings-history-main">
-            <div><small>{item.date} · {STATUS[item.status]}</small><strong>{item.ruleName ?? rule?.name ?? "Quy tắc đã xóa"}</strong>
-              <small>{item.destination.kind === "transfer" ? "Chuyển tài khoản" : "Dành riêng"} · {percent}% của tiền tính theo quy tắc</small></div>
+            <div><small>{item.date} · {STATUS[item.status]}</small><strong>{item.origin === "jar_rollover"
+              ? `Tiền dư hũ ${item.ruleName ?? "đã xóa"}` : item.ruleName ?? rule?.name ?? "Quy tắc đã xóa"}</strong>
+              <small>{item.origin === "jar_rollover"
+                ? `Tháng ${item.period?.slice(5)}/${item.period?.slice(0, 4)} · ${item.status === "skipped" ? "Giữ trong hũ" : item.destination.kind === "transfer" ? "Chuyển tài khoản" : "Dành riêng"}`
+                : `${item.destination.kind === "transfer" ? "Chuyển tài khoản" : "Dành riêng"} · ${percent}% của tiền tính theo quy tắc`}</small></div>
             <strong className="savings-history-amount">{formatMoney(item.amount)}</strong></div>
-            <details className="savings-history-details"><summary>Xem chi tiết tính toán</summary>
-              <dl><div><dt>Thu nhập đã xác nhận</dt><dd>{formatMoney(incomeAmount)}</dd></div>
+            <details className="savings-history-details"><summary>{item.origin === "jar_rollover" ? "Xem nguồn tiền" : "Xem chi tiết tính toán"}</summary>
+              {item.origin === "jar_rollover" ? <dl>
+                <div><dt>Hũ chi tiêu</dt><dd>{item.ruleName ?? "Hũ đã xóa"}</dd></div>
+                <div><dt>Kỳ đã kết thúc</dt><dd>{item.period}</dd></div>
+                <div><dt>Tài khoản nguồn</dt><dd>{accountsById.get(item.sourceAccountId) ?? "Tài khoản đã xóa"}</dd></div>
+                <div><dt>Đích</dt><dd>{item.status === "skipped" ? "Giữ trong hũ" : item.destination.kind === "transfer"
+                  ? accountsById.get(item.destination.accountId) ?? "Tài khoản đã xóa" : "Tiền dành riêng"}</dd></div>
+              </dl> : <dl><div><dt>Thu nhập đã xác nhận</dt><dd>{formatMoney(incomeAmount)}</dd></div>
                 {(item.basisKind ?? rule?.basis) === "net_work" && <div><dt>Chi phí công việc</dt><dd>−{formatMoney(workCosts)}</dd></div>}
                 <div><dt>Tiền làm căn cứ</dt><dd>{formatMoney(basis)}</dd></div>
                 <div><dt>Quy tắc áp dụng</dt><dd>{rate ?? "Số tiền cố định/ngẫu nhiên"}</dd></div>
@@ -128,7 +147,7 @@ export function SavingsPage({ ledger, goals, today, onBack, onCommand, schemaRea
                 <div><dt>Tài khoản nguồn</dt><dd>{accountsById.get(item.sourceAccountId) ?? "Tài khoản đã xóa"}</dd></div>
                 <div><dt>Đích</dt><dd>{item.destination.kind === "transfer"
                   ? accountsById.get(item.destination.accountId) ?? "Tài khoản đã xóa" : "Tiền dành riêng"}</dd></div>
-              </dl></details>
+              </dl>}</details>
             {item.status === "proposed" && <div className="savings-row-actions">
               <input aria-label="Điều chỉnh số tiền tiết kiệm" inputMode="numeric" value={amounts[item.id] ?? formatMoneyInput(String(item.amount))}
                 onChange={(event) => setAmounts((previous) => ({ ...previous, [item.id]: formatMoneyInput(event.target.value) }))} />
@@ -140,7 +159,13 @@ export function SavingsPage({ ledger, goals, today, onBack, onCommand, schemaRea
             {item.status === "allocated" && <div className="savings-row-actions"><button type="button" className="savings-quiet-button"
               onClick={() => issue({ type: "release", resultId: item.id })}>Giải phóng tiền</button></div>}
           </article>;
-        })}</div>}</section>
+        })}</div><nav className="savings-history-pagination" aria-label="Phân trang lịch sử tiết kiệm">
+          <button type="button" className="savings-quiet-button" disabled={currentHistoryPage === 1}
+            onClick={() => setHistoryPage(currentHistoryPage - 1)}>Trước</button>
+          <span>Trang {currentHistoryPage}/{historyPageCount} · {visibleHistory.length} khoản</span>
+          <button type="button" className="savings-quiet-button" disabled={currentHistoryPage === historyPageCount}
+            onClick={() => setHistoryPage(currentHistoryPage + 1)}>Sau</button>
+        </nav></>}</section>
     {editing && <SavingsRuleForm accounts={ledger.accounts} goals={goals} today={today}
       initial={editing === "new" ? undefined : editing} onClose={() => setEditing(null)}
       onSave={(rule) => { onCommand({ type: "save_rule", rule }); setEditing(null); }} />}

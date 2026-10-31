@@ -29,6 +29,10 @@ export type SavingsRule = {
 export type SavingsAllocation = {
   id: string;
   ruleId: string;
+  /** Jar balance moved at a month boundary, independent of income rules. */
+  origin?: "jar_rollover";
+  jarId?: string;
+  period?: string;
   date: string;
   sourceAccountId: string;
   destination: SavingsRule["destination"];
@@ -62,7 +66,8 @@ export type SavingsHistoryFilters = {
 export function filterSavingsHistory(items: SavingsAllocation[], filters: SavingsHistoryFilters) {
   return items.filter((item) =>
     (!filters.month || item.date.startsWith(filters.month)) &&
-    (!filters.ruleId || item.ruleId === filters.ruleId) &&
+    (!filters.ruleId || (filters.ruleId === "jar-rollover"
+      ? item.origin === "jar_rollover" : item.ruleId === filters.ruleId)) &&
     (!filters.destination || item.destination.kind === filters.destination) &&
     (!filters.status || (filters.status === "saved"
       ? isSavedSavingsResult(item) : item.status === filters.status)));

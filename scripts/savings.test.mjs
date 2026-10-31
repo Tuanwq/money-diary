@@ -8,6 +8,7 @@ import { assertSavingsCoverageAfterLedgerChange, calculateSavingsAmount, filterS
   "../src/features/savings/domain/savingsModel.ts";
 import { applySavingsCommand } from "../src/features/savings/services/savingsService.ts";
 import { getSavingsHeldByAccount } from "../src/features/savings/domain/savingsBalance.ts";
+import { getPendingJarRollover } from "../src/features/savings/domain/jarRollover.ts";
 import { filterHistoryLedgerTransactions } from "../src/features/history/historyLedgerModel.ts";
 import { buildStoryTimeline } from "../src/features/photo-finance/services/dayStoryModel.ts";
 
@@ -196,4 +197,95 @@ assert.throws(() => assertSavingsCoverageAfterLedgerChange(allocated, {
   ...allocated, transactions: [...allocated.transactions, { ...allocated.transactions[0], id: "expense", type: "expense", amount: 450_000 }],
 }), /không đủ tiền/, "subsequent spending cannot silently consume savings reserve");
 
-console.log("Savings: calculations, caps, random persistence, availability, idempotency, income edits, and asset invariants passed.");
+const rolloverDate = "2026-11-01";
+const rolloverBase = () => {
+  const data = createDefaultLedger();
+  data.accounts = data.accounts.map((account) => ({ ...account,
+    openingBalance: account.id === source ? 200_000 : 0, budgetEligibility: "eligible" }));
+  data.jars = [{ id: "october-jar", name: "Ăn uống", icon: "🫙", limitAmount: 150_000,
+    budgetPeriod: "monthly", startDate: "2026-10-01", linkedLabels: ["Ăn uống"],
+    status: "active", createdAt: now, updatedAt: now }];
+  data.jarActivities = [{ id: "october-funding", jarId: "october-jar", kind: "allocate",
+    accountId: source, amount: 100_000, createdAt: now }];
+  return data;
+};
+const rollover = rolloverBase();
+assert.equal(getPendingJarRollover(rollover, "2026-10-31").jars.length, 0,
+  "monthly jars do not roll over before the month ends");
+assert.equal(getPendingJarRollover(rollover, rolloverDate).jars[0].amount, 100_000);
+const expiredCustomJar = rolloverBase();
+expiredCustomJar.jars = expiredCustomJar.jars.map((jar) => ({ ...jar,
+  budgetPeriod: "custom", endDate: "2026-10-25" }));
+assert.equal(getPendingJarRollover(expiredCustomJar, rolloverDate).jars.length, 1,
+  "custom jars ending in the previous month are also offered for rollover");
+const newMonthFunding = rolloverBase();
+newMonthFunding.jarActivities.push({ id: "november-funding", jarId: "october-jar",
+  kind: "allocate", accountId: source, amount: 30_000,
+  createdAt: "2026-11-02T10:00:00.000Z" });
+assert.equal(getPendingJarRollover(newMonthFunding, "2026-11-03").jars[0].amount, 100_000,
+  "new-month funding must stay in the jar");
+assert.equal(getFinancialPosition(applySavingsCommand(newMonthFunding,
+  { type: "rollover_jars", today: "2026-11-03", decision: "allocate" }, now)).reserved, 30_000);
+const declinedRollover = applySavingsCommand(rollover,
+  { type: "rollover_jars", today: rolloverDate, decision: "skip" }, now);
+assert.equal(declinedRollover.savingsAllocations[0].status, "skipped");
+assert.equal(getPendingJarRollover(declinedRollover, rolloverDate).jars.length, 0);
+assert.equal(getFinancialPosition(declinedRollover).reserved, 100_000,
+  "declining leaves all money in the jar");
+const savedRollover = applySavingsCommand(rollover,
+  { type: "rollover_jars", today: rolloverDate, decision: "allocate" }, now);
+assert.equal(getFinancialPosition(savedRollover).reserved, 0);
+assert.equal(getSavingsHeldAmount(savedRollover), 100_000);
+assert.equal(calculateAccountBalance(savedRollover.accounts[1], savedRollover.transactions),
+  calculateAccountBalance(rollover.accounts[1], rollover.transactions),
+  "a savings allocation does not change book balance");
+assert.equal(filterSavingsHistory(savedRollover.savingsAllocations,
+  { ruleId: "jar-rollover" }).length, 1);
+assert.equal(getPendingJarRollover(savedRollover, rolloverDate).jars.length, 0);
+assert.equal(applySavingsCommand(savedRollover,
+  { type: "rollover_jars", today: rolloverDate, decision: "allocate" }, now), savedRollover,
+  "retry cannot save the same jar balance twice");
+const twoJars = rolloverBase();
+twoJars.jars.push({ ...twoJars.jars[0], id: "second-jar", name: "Di chuyển" });
+twoJars.jarActivities.push({ id: "second-funding", jarId: "second-jar", kind: "allocate",
+  accountId: source, amount: 20_000, createdAt: now });
+const allJarsSaved = applySavingsCommand(twoJars,
+  { type: "rollover_jars", today: rolloverDate, decision: "allocate" }, now);
+assert.equal(allJarsSaved.savingsAllocations.length, 2,
+  "one confirmation sweeps all eligible jars");
+assert.equal(getFinancialPosition(allJarsSaved).reserved, 0);
+assert.equal(getSavingsHeldAmount(allJarsSaved), 120_000);
+const transferredRollover = applySavingsCommand(rollover,
+  { type: "rollover_jars", today: rolloverDate, decision: "transfer", destinationAccountId: target }, now);
+assert.equal(transferredRollover.transactions.length, 1);
+assert.equal(transferredRollover.transactions[0].type, "transfer");
+assert.ok(isSavingsTransfer(transferredRollover.transactions[0]));
+assert.equal(getLedgerSummary(transferredRollover.accounts, transferredRollover.transactions,
+  "2026-11").totalBalance, getLedgerSummary(rollover.accounts, rollover.transactions,
+  "2026-11").totalBalance, "the transfer preserves total assets");
+assert.equal(getSavingsHeldByAccount(transferredRollover).get(target), 100_000);
+assert.equal(getFinancialPosition(transferredRollover).reserved, 0);
+assert.equal(filterHistoryLedgerTransactions(transferredRollover.transactions,
+  { fromDate: "", toDate: "", search: "" }).length, 0);
+const twoSources = rolloverBase();
+twoSources.accounts = twoSources.accounts.map((account) => account.id === target
+  ? { ...account, openingBalance: 50_000 } : account);
+twoSources.jarActivities.push({ id: "cash-funding", jarId: "october-jar", kind: "allocate",
+  accountId: target, amount: 50_000, createdAt: now });
+const multiSourceTransfer = applySavingsCommand(twoSources,
+  { type: "rollover_jars", today: rolloverDate, decision: "transfer", destinationAccountId: target }, now);
+assert.equal(multiSourceTransfer.transactions.length, 1,
+  "funds already at the destination stay there without a self-transfer");
+assert.equal(getSavingsHeldByAccount(multiSourceTransfer).get(target), 150_000);
+assert.equal(getFinancialPosition(multiSourceTransfer).reserved, 0);
+assert.throws(() => applySavingsCommand(rollover,
+  { type: "rollover_jars", today: rolloverDate, decision: "transfer" }, now),
+  /chọn tài khoản tiết kiệm/);
+const shortRollover = rolloverBase();
+shortRollover.accounts = shortRollover.accounts.map((account) => account.id === source
+  ? { ...account, openingBalance: 80_000 } : account);
+assert.throws(() => applySavingsCommand(shortRollover,
+  { type: "rollover_jars", today: rolloverDate, decision: "transfer", destinationAccountId: target }, now),
+  /không đủ tiền thực có/);
+
+console.log("Savings: rules, month rollover, transfer accounting, idempotency, income edits, and asset invariants passed.");

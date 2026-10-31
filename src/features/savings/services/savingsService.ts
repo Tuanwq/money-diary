@@ -1,6 +1,8 @@
 import type { AccountLedgerData, AccountTransaction } from "../../account-ledger/accountLedgerModel.ts";
+import { getFinancialPosition, assertReservationCoverageAfterLedgerChange } from "../../spending-jars/domain/financialPosition.ts";
+import { getPendingJarRollover } from "../domain/jarRollover.ts";
 import { SAVINGS_ROUNDING_UNIT, calculateSavingsAmount, getSavingsAvailable, getSavingsIncome,
-  roundSavingsAmount, savingsResultId,
+  assertSavingsCoverageAfterLedgerChange, roundSavingsAmount, savingsResultId,
   type SavingsAllocation, type SavingsRule } from "../domain/savingsModel.ts";
 
 export type SavingsCommand =
@@ -11,7 +13,63 @@ export type SavingsCommand =
   | { type: "confirm"; resultId: string; amount?: number }
   | { type: "skip"; resultId: string }
   | { type: "recalculate"; resultId: string }
-  | { type: "release"; resultId: string };
+  | { type: "release"; resultId: string }
+  | { type: "rollover_jars"; today: string; decision: "skip" | "allocate" | "transfer";
+      destinationAccountId?: string };
+
+function rollOverJars(ledger: AccountLedgerData,
+  command: Extract<SavingsCommand, { type: "rollover_jars" }>, now: string): AccountLedgerData {
+  const { period, jars } = getPendingJarRollover(ledger, command.today);
+  if (!jars.length) return ledger;
+  const target = command.decision === "transfer"
+    ? ledger.accounts.find((account) => account.id === command.destinationAccountId && !account.archivedAt)
+    : undefined;
+  if (command.decision === "transfer" && !target)
+    throw new Error("Hãy chọn tài khoản tiết kiệm đang hoạt động.");
+  const positions = new Map(getFinancialPosition(ledger).accounts.map((item) => [item.accountId, item]));
+  const activities = [...ledger.jarActivities];
+  const outcomes = [...(ledger.savingsAllocations ?? [])];
+  const transactions = [...ledger.transactions];
+  for (const { jar, sources } of jars) {
+    const ruleId = `jar-rollover:${jar.id}`;
+    if (command.decision === "skip") {
+      outcomes.push({ id: `jar-rollover:${period}:${jar.id}:skip`, ruleId,
+        origin: "jar_rollover", jarId: jar.id, period, date: command.today,
+        sourceAccountId: sources[0].accountId, destination: { kind: "allocation" },
+        amount: 0, incomeSignature: "", ruleName: jar.name, status: "skipped",
+        createdAt: now, updatedAt: now });
+      continue;
+    }
+    for (const source of sources) {
+      const account = ledger.accounts.find((item) => item.id === source.accountId && !item.archivedAt);
+      if (!account) throw new Error(`Tài khoản nguồn của hũ ${jar.name} không còn hoạt động.`);
+      if (command.decision === "transfer" && source.accountId !== target?.id &&
+        (positions.get(source.accountId)?.unallocated ?? -1) < 0)
+        throw new Error(`Tài khoản ${account.name} không đủ tiền thực có để chuyển phần dư của hũ.`);
+      const id = `jar-rollover:${period}:${jar.id}:${source.accountId}`;
+      const transfer = command.decision === "transfer" && source.accountId !== target?.id;
+      const transactionId = transfer ? `saving-transfer:${id}` : undefined;
+      activities.push({ id: `${id}:release`, jarId: jar.id, kind: "release",
+        accountId: source.accountId, amount: source.amount,
+        note: `Chuyển tiền dư tháng ${period} sang tiết kiệm`, createdAt: now });
+      if (transactionId && target) transactions.push({ id: transactionId,
+        accountId: source.accountId, toAccountId: target.id, amount: source.amount,
+        category: "Tiết kiệm từ hũ", date: command.today, type: "transfer",
+        purpose: "internal_transfer", source: "savings", note: `Tiền dư hũ ${jar.name} · ${period}`,
+        createdAt: now, updatedAt: now });
+      outcomes.push({ id, ruleId, origin: "jar_rollover", jarId: jar.id, period,
+        date: command.today, sourceAccountId: source.accountId,
+        destination: transfer && target ? { kind: "transfer", accountId: target.id } : { kind: "allocation" },
+        amount: source.amount, incomeSignature: "", ruleName: jar.name,
+        status: transfer ? "transferred" : "allocated", transactionId,
+        createdAt: now, updatedAt: now });
+    }
+  }
+  const next = { ...ledger, jarActivities: activities, savingsAllocations: outcomes, transactions };
+  assertReservationCoverageAfterLedgerChange(ledger, next);
+  assertSavingsCoverageAfterLedgerChange(ledger, next);
+  return next;
+}
 
 function sample(rule: SavingsRule, random: () => number) {
   if (!rule.mode.startsWith("random_")) return undefined;
@@ -120,6 +178,7 @@ function roundExistingReservation(ledger: AccountLedgerData, rule: SavingsRule,
 /** Pure ledger command: result and any transfer are saved in the same ledger revision. */
 export function applySavingsCommand(ledger: AccountLedgerData, command: SavingsCommand,
   now = new Date().toISOString(), random: () => number = Math.random): AccountLedgerData {
+  if (command.type === "rollover_jars") return rollOverJars(ledger, command, now);
   const rules = ledger.savingsRules ?? [];
   const outcomes = ledger.savingsAllocations ?? [];
   if (command.type === "save_rule") {

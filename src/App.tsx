@@ -6,6 +6,7 @@ import { selectTrustedLegacyBudgets } from "./features/account-ledger/ledgerStor
 import { getLedgerSummary } from "./features/account-ledger/accountLedgerModel";
 import type { AccountTransaction } from "./features/account-ledger/accountLedgerModel.ts";
 import { useSavings } from "./features/savings/hooks/useSavings.ts";
+import { JarRolloverPrompt } from "./features/savings/components/JarRolloverPrompt.tsx";
 import { getSavingsHeldAmount } from "./features/savings/domain/savingsModel.ts";
 import { calculateActualAvailableBalance } from "./features/account-ledger/accountExternalModel.ts";
 import { getFinancialPosition } from "./features/spending-jars/domain/financialPosition.ts";
@@ -3994,6 +3995,9 @@ if (route.kind === "daymark") {
       </Suspense>
     </LazyRouteBoundary>
   )}
+      <JarRolloverPrompt ledger={savingsLedger} today={todayString}
+        ready={savingsSchemaReady && accountLedgerCloudStatus === "Sổ tài khoản đã đồng bộ"}
+        onCommand={handleSavingsCommand} />
     </MoneyPageShell>
   );
 }
