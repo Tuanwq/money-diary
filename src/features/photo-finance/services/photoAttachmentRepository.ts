@@ -6,6 +6,7 @@ import { processPhoto, type ProcessedPhoto } from "./photoImageProcessor.ts";
 import { photoFinanceErrorMessage, retryPhotoOperation } from "./photoFinanceErrors.ts";
 import { createSignedPhotoCache } from "./signedPhotoCache.ts";
 import { photoUploadModeForSize, uploadProcessedPhotoImages } from "./photoUploadService.ts";
+import type { PhotoSaveTrace } from "./photoSaveTrace.ts";
 
 type AttachmentRow = {
   id: string; owner_id: string; source_type: string; source_id: string;
@@ -26,11 +27,15 @@ async function requireOwner(client: SupabaseClient, ownerId: string) {
     throw new Error("Cần đăng nhập đúng tài khoản để lưu ảnh riêng tư.");
 }
 
-async function unwrap<T>(operation: () => PromiseLike<{ data: T; error: unknown }>, retries = 1) {
+async function unwrap<T>(operation: () => PromiseLike<{ data: T; error: unknown }>, retries = 1,
+  trace?: PhotoSaveTrace) {
   return retryPhotoOperation(async () => {
-    const result = await operation();
-    if (result.error) throw result.error;
-    return result.data;
+    const attempt = async () => {
+      const result = await operation();
+      if (result.error) throw result.error;
+      return result.data;
+    };
+    return trace ? trace.measure("metadata", attempt) : attempt();
   }, retries);
 }
 
@@ -38,6 +43,7 @@ export function createPhotoAttachmentRepository(client: SupabaseClient = supabas
   let readyOwner = "";
   let readyUntil = 0;
   let preparing: { ownerId: string; promise: Promise<void> } | null = null;
+  let pendingUpload: { id: string; image: ProcessedPhoto; completedPaths: Set<string> } | null = null;
   const images = createSignedPhotoCache(async (paths) => {
     const { data, error } = await client.storage.from(PHOTO_FINANCE_BUCKET)
       .createSignedUrls(paths, 3600);
@@ -104,11 +110,16 @@ export function createPhotoAttachmentRepository(client: SupabaseClient = supabas
     invalidateImage: images.invalidate,
 
     async upload(ownerId: string, transactionId: string, file: File, isCover: boolean,
-      attachmentId?: string, preparedImage?: ProcessedPhoto): Promise<PhotoAttachment> {
-      await requireOwner(client, ownerId);
+      attachmentId?: string, preparedImage?: ProcessedPhoto,
+      trace?: PhotoSaveTrace): Promise<PhotoAttachment> {
+      if (trace) await trace.measure("authorization", () => requireOwner(client, ownerId));
+      else await requireOwner(client, ownerId);
       if (!transactionId.trim()) throw new Error("Giao dịch chưa được lưu.");
       const image = preparedImage ?? await processPhoto(file);
       const id = attachmentId ?? crypto.randomUUID();
+      if (pendingUpload?.id !== id || pendingUpload.image !== image)
+        pendingUpload = { id, image, completedPaths: new Set() };
+      const completedPaths = pendingUpload.completedPaths;
       const storagePath = `${ownerId}/${id}/display.jpg`;
       const thumbnailPath = `${ownerId}/${id}/thumbnail.jpg`;
       const storage = client.storage.from(PHOTO_FINANCE_BUCKET);
@@ -120,17 +131,18 @@ export function createPhotoAttachmentRepository(client: SupabaseClient = supabas
         await uploadProcessedPhotoImages(image, storagePath, thumbnailPath,
           (path, bytes) => storage.upload(path, bytes,
             { contentType: "image/jpeg", upsert: true }),
-          photoUploadModeForSize(image.display.size + image.thumbnail.size));
+          photoUploadModeForSize(image.display.size + image.thumbnail.size), trace, completedPaths);
         const data = await unwrap(() => client.from("money_diary_financial_attachments")
           .upsert({ id, owner_id: ownerId, source_type: PHOTO_FINANCE_SOURCE_TYPE,
             source_id: transactionId, storage_path: storagePath,
             thumbnail_path: thumbnailPath, is_cover: isCover,
             width: image.width, height: image.height }, { onConflict: "id" })
           .select("id,owner_id,source_type,source_id,storage_path,thumbnail_path,is_cover,width,height,created_at")
-          .single(), 2);
+          .single(), 2, trace);
         if (!data) throw new Error("Không liên kết được ảnh.");
         images.invalidate(storagePath);
         images.invalidate(thumbnailPath);
+        if (pendingUpload?.id === id) pendingUpload = null;
         return fromRow(data as AttachmentRow);
       } catch (error) {
         // A timeout can follow a successful metadata commit. Preserve these files;

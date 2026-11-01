@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { PopupNotice } from "../../../components/feedback/PopupNotice.tsx";
+import { showAppToast } from "../../../components/feedback/appToast.ts";
 import { ArrowDownLeft, ArrowUpRight, ArrowLeftRight, CalendarDays, Camera, Check, ChevronDown,
   Image as ImageIcon, Pencil, RotateCcw, WalletCards, X } from "lucide-react";
 import type { AccountTransaction, AccountTransactionType, FinancialAccount, TransactionCategory } from "../../account-ledger/accountLedgerModel.ts";
@@ -12,7 +13,9 @@ import { vietnamFinancialDate, vietnamFinancialTime } from "../services/photoFin
 import { buildPhotoTransaction } from "../services/photoTransactionDraft.ts";
 import type { PhotoAttachment } from "../types/photoFinance.ts";
 import type { createPhotoAttachmentRepository } from "../services/photoAttachmentRepository.ts";
-import { processPhoto, type ProcessedPhoto } from "../services/photoImageProcessor.ts";
+import { isIosPhotoEnvironment, processPhoto, type ProcessedPhoto } from "../services/photoImageProcessor.ts";
+import { createPhotoSaveTrace, formatPhotoSaveReport, photoSaveStageLabel,
+  type PhotoSaveStage } from "../services/photoSaveTrace.ts";
 import type { JarActivity, SpendingJar } from "../../spending-jars/domain/jarModel.ts";
 import { getJarView, suggestJar } from "../../spending-jars/domain/jarModel.ts";
 import { planJarSpend, type JarCommand } from "../../spending-jars/services/jarService.ts";
@@ -71,10 +74,19 @@ export function PhotoTransactionForm({ accounts, categories, onCategoryCommand, 
   const [retryingPhoto, setRetryingPhoto] = useState(false);
   const [preparingPhoto, setPreparingPhoto] = useState(false);
   const [error, setError] = useState("");
+  const [saveStage, setSaveStage] = useState<PhotoSaveStage>("prepare");
+  const [saveSeconds, setSaveSeconds] = useState(0);
+  const [saveDiagnostic, setSaveDiagnostic] = useState("");
   const lockRef = useRef(false);
   const photoSelectionRef = useRef(0);
   const processingRef = useRef<AbortController | null>(null);
   useEffect(() => () => { processingRef.current?.abort(); }, []);
+  useEffect(() => {
+    if (!working) return;
+    const started = Date.now();
+    const timer = window.setInterval(() => setSaveSeconds(Math.floor((Date.now() - started) / 1000)), 1000);
+    return () => window.clearInterval(timer);
+  }, [working]);
   useEffect(() => () => onUploadBusyChange(false), [onUploadBusyChange]);
   useEffect(() => () => {
     if (selectedPhoto?.previewUrl) URL.revokeObjectURL(selectedPhoto.previewUrl);
@@ -100,6 +112,7 @@ export function PhotoTransactionForm({ accounts, categories, onCategoryCommand, 
     const selection = photoSelectionRef.current + 1;
     photoSelectionRef.current = selection;
     setError("");
+    setSaveDiagnostic("");
     setPreparingPhoto(true);
     // Show the camera image immediately while Safari decodes and compresses it.
     const rawPreviewUrl = URL.createObjectURL(next);
@@ -138,6 +151,10 @@ export function PhotoTransactionForm({ accounts, categories, onCategoryCommand, 
     setRetryingPhoto(Boolean(savedId));
     setWorking(true);
     setError("");
+    setSaveDiagnostic("");
+    setSaveSeconds(0);
+    setSaveStage("prepare");
+    const trace = createPhotoSaveTrace(setSaveStage);
     try {
       if (!ownerId) throw new Error("Hãy đăng nhập và bật đồng bộ cloud để lưu ảnh riêng tư.");
       if (preparingPhoto) throw new Error("Ảnh đang được chuẩn bị, hãy đợi một chút.");
@@ -161,28 +178,37 @@ export function PhotoTransactionForm({ accounts, categories, onCategoryCommand, 
 
       // Verify photo persistence before creating a money transaction. After that,
       // savedId makes an upload retry reuse the same transaction.
-      if (file && !savedId) await repository.prepare(ownerId);
+      if (file && !savedId) await trace.measure("prepare", () => repository.prepare(ownerId));
 
       if (selectedJar && !savedId) {
-        onJarCommand({ kind: "spend", id: activityId, now: new Date().toISOString(),
+        await trace.measure("ledger", () => onJarCommand({ kind: "spend", id: activityId, now: new Date().toISOString(),
           jarId: selectedJar.id, amount: value, accountId: jarSourceId || undefined,
           date, category, note, isWorkExpense,
           purpose: effectivePurpose === "goal_allocation" ? "goal_allocation" : "daily_expense",
-          occurredAt: new Date(`${date}T${time}:00+07:00`).toISOString() });
+          occurredAt: new Date(`${date}T${time}:00+07:00`).toISOString() }));
         setSavedId(transactionId);
       } else if (transaction) {
-        onSaveTransaction(transaction);
+        await trace.measure("ledger", () => onSaveTransaction(transaction));
         setSavedId(transactionId);
       }
       let attachment: PhotoAttachment | undefined;
       if (file) {
         attachmentIdRef.current ??= crypto.randomUUID();
         attachment = await repository.upload(ownerId, transactionId, file, !dayHasPhotos(date),
-          attachmentIdRef.current, selectedPhoto?.processed);
+          attachmentIdRef.current, selectedPhoto?.processed, trace);
       }
+      const report = trace.report();
+      if (isIosPhotoEnvironment() && report.totalMs >= 8_000 && report.slowest)
+        showAppToast(`Ảnh đã lưu sau ${Math.round(report.totalMs / 1000)} giây. Bước chậm nhất: ${photoSaveStageLabel(report.slowest.stage)} (${Math.round(report.slowest.elapsedMs / 1000)} giây).`, "info");
       onSaved(transactionId, date, attachment);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Không lưu được khoảnh khắc.");
+      const report = trace.report();
+      setSaveDiagnostic(report.steps.length ? formatPhotoSaveReport(trace) : "");
+      const stage = report.failedStage ? ` Bước gặp lỗi: ${photoSaveStageLabel(report.failedStage)}.` : "";
+      const slowest = report.totalMs >= 5_000 && report.slowest
+        ? ` Chậm nhất: ${photoSaveStageLabel(report.slowest.stage)} ${Math.round(report.slowest.elapsedMs / 1000)} giây${report.slowest.attempts > 1 ? ` (${report.slowest.attempts} lần thử)` : ""}.`
+        : "";
+      setError((cause instanceof Error ? cause.message : "Không lưu được khoảnh khắc.") + stage + slowest);
     } finally { lockRef.current = false; setWorking(false); onUploadBusyChange(false); }
   }
 
@@ -340,6 +366,9 @@ export function PhotoTransactionForm({ accounts, categories, onCategoryCommand, 
     {savedId && !working && <p className="photo-finance-retry" role="status">Giao dịch đã lưu một lần. Nút bên dưới chỉ tải lại ảnh.
       <button onClick={onStartNew} type="button">Tạo khoảnh khắc khác</button></p>}
     <PopupNotice message={error} />
+    {saveDiagnostic && <details className="photo-finance-diagnostic">
+      <summary>Chi tiết thời gian lưu ảnh</summary><p>{saveDiagnostic}</p>
+    </details>}
 
     {(selectedPhoto || existing) && <div className="photo-finance-form-actions">
       <button aria-label="Bỏ ảnh đã chọn" className="photo-finance-cancel" disabled={working}
@@ -353,7 +382,11 @@ export function PhotoTransactionForm({ accounts, categories, onCategoryCommand, 
     {showCategoryManager && <TransactionCategoryManager categories={categories} transactions={transactions}
       onCommand={onCategoryCommand} onClose={() => setShowCategoryManager(false)} />}
     {(working || preparingPhoto) && <p className="photo-finance-working" role="status">
-      {preparingPhoto ? "Đang tối ưu ảnh..." : retryingPhoto ? "Đang tải ảnh lại..." : "Đang tải ảnh riêng tư..."}
+      {preparingPhoto ? "Đang tối ưu ảnh..." : retryingPhoto ? "Đang tải ảnh lại..." :
+        saveStage === "prepare" ? "Đang kiểm tra kho ảnh..." :
+          saveStage === "ledger" ? "Đang lưu giao dịch..." :
+            saveStage === "metadata" ? "Đang hoàn tất ảnh..." : "Đang tải ảnh riêng tư..."}
+      {working && saveSeconds >= 3 ? ` ${saveSeconds} giây` : ""}
     </p>}
   </form>;
 }

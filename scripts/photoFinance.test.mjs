@@ -19,6 +19,8 @@ import {
 } from "../src/features/photo-finance/services/photoFinanceModel.ts";
 import { photoFinanceErrorMessage } from
   "../src/features/photo-finance/services/photoFinanceErrors.ts";
+import { createPhotoSaveTrace, formatPhotoSaveReport } from
+  "../src/features/photo-finance/services/photoSaveTrace.ts";
 
 const date = "2026-09-16";
 const entry = { id: "hub-day", date, income: 500_000, receivedMoney: 0,
@@ -141,6 +143,41 @@ test("mobile photo upload retries a failed request and sends display then thumbn
     ["owner/photo/display.jpg", 7],
     ["owner/photo/thumbnail.jpg", 5],
   ]);
+});
+
+test("photo save trace identifies the slow step and counts retry time without private identifiers", async () => {
+  let now = 0;
+  const stages = [];
+  const trace = createPhotoSaveTrace((stage) => stages.push(stage), () => now);
+  await trace.measure("prepare", () => { now += 100; });
+  await assert.rejects(trace.measure("display", () => { now += 6_000; throw new Error("Load failed"); }, 500_000));
+  await trace.measure("display", () => { now += 4_000; }, 500_000);
+  await trace.measure("thumbnail", () => { now += 250; }, 20_000);
+  await trace.measure("metadata", () => { now += 100; });
+  assert.deepEqual(stages, ["prepare", "display", "display", "thumbnail", "metadata"]);
+  assert.equal(trace.report().slowest.stage, "display");
+  assert.equal(trace.report().slowest.attempts, 2);
+  assert.equal(trace.report().slowest.elapsedMs, 10_000);
+  assert.match(formatPhotoSaveReport(trace), /Tải ảnh chính 10\.0 giây \(2 lần\)/);
+  assert.doesNotMatch(formatPhotoSaveReport(trace), /owner|transaction|storage/);
+});
+
+test("retrying a partly uploaded photo reuses successful files", async () => {
+  const image = { display: new Blob(["display"]), thumbnail: new Blob(["thumb"]), width: 100, height: 80 };
+  const completed = new Set();
+  const calls = [];
+  const upload = async (path) => {
+    calls.push(path);
+    return { error: path.endsWith("thumbnail.jpg") && calls.length <= 4
+      ? new Error("Load failed") : null };
+  };
+  await assert.rejects(uploadProcessedPhotoImages(image, "display.jpg", "thumbnail.jpg",
+    upload, "sequential", undefined, completed));
+  assert.deepEqual([...completed], ["display.jpg"]);
+  await uploadProcessedPhotoImages(image, "display.jpg", "thumbnail.jpg",
+    upload, "sequential", undefined, completed);
+  assert.deepEqual(calls, ["display.jpg", "thumbnail.jpg", "thumbnail.jpg", "thumbnail.jpg", "thumbnail.jpg"]);
+  assert.deepEqual([...completed], ["display.jpg", "thumbnail.jpg"]);
 });
 
 test("small photo files upload together and a retry waits for both requests to settle", async () => {
