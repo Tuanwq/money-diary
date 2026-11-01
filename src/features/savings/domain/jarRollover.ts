@@ -7,7 +7,6 @@ export function getPendingJarRollover(ledger: AccountLedgerData, today: string) 
     return { period: "", jars: [] };
   const previousEnd = new Date(Date.UTC(year, month - 1, 0)).toISOString().slice(0, 10);
   const period = previousEnd.slice(0, 7);
-  const previousStart = `${period}-01`;
   const currentStart = `${today.slice(0, 7)}-01`;
   const currentStartTime = new Date(`${currentStart}T00:00:00`).getTime();
   const priorLedger = { ...ledger,
@@ -21,8 +20,7 @@ export function getPendingJarRollover(ledger: AccountLedgerData, today: string) 
     .map((item) => item.jarId));
   const jars = ledger.jars.filter((jar) => jar.status === "active" && !handled.has(jar.id) &&
     jar.startDate <= previousEnd && (
-      (jar.budgetPeriod === "monthly" && (!jar.endDate || jar.endDate >= previousStart)) ||
-      (jar.endDate?.startsWith(period) ?? false)))
+      jar.budgetPeriod === "monthly" || (jar.endDate?.startsWith(period) ?? false)))
     .map((jar) => {
       const prior = new Map(getJarView(priorLedger, jar).sources
         .map((source) => [source.accountId, source.amount]));

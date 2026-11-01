@@ -270,6 +270,10 @@ const rollover = rolloverBase();
 assert.equal(getPendingJarRollover(rollover, "2026-10-31").jars.length, 0,
   "monthly jars do not roll over before the month ends");
 assert.equal(getPendingJarRollover(rollover, rolloverDate).jars[0].amount, 100_000);
+const monthlyWithOldEnd = rolloverBase();
+monthlyWithOldEnd.jars = monthlyWithOldEnd.jars.map((jar) => ({ ...jar, endDate: "2026-09-30" }));
+assert.equal(getPendingJarRollover(monthlyWithOldEnd, rolloverDate).jars[0].amount, 100_000,
+  "an obsolete monthly end date cannot hide the month-end savings prompt");
 const expiredCustomJar = rolloverBase();
 expiredCustomJar.jars = expiredCustomJar.jars.map((jar) => ({ ...jar,
   budgetPeriod: "custom", endDate: "2026-10-25" }));

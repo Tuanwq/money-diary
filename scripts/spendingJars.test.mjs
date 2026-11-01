@@ -3,7 +3,7 @@ import { calculateAccountBalance, getLedgerSummary, isExpenseReversal } from
   "../src/features/account-ledger/accountLedgerModel.ts";
 import { calculateActualAvailableBalance } from
   "../src/features/account-ledger/accountExternalModel.ts";
-import { getAccountAvailableToAllocate, getJarBudgetView, getJarRemainingPercent, getJarView, migrateExpenseBudgets } from
+import { getAccountAvailableToAllocate, getJarBudgetRange, getJarBudgetView, getJarRemainingPercent, getJarView, migrateExpenseBudgets } from
   "../src/features/spending-jars/domain/jarModel.ts";
 import { assertReservationCoverageAfterLedgerChange, getFinancialPosition } from
   "../src/features/spending-jars/domain/financialPosition.ts";
@@ -63,8 +63,8 @@ assert.equal(firstAnalysis.expenseCount, 1, "split account postings are one purc
 assert.equal(firstAnalysis.grossSpent, 1_200_000);
 assert.equal(firstAnalysis.averageExpense, 1_200_000);
 assert.deepEqual(firstAnalysis.categories, [{ name: "Ăn uống", amount: 1_200_000, percentage: 100 }]);
-assert.deepEqual(firstAnalysis.recent[0].accountNames, ["Tiền mặt", "BIDV"]);
-assert.equal(firstAnalysis.recent[0].note, "Ăn tối");
+assert.deepEqual(firstAnalysis.expenses[0].accountNames, ["Tiền mặt", "BIDV"]);
+assert.equal(firstAnalysis.expenses[0].note, "Ăn tối");
 const unchanged = applyJarCommand(ledger, { kind: "spend", id: "dinner", now,
   jarId: "food", amount: 1_200_000, date: "2026-09-22", category: "Ăn uống",
   note: "Ăn tối", purpose: "daily_expense" });
@@ -93,7 +93,7 @@ assert.equal(refundedAnalysis.expenseCount, 1);
 assert.equal(refundedAnalysis.grossSpent, 300_000);
 assert.equal(refundedAnalysis.refunded, 50_000);
 assert.equal(refundedAnalysis.netSpent, 250_000);
-assert.equal(refundedAnalysis.recent[0].note, "Ăn tối sửa", "analysis follows edited ledger data");
+assert.equal(refundedAnalysis.expenses[0].note, "Ăn tối sửa", "analysis follows edited ledger data");
 assert.throws(() => apply({ kind: "refund", jarId: "food", accountId: "a", amount: 1,
   date: "2026-09-22", note: "Sai nguồn" }), /vượt số đã chi/);
 
@@ -169,6 +169,39 @@ assert.equal(getJarBudgetView(monthly, monthly.jars[0], "2026-10-01").spent, 0,
   "a new budget period does not erase the cash still reserved");
 assert.equal(getJarSpendingAnalysis(monthly, monthly.jars[0], "2026-10-01").expenseCount, 0,
   "analysis follows the jar's budget period");
+const oldMonthlyEnd = { ...monthly, jars: monthly.jars.map((jar) => ({ ...jar, endDate: "2026-09-30" })) };
+assert.deepEqual(getJarBudgetRange(oldMonthlyEnd.jars[0], "2026-10-01"),
+  { fromDate: "2026-10-01", toDate: "2026-10-31" },
+  "an old end date must not stop a monthly jar in the new month");
+assert.equal(getJarDetailPresentation(oldMonthlyEnd, oldMonthlyEnd.jars[0], "2026-10-01").daysRemaining, 31);
+assert.equal(getJarDetailPresentation(oldMonthlyEnd, oldMonthlyEnd.jars[0], "2026-11-01").daysRemaining, 30,
+  "remaining days reset at each monthly boundary");
+const octoberSpend = applyJarCommand(oldMonthlyEnd, { kind: "spend", id: "october-spend", now,
+  jarId: "monthly", amount: 100_000, date: "2026-10-01", category: "Nhà", note: "Tháng mới",
+  purpose: "daily_expense" });
+assert.equal(getJarBudgetView(octoberSpend, octoberSpend.jars[0], "2026-10-01").spent, 100_000);
+assert.equal(getJarSpendingAnalysis(octoberSpend, octoberSpend.jars[0], "2026-10-01").expenseCount, 1);
+assert.equal(getJarSpendingAnalysis(octoberSpend, octoberSpend.jars[0], "2026-09-01").expenseCount, 1);
+const editedMonthly = applyJarCommand(oldMonthlyEnd, { kind: "edit", id: "monthly-edit", now,
+  jarId: "monthly", fields: { name: "Tiền nhà", icon: "🏠", limitAmount: 3_000_000,
+    budgetPeriod: "monthly", startDate: "2026-09-01", endDate: "2026-09-30", linkedLabels: [] } });
+assert.equal(editedMonthly.jars[0].endDate, undefined, "saving a monthly jar clears an obsolete end date");
+const customRange = getJarBudgetRange({ ...oldMonthlyEnd.jars[0], budgetPeriod: "custom" }, "2026-10-01");
+assert.equal(customRange.toDate, "2026-09-30", "custom periods still respect their chosen end date");
+let historical = monthly;
+for (let index = 0; index < 4; index++) {
+  historical = applyJarCommand(historical, { kind: "spend", id: `history-${index}`, now,
+    jarId: "monthly", amount: 50_000, date: "2026-09-23", category: "Nhà",
+    note: `Khoản ${index + 1}`, purpose: "daily_expense" });
+}
+historical = applyJarCommand(historical, { kind: "close", id: "close-history", now, jarId: "monthly" });
+const septemberHistory = getJarSpendingAnalysis(historical, historical.jars[0], "2026-09-01");
+assert.equal(septemberHistory.expenseCount, 5, "all past-month expenses remain visible after closing");
+assert.equal(septemberHistory.expenses.length, 5, "history is not truncated to recent entries");
+assert.equal(septemberHistory.netSpent, 700_000);
+assert.equal(septemberHistory.periodLabel, "Tháng 09/2026");
+assert.equal(getJarSpendingAnalysis(historical, historical.jars[0], "2026-10-01").expenseCount, 0,
+  "switching months does not mix old spending into the current month");
 assert.equal(getJarView(monthly, monthly.jars[0]).remainingAmount, 500_000);
 const release = { kind: "release", id: "unreserve", now, jarId: "monthly", accountId: "b", amount: 200_000 };
 monthly = applyJarCommand(monthly, release);

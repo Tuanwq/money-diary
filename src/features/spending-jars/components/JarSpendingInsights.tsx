@@ -9,8 +9,11 @@ function formatDay(date: string) {
   return `${day}/${month}/${year}`;
 }
 
-export function JarSpendingInsights({ analysis }: {
+export function JarSpendingInsights({ analysis, months, selectedMonth, onSelectMonth }: {
   analysis: JarSpendingAnalysis;
+  months: string[];
+  selectedMonth: string;
+  onSelectMonth: (month: string) => void;
 }) {
   const [view, setView] = useState<"list" | "pie" | "column">("list");
   const visibleCategories = analysis.categories.slice(0, 4);
@@ -25,6 +28,11 @@ export function JarSpendingInsights({ analysis }: {
       <div><h2 id="jar-insights-title">Bạn đã tiêu gì?</h2><p>{analysis.periodLabel} · chỉ tính giao dịch của hũ này</p></div>
       <strong>{formatMoney(analysis.netSpent)}</strong>
     </header>
+    <label className="jar-insights-month">Xem tháng
+      <select value={selectedMonth} onChange={(event) => onSelectMonth(event.target.value)}>
+        {months.map((month) => <option key={month} value={month}>Tháng {month.slice(5, 7)}/{month.slice(0, 4)}</option>)}
+      </select>
+    </label>
     {analysis.expenseCount === 0 ? <p className="jar-insights-empty">Chưa có khoản chi trong kỳ này. Khi chi từ hũ, các nhóm và ghi chú sẽ hiện ở đây.</p> : <>
       <div className="jar-insights-metrics">
         <span><small>Số khoản chi</small><strong>{analysis.expenseCount}</strong></span>
@@ -45,8 +53,8 @@ export function JarSpendingInsights({ analysis }: {
           </div>
         </div>) : <JarCategoryChart mode={view} categories={categories} grossSpent={analysis.grossSpent} />}
       </div>
-      <div className="jar-insights-recent"><h3>Khoản chi gần đây</h3>
-        {analysis.recent.map((event) => <div className="jar-insights-event" key={event.id}>
+      <div className="jar-insights-recent"><h3>Lịch sử chi tiêu trong tháng</h3>
+        {analysis.expenses.map((event) => <div className="jar-insights-event" key={event.id}>
           <div><strong>{event.note || event.category}</strong><small>{event.note ? `${event.category} · ` : ""}{formatDay(event.date)} · {event.accountNames.join(" + ")}</small></div>
           <strong>−{formatMoney(event.amount)}</strong>
         </div>)}

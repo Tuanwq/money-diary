@@ -13,6 +13,8 @@
 .jar-insights h3 { margin: 0; font-size: 1rem; }
 .jar-insights-heading p { margin: 0.2rem 0 0; color: var(--money-text-secondary); font-size: 0.75rem; }
 .jar-insights-heading > strong { color: var(--money-expense); font-size: 1.12rem; font-variant-numeric: tabular-nums; text-align: right; overflow-wrap: anywhere; }
+.jar-insights-month { display: grid; gap: 0.3rem; width: min(100%, 240px); color: var(--money-text-secondary); font-size: 0.76rem; font-weight: 700; }
+.jar-insights-month select { width: 100%; min-height: 44px; border: 1px solid var(--money-border); border-radius: 10px; background: var(--money-surface); padding: 0.5rem 0.7rem; color: var(--money-text); font: inherit; font-size: 0.85rem; }
 .jar-insights-empty,
 .jar-insights-refund { margin: 0; color: var(--money-text-secondary); font-size: 0.78rem; line-height: 1.5; }
 .jar-insights-refund { border-top: 1px solid var(--money-border); padding-top: 0.8rem; }
@@ -51,6 +53,7 @@
 .jar-category-legend-name i { display: inline-block; flex: none; width: 9px; height: 9px; border-radius: 3px; }
 .jar-category-legend strong { flex: none; font-variant-numeric: tabular-nums; }
 .jar-insights-event { display: flex; align-items: start; justify-content: space-between; gap: 0.7rem; font-size: 0.78rem; }
+.jar-insights-event + .jar-insights-event { border-top: 1px solid var(--money-border); padding-top: 0.65rem; }
 .jar-insights-event > div { display: grid; gap: 0.18rem; min-width: 0; }
 .jar-insights-event > div strong,
 .jar-insights-event small { overflow-wrap: anywhere; }

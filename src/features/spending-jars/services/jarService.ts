@@ -45,9 +45,10 @@ function normalizeFields(fields: JarFields) {
   if (fields.budgetPeriod && !["monthly", "custom", "legacy_total"].includes(fields.budgetPeriod))
     throw new Error("Kỳ ngân sách không hợp lệ.");
   if (!/^\d{4}-\d{2}-\d{2}$/.test(fields.startDate) ||
-    (fields.endDate && fields.endDate < fields.startDate))
+    (fields.budgetPeriod !== "monthly" && fields.endDate && fields.endDate < fields.startDate))
     throw new Error("Ngày bắt đầu hoặc ngày kết thúc không hợp lệ.");
   return { ...fields, name, icon: fields.icon.trim() || "🫙",
+    endDate: fields.budgetPeriod === "monthly" ? undefined : fields.endDate,
     linkedLabels: [...new Set(fields.linkedLabels.map((label) => label.trim()).filter(Boolean))] };
 }
 

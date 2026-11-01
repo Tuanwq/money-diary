@@ -1,5 +1,5 @@
 import { isExpenseReversal, type AccountTransaction } from "../../account-ledger/accountLedgerModel.ts";
-import { getJarBudgetRange, getJarBudgetView, type JarLedger, type SpendingJar } from "./jarModel.ts";
+import { type JarLedger, type SpendingJar } from "./jarModel.ts";
 
 export type JarSpendingEvent = {
   id: string;
@@ -18,14 +18,18 @@ export type JarSpendingAnalysis = {
   expenseCount: number;
   averageExpense: number;
   categories: Array<{ name: string; amount: number; percentage: number }>;
-  recent: JarSpendingEvent[];
+  expenses: JarSpendingEvent[];
 };
 
-/** Read-only breakdown of the same linked transactions and period as the jar budget. */
+/** Read-only calendar-month history. The jar's budget and reserved cash are not changed. */
 export function getJarSpendingAnalysis(ledger: JarLedger, jar: SpendingJar,
   asOfDate: string): JarSpendingAnalysis {
-  const { fromDate, toDate } = getJarBudgetRange(jar, asOfDate);
-  const budget = getJarBudgetView(ledger, jar, asOfDate);
+  const month = asOfDate.slice(0, 7);
+  const [year, monthNumber] = month.split("-").map(Number);
+  const monthEnd = `${month}-${String(new Date(Date.UTC(year, monthNumber, 0)).getUTCDate()).padStart(2, "0")}`;
+  const fromDate = `${month}-01` < jar.startDate ? jar.startDate : `${month}-01`;
+  const toDate = jar.budgetPeriod !== "monthly" && jar.endDate && jar.endDate < monthEnd
+    ? jar.endDate : monthEnd;
   const accountNames = new Map(ledger.accounts.map((account) => [account.id, account.name]));
   const events = new Map<string, { lines: AccountTransaction[]; sortKey: string }>();
   const categoryAmounts = new Map<string, number>();
@@ -56,7 +60,7 @@ export function getJarSpendingAnalysis(ledger: JarLedger, jar: SpendingJar,
     }
   }
 
-  const recent = [...events.entries()].map(([id, { lines, sortKey }]): JarSpendingEvent & { sortKey: string } => ({
+  const expenses = [...events.entries()].map(([id, { lines, sortKey }]): JarSpendingEvent & { sortKey: string } => ({
     id,
     sortKey,
     date: lines[0].date,
@@ -64,7 +68,7 @@ export function getJarSpendingAnalysis(ledger: JarLedger, jar: SpendingJar,
     note: lines.find((line) => line.note.trim())?.note.trim() ?? "",
     amount: lines.reduce((sum, line) => sum + line.amount, 0),
     accountNames: [...new Set(lines.map((line) => accountNames.get(line.accountId) ?? "Tài khoản đã xóa"))],
-  })).sort((a, b) => b.sortKey.localeCompare(a.sortKey)).slice(0, 3)
+  })).sort((a, b) => b.sortKey.localeCompare(a.sortKey))
     .map((event) => ({ id: event.id, date: event.date, category: event.category,
       note: event.note, amount: event.amount, accountNames: event.accountNames }));
 
@@ -73,13 +77,13 @@ export function getJarSpendingAnalysis(ledger: JarLedger, jar: SpendingJar,
   })).sort((a, b) => b.amount - a.amount || a.name.localeCompare(b.name, "vi"));
 
   return {
-    periodLabel: budget.periodLabel,
+    periodLabel: `Tháng ${month.slice(5, 7)}/${month.slice(0, 4)}`,
     grossSpent,
     refunded,
-    netSpent: budget.spent,
+    netSpent: Math.max(0, grossSpent - refunded),
     expenseCount: events.size,
     averageExpense: events.size > 0 ? Math.round(grossSpent / events.size) : 0,
     categories,
-    recent,
+    expenses,
   };
 }

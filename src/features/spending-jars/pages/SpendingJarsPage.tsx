@@ -21,7 +21,8 @@ type JarForm = { name: string; icon: string; color: string; limit: string;
 function fieldsFrom(jar?: SpendingJar): JarForm {
   return { name: jar?.name ?? "", icon: jar?.icon ?? "🫙", color: jar?.color ?? "",
     limit: jar ? formatMoneyInput(String(jar.limitAmount)) : "", startDate: jar?.startDate ?? getToday(),
-    endDate: jar?.endDate ?? "", labels: jar?.linkedLabels.join(", ") ?? "",
+    endDate: jar?.budgetPeriod === "monthly" ? "" : jar?.endDate ?? "",
+    labels: jar?.linkedLabels.join(", ") ?? "",
     budgetPeriod: jar?.budgetPeriod ?? (jar ? "legacy_total" : "monthly") };
 }
 
@@ -36,6 +37,7 @@ export function SpendingJarsPage({ ledger, cloudStatus, onBack, onCommand, onDel
   const [action, setAction] = useState<Action | null>(null);
   const [picker, setPicker] = useState<"allocate" | "smart" | null>(null);
   const [detailTab, setDetailTab] = useState<"overview" | "history">("overview");
+  const [analysisMonth, setAnalysisMonth] = useState(() => getToday().slice(0, 7));
   const modalRef = useRef<HTMLFormElement | HTMLDivElement>(null);
   const [amount, setAmount] = useState("");
   const [accountId, setAccountId] = useState("");
@@ -58,10 +60,22 @@ export function SpendingJarsPage({ ledger, cloudStatus, onBack, onCommand, onDel
   const allocationAccounts = activeAccounts.filter((item) => getAccountAvailableToAllocate(ledger, item.id) > 0);
   const isLoadingEmptyLedger = ledger.jars.length === 0 && /đang tải/i.test(cloudStatus);
   const accountNames = new Map(ledger.accounts.map((item) => [item.id, item.name]));
+  const analysisMonths = useMemo(() => {
+    if (!selected) return [];
+    const todayMonth = getToday().slice(0, 7);
+    const firstMonth = selected.startDate.slice(0, 7);
+    const months: string[] = [];
+    for (let month = todayMonth; month >= firstMonth;) {
+      months.push(month);
+      const [year, number] = month.split("-").map(Number);
+      month = `${number === 1 ? year - 1 : year}-${String(number === 1 ? 12 : number - 1).padStart(2, "0")}`;
+    }
+    return months.length ? months : [todayMonth];
+  }, [selected]);
   const spendingAnalysis = useMemo(() => {
     const jar = stableLedger.jars.find((item) => item.id === selectedId && item.status !== "deleted");
-    return jar ? getJarSpendingAnalysis(stableLedger, jar, getToday()) : null;
-  }, [selectedId, stableLedger]);
+    return jar ? getJarSpendingAnalysis(stableLedger, jar, `${analysisMonth}-01`) : null;
+  }, [analysisMonth, selectedId, stableLedger]);
 
   function openCreate() {
     setJarForm(fieldsFrom());
@@ -69,7 +83,9 @@ export function SpendingJarsPage({ ledger, cloudStatus, onBack, onCommand, onDel
     setError("");
   }
 
-  function openJar(id: string) { setSelectedId(id); setDetailTab("overview"); setError(""); }
+  function openJar(id: string) {
+    setSelectedId(id); setDetailTab("overview"); setAnalysisMonth(getToday().slice(0, 7)); setError("");
+  }
 
   function run(command: JarCommand) {
     try { onCommand(command); setError(""); return true; }
@@ -106,7 +122,8 @@ export function SpendingJarsPage({ ledger, cloudStatus, onBack, onCommand, onDel
     const now = new Date().toISOString();
     const fields = { name: jarForm.name, icon: jarForm.icon, color: jarForm.color || undefined,
       limitAmount: parseMoneyInput(jarForm.limit), startDate: jarForm.startDate,
-      endDate: jarForm.endDate || undefined, linkedLabels: jarForm.labels.split(","),
+      endDate: jarForm.budgetPeriod === "monthly" ? undefined : jarForm.endDate || undefined,
+      linkedLabels: jarForm.labels.split(","),
       budgetPeriod: jarForm.budgetPeriod };
     const command: JarCommand = editor === "edit" && selected
       ? { kind: "edit", id: crypto.randomUUID(), jarId: selected.id, now, fields }
@@ -208,7 +225,8 @@ export function SpendingJarsPage({ ledger, cloudStatus, onBack, onCommand, onDel
         {detailTab === "overview" ? <>
           <JarDetailOverview item={item} accountNames={accountNames} />
           {spendingAnalysis && <details className="jar-insights-panel"><summary>Xem phân tích chi tiêu</summary>
-            <JarSpendingInsights analysis={spendingAnalysis} /></details>}
+            <JarSpendingInsights analysis={spendingAnalysis} months={analysisMonths}
+              selectedMonth={analysisMonth} onSelectMonth={setAnalysisMonth} /></details>}
           {selected.status === "active" && <details className="jar-secondary-actions"><summary>Thao tác khác</summary><div>
             <button onClick={() => openAction("release")} type="button">Giải phóng về tài khoản</button>
             <button onClick={() => openAction("refund")} type="button">Hoàn tiền</button>
@@ -243,8 +261,9 @@ export function SpendingJarsPage({ ledger, cloudStatus, onBack, onCommand, onDel
         <option value="monthly">Hàng tháng</option><option value="custom">Từ ngày bắt đầu đến kết thúc</option>
         {editor === "edit" && jarForm.budgetPeriod === "legacy_total" && <option value="legacy_total">Hũ cũ · toàn kỳ (cần xem lại)</option>}
       </select></label>
-      <div className="jars-form-row"><label>Bắt đầu<input type="date" required value={jarForm.startDate} onChange={(event) => setJarForm({ ...jarForm, startDate: event.target.value })} /></label>
-        <label>Kết thúc (nếu có)<input type="date" value={jarForm.endDate} onChange={(event) => setJarForm({ ...jarForm, endDate: event.target.value })} /></label></div>
+      {jarForm.budgetPeriod === "monthly" ? <p className="jars-period-note">Hũ tự bắt đầu kỳ mới vào ngày 1 hằng tháng. Số ngày còn lại và hạn mức được tính lại theo tháng hiện tại.</p>
+        : <div className="jars-form-row"><label>Bắt đầu<input type="date" required value={jarForm.startDate} onChange={(event) => setJarForm({ ...jarForm, startDate: event.target.value })} /></label>
+          <label>Kết thúc (nếu có)<input type="date" value={jarForm.endDate} onChange={(event) => setJarForm({ ...jarForm, endDate: event.target.value })} /></label></div>}
       <label>Nhãn liên kết, cách nhau bằng dấu phẩy<input value={jarForm.labels} onChange={(event) => setJarForm({ ...jarForm, labels: event.target.value })} placeholder="Ăn uống, Siêu thị" /></label>
       {error && <p className="jars-error" role="alert">{error}</p>}
       <div className="jars-form-actions"><button type="button" onClick={() => setEditor(null)}>Hủy</button><button className="jars-primary" type="submit">Lưu hũ</button></div>

@@ -70,7 +70,8 @@ export function getJarBudgetRange(jar: SpendingJar, asOfDate: string) {
     ? `${asOfDate.slice(0, 7)}-${String(new Date(Date.UTC(year, month, 0)).getUTCDate()).padStart(2, "0")}`
     : jar.endDate ?? asOfDate;
   const fromDate = start < jar.startDate ? jar.startDate : start;
-  const toDate = jar.endDate && end > jar.endDate ? jar.endDate : end;
+  // A monthly jar may have an end date from an older form. It must not stop the next month.
+  const toDate = period !== "monthly" && jar.endDate && end > jar.endDate ? jar.endDate : end;
   return { fromDate, toDate };
 }
 
