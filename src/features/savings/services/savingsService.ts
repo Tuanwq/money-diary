@@ -16,8 +16,43 @@ export type SavingsCommand =
   | { type: "release"; resultId: string }
   | { type: "manual_transfer"; id: string; date: string; sourceAccountId: string;
       destinationAccountId: string; amount: number; note: string; goalId?: string }
+  | { type: "manual_allocate"; id: string; date: string; sourceAccountId: string;
+      amount: number; note: string; goalId?: string }
   | { type: "rollover_jars"; today: string; decision: "skip" | "allocate" | "transfer";
       destinationAccountId?: string };
+
+function validateManualSavings(ledger: AccountLedgerData,
+  command: { id: string; date: string; sourceAccountId: string; amount: number }) {
+  if (!command.id.trim()) throw new Error("Không xác định được khoản tiết kiệm.");
+  const parsedDate = new Date(`${command.date}T12:00:00Z`);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(command.date) ||
+    Number.isNaN(parsedDate.getTime()) || parsedDate.toISOString().slice(0, 10) !== command.date)
+    throw new Error("Ngày tiết kiệm không hợp lệ.");
+  if (!Number.isSafeInteger(command.amount) || command.amount <= 0)
+    throw new Error("Số tiền tiết kiệm phải là số nguyên dương.");
+  const source = ledger.accounts.find((item) => item.id === command.sourceAccountId && !item.archivedAt);
+  if (!source) throw new Error("Hãy chọn tài khoản nguồn đang hoạt động.");
+  if (command.amount > getSavingsAvailable(ledger, source.id))
+    throw new Error(`Tài khoản ${source.name} không đủ tiền có thể đưa vào tiết kiệm.`);
+  return source;
+}
+
+function allocateManually(ledger: AccountLedgerData,
+  command: Extract<SavingsCommand, { type: "manual_allocate" }>, now: string): AccountLedgerData {
+  const resultId = `manual-allocation:${command.id}`;
+  if ((ledger.savingsAllocations ?? []).some((item) => item.id === resultId)) return ledger;
+  const source = validateManualSavings(ledger, command);
+  const result: SavingsAllocation = {
+    id: resultId, ruleId: "manual-allocation", origin: "manual_allocation", date: command.date,
+    sourceAccountId: source.id, destination: { kind: "allocation", goalId: command.goalId || undefined },
+    amount: command.amount, incomeSignature: "", ruleName: "Dành riêng tiền",
+    note: command.note.trim(), status: "allocated", createdAt: now, updatedAt: now,
+  };
+  const next = { ...ledger, savingsAllocations: [result, ...(ledger.savingsAllocations ?? [])] };
+  assertReservationCoverageAfterLedgerChange(ledger, next);
+  assertSavingsCoverageAfterLedgerChange(ledger, next);
+  return next;
+}
 
 function transferToSavings(ledger: AccountLedgerData,
   command: Extract<SavingsCommand, { type: "manual_transfer" }>, now: string): AccountLedgerData {
@@ -28,19 +63,10 @@ function transferToSavings(ledger: AccountLedgerData,
   if (existingResult && existingTransaction && existingResult.transactionId === transactionId) return ledger;
   if (existingResult || existingTransaction)
     throw new Error("Khoản chuyển tiết kiệm chưa khớp với Sổ tài khoản. Hãy kiểm tra dữ liệu trước khi thử lại.");
-  if (!command.id.trim()) throw new Error("Không xác định được lần chuyển tiền.");
-  const parsedDate = new Date(`${command.date}T12:00:00Z`);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(command.date) ||
-    Number.isNaN(parsedDate.getTime()) || parsedDate.toISOString().slice(0, 10) !== command.date)
-    throw new Error("Ngày chuyển tiền không hợp lệ.");
-  if (!Number.isSafeInteger(command.amount) || command.amount <= 0)
-    throw new Error("Số tiền chuyển phải là số nguyên dương.");
-  const source = ledger.accounts.find((item) => item.id === command.sourceAccountId && !item.archivedAt);
+  const source = validateManualSavings(ledger, command);
   const target = ledger.accounts.find((item) => item.id === command.destinationAccountId && !item.archivedAt);
-  if (!source || !target || source.id === target.id)
+  if (!target || source.id === target.id)
     throw new Error("Hãy chọn hai tài khoản đang hoạt động và khác nhau.");
-  if (command.amount > getSavingsAvailable(ledger, source.id))
-    throw new Error(`Tài khoản ${source.name} không đủ tiền có thể chuyển vào tiết kiệm.`);
   const transaction: AccountTransaction = {
     id: transactionId, accountId: source.id, toAccountId: target.id,
     amount: command.amount, category: "Chuyển vào tiết kiệm", date: command.date,
@@ -52,7 +78,7 @@ function transferToSavings(ledger: AccountLedgerData,
     sourceAccountId: source.id,
     destination: { kind: "transfer", accountId: target.id, goalId: command.goalId || undefined },
     amount: command.amount, incomeSignature: "", ruleName: "Chuyển vào tiết kiệm",
-    status: "transferred", transactionId, createdAt: now, updatedAt: now,
+    note: command.note.trim(), status: "transferred", transactionId, createdAt: now, updatedAt: now,
   };
   const next = { ...ledger, transactions: [transaction, ...ledger.transactions],
     savingsAllocations: [result, ...(ledger.savingsAllocations ?? [])] };
@@ -222,6 +248,7 @@ function roundExistingReservation(ledger: AccountLedgerData, rule: SavingsRule,
 /** Pure ledger command: result and any transfer are saved in the same ledger revision. */
 export function applySavingsCommand(ledger: AccountLedgerData, command: SavingsCommand,
   now = new Date().toISOString(), random: () => number = Math.random): AccountLedgerData {
+  if (command.type === "manual_allocate") return allocateManually(ledger, command, now);
   if (command.type === "manual_transfer") return transferToSavings(ledger, command, now);
   if (command.type === "rollover_jars") return rollOverJars(ledger, command, now);
   const rules = ledger.savingsRules ?? [];
@@ -303,7 +330,7 @@ export function applySavingsCommand(ledger: AccountLedgerData, command: SavingsC
   if (command.type === "release") {
     if (result.status !== "allocated") throw new Error("Chỉ có thể giải phóng khoản đã dành riêng.");
     return { ...ledger, savingsAllocations: outcomes.map((item) => item.id === result.id
-      ? { ...item, status: "skipped", updatedAt: now } : item) };
+      ? { ...item, status: "skipped", releasedAt: now, updatedAt: now } : item) };
   }
   if (command.type === "recalculate") {
     const rule = rules.find((item) => item.id === result.ruleId);

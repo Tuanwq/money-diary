@@ -126,6 +126,33 @@ assert.throws(() => applySavingsCommand(base(),
 assert.throws(() => applySavingsCommand(allocated, { ...manualCommand, amount: 421_000 }, now),
   /không đủ tiền/i, "manual transfer cannot consume reserved savings");
 
+const manualAllocationCommand = { type: "manual_allocate", id: "reserve-one", date: today,
+  sourceAccountId: source, amount: 125_000, goalId: "goal-one", note: "Để riêng tiền tháng này" };
+const manuallyAllocated = applySavingsCommand(base(), manualAllocationCommand, now);
+assert.equal(manuallyAllocated.transactions.length, 1, "reserving money does not create a transfer or expense");
+assert.equal(calculateAccountBalance(manuallyAllocated.accounts.find((item) => item.id === source),
+  manuallyAllocated.transactions), 500_000, "the source account book balance stays unchanged");
+assert.equal(manuallyAllocated.savingsAllocations[0].status, "allocated");
+assert.equal(manuallyAllocated.savingsAllocations[0].note, "Để riêng tiền tháng này");
+assert.equal(manuallyAllocated.savingsAllocations[0].destination.goalId, "goal-one");
+assert.equal(getSavingsHeldByAccount(manuallyAllocated).get(source), 125_000);
+assert.equal(getSavingsHeldAmount(manuallyAllocated), 125_000);
+assert.equal(getSavingsAvailable(manuallyAllocated, source), 375_000);
+assert.equal(filterSavingsHistory(manuallyAllocated.savingsAllocations,
+  { ruleId: "manual-allocation", destination: "allocation" }).length, 1);
+assert.deepEqual([getLedgerSummary(manuallyAllocated.accounts, manuallyAllocated.transactions,
+  "2026-10").income, getLedgerSummary(manuallyAllocated.accounts, manuallyAllocated.transactions,
+  "2026-10").expense], [400_000, 0]);
+assert.equal(applySavingsCommand(manuallyAllocated, manualAllocationCommand, now), manuallyAllocated,
+  "replaying the same reservation cannot duplicate it");
+assert.throws(() => applySavingsCommand(manuallyAllocated,
+  { ...manualAllocationCommand, id: "reserve-too-much", amount: 375_001 }, now), /không đủ tiền/i);
+const releasedManual = applySavingsCommand(manuallyAllocated,
+  { type: "release", resultId: "manual-allocation:reserve-one" }, now);
+assert.equal(getSavingsHeldAmount(releasedManual), 0);
+assert.equal(getSavingsAvailable(releasedManual, source), 500_000);
+assert.equal(releasedManual.savingsAllocations[0].releasedAt, now);
+
 const transferRule = rule({ destination: { kind: "transfer", accountId: target } });
 const transferred = applySavingsCommand(refresh(save(base(), transferRule)),
   { type: "confirm", resultId: "saving:rule:2026-10-23" }, now);

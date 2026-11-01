@@ -69,7 +69,7 @@ export function SavingsPage({ ledger, goals, today, onBack, onCommand, schemaRea
       <div><small>MONEY DIARY</small><h1>Tiết kiệm</h1><p>Dành tiền từ khoản thu đã ghi vào sổ.</p></div>
       <div className="savings-header-actions">
         <button type="button" className="savings-primary-button" onClick={() => setTransferring(true)} disabled={!schemaReady}>
-          <ArrowLeftRight size={17} /> Chuyển vào tiết kiệm</button>
+          <ArrowLeftRight size={17} /> Đưa vào tiết kiệm</button>
         <button type="button" className="savings-quiet-button" onClick={() => setEditing("new")} disabled={!schemaReady}><Plus size={17} /> Tạo quy tắc</button>
       </div></header>
     {!schemaReady && <p className="savings-error" role="alert">Tiết kiệm chưa đồng bộ. Cần áp dụng migration Supabase trước khi tạo quy tắc.</p>}
@@ -113,7 +113,7 @@ export function SavingsPage({ ledger, goals, today, onBack, onCommand, schemaRea
           <option value="needs_recalculation">Cần tính lại</option><option value="skipped">Đã bỏ qua</option>
         </select></label>
         <label>Quy tắc<select value={filters.ruleId ?? ""} onChange={(event) => changeFilters((old) => ({ ...old, ruleId: event.target.value || undefined }))}>
-          <option value="">Tất cả</option><option value="manual-transfer">Chuyển thủ công</option><option value="jar-rollover">Tiền dư hũ</option>{(ledger.savingsRules ?? []).map((rule) => <option value={rule.id} key={rule.id}>{rule.name}</option>)}
+          <option value="">Tất cả</option><option value="manual-allocation">Dành riêng thủ công</option><option value="manual-transfer">Chuyển thủ công</option><option value="jar-rollover">Tiền dư hũ</option>{(ledger.savingsRules ?? []).map((rule) => <option value={rule.id} key={rule.id}>{rule.name}</option>)}
         </select></label>
         <label>Cách tiết kiệm<select value={filters.destination ?? ""} onChange={(event) => changeFilters((old) => ({ ...old,
           destination: event.target.value as SavingsHistoryFilters["destination"] || undefined }))}>
@@ -132,28 +132,32 @@ export function SavingsPage({ ledger, goals, today, onBack, onCommand, schemaRea
           const rate = item.ruleMode === "percentage" || item.ruleMode === "random_percentage"
             ? `${item.ruleValue ?? item.sampledValue ?? rule?.value ?? 0}%` : null;
           return <article className="savings-history-row" key={item.id}><div className="savings-history-main">
-            <div><small>{item.date} · {STATUS[item.status]}</small><strong>{item.origin === "jar_rollover"
+            <div><small>{item.date} · {item.releasedAt ? "Đã giải phóng" : STATUS[item.status]}</small><strong>{item.origin === "jar_rollover"
               ? `Tiền dư hũ ${item.ruleName ?? "đã xóa"}` : item.origin === "manual_transfer"
-                ? "Chuyển vào tiết kiệm" : item.ruleName ?? rule?.name ?? "Quy tắc đã xóa"}</strong>
-              <small>{item.origin === "manual_transfer"
+                ? "Chuyển vào tiết kiệm" : item.origin === "manual_allocation"
+                  ? "Dành riêng tiền" : item.ruleName ?? rule?.name ?? "Quy tắc đã xóa"}</strong>
+              <small>{item.origin === "manual_allocation"
+                ? `Giữ tại ${accountsById.get(item.sourceAccountId) ?? "Tài khoản đã xóa"}`
+                : item.origin === "manual_transfer"
                 ? `${accountsById.get(item.sourceAccountId) ?? "Tài khoản đã xóa"} → ${item.destination.kind === "transfer" ? accountsById.get(item.destination.accountId) ?? "Tài khoản đã xóa" : "Tiền dành riêng"}`
                 : item.origin === "jar_rollover"
                 ? `Tháng ${item.period?.slice(5)}/${item.period?.slice(0, 4)} · ${item.status === "skipped" ? "Giữ trong hũ" : item.destination.kind === "transfer" ? "Chuyển tài khoản" : "Dành riêng"}`
                 : `${item.destination.kind === "transfer" ? "Chuyển tài khoản" : "Dành riêng"} · ${percent}% của tiền tính theo quy tắc`}</small></div>
             <strong className="savings-history-amount">{formatMoney(item.amount)}</strong></div>
-            <details className="savings-history-details"><summary>{item.origin === "jar_rollover" ? "Xem nguồn tiền" : item.origin === "manual_transfer" ? "Xem chi tiết chuyển tiền" : "Xem chi tiết tính toán"}</summary>
+            <details className="savings-history-details"><summary>{item.origin === "jar_rollover" ? "Xem nguồn tiền" : item.origin === "manual_transfer" ? "Xem chi tiết chuyển tiền" : item.origin === "manual_allocation" ? "Xem tiền dành riêng" : "Xem chi tiết tính toán"}</summary>
               {item.origin === "jar_rollover" ? <dl>
                 <div><dt>Hũ chi tiêu</dt><dd>{item.ruleName ?? "Hũ đã xóa"}</dd></div>
                 <div><dt>Kỳ đã kết thúc</dt><dd>{item.period}</dd></div>
                 <div><dt>Tài khoản nguồn</dt><dd>{accountsById.get(item.sourceAccountId) ?? "Tài khoản đã xóa"}</dd></div>
                 <div><dt>Đích</dt><dd>{item.status === "skipped" ? "Giữ trong hũ" : item.destination.kind === "transfer"
                   ? accountsById.get(item.destination.accountId) ?? "Tài khoản đã xóa" : "Tiền dành riêng"}</dd></div>
-              </dl> : item.origin === "manual_transfer" ? <dl>
+              </dl> : item.origin === "manual_transfer" || item.origin === "manual_allocation" ? <dl>
                 <div><dt>Tài khoản gửi</dt><dd>{accountsById.get(item.sourceAccountId) ?? "Tài khoản đã xóa"}</dd></div>
                 <div><dt>Tài khoản nhận</dt><dd>{item.destination.kind === "transfer"
                   ? accountsById.get(item.destination.accountId) ?? "Tài khoản đã xóa" : "Tiền dành riêng"}</dd></div>
                 {item.destination.goalId && <div><dt>Mục tiêu</dt><dd>{goals.find((goal) => goal.id === item.destination.goalId)?.name ?? "Mục tiêu đã xóa"}</dd></div>}
-                {item.transactionId && <div><dt>Ghi chú</dt><dd>{ledger.transactions.find((transaction) => transaction.id === item.transactionId)?.note || "Không có"}</dd></div>}
+                <div><dt>Ghi chú</dt><dd>{item.note || (item.transactionId
+                  ? ledger.transactions.find((transaction) => transaction.id === item.transactionId)?.note : "") || "Không có"}</dd></div>
               </dl> : <dl><div><dt>Thu nhập đã xác nhận</dt><dd>{formatMoney(incomeAmount)}</dd></div>
                 {(item.basisKind ?? rule?.basis) === "net_work" && <div><dt>Chi phí công việc</dt><dd>−{formatMoney(workCosts)}</dd></div>}
                 <div><dt>Tiền làm căn cứ</dt><dd>{formatMoney(basis)}</dd></div>

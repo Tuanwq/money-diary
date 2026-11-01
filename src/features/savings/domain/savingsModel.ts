@@ -30,7 +30,7 @@ export type SavingsAllocation = {
   id: string;
   ruleId: string;
   /** Jar balance moved at a month boundary, independent of income rules. */
-  origin?: "jar_rollover" | "manual_transfer";
+  origin?: "jar_rollover" | "manual_transfer" | "manual_allocation";
   jarId?: string;
   period?: string;
   date: string;
@@ -45,6 +45,7 @@ export type SavingsAllocation = {
   workCostsAmount?: number;
   basisAmount?: number;
   ruleName?: string;
+  note?: string;
   ruleMode?: SavingsMode;
   ruleValue?: number;
   basisKind?: SavingsRule["basis"];
@@ -52,6 +53,7 @@ export type SavingsAllocation = {
   previousStatus?: "allocated" | "transferred" | "skipped";
   transactionId?: string;
   manuallyAdjusted?: boolean;
+  releasedAt?: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -68,7 +70,8 @@ export function filterSavingsHistory(items: SavingsAllocation[], filters: Saving
     (!filters.month || item.date.startsWith(filters.month)) &&
     (!filters.ruleId || (filters.ruleId === "jar-rollover"
       ? item.origin === "jar_rollover" : filters.ruleId === "manual-transfer"
-        ? item.origin === "manual_transfer" : item.ruleId === filters.ruleId)) &&
+        ? item.origin === "manual_transfer" : filters.ruleId === "manual-allocation"
+          ? item.origin === "manual_allocation" : item.ruleId === filters.ruleId)) &&
     (!filters.destination || item.destination.kind === filters.destination) &&
     (!filters.status || (filters.status === "saved"
       ? isSavedSavingsResult(item) : item.status === filters.status)));
