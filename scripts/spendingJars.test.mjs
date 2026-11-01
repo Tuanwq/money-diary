@@ -16,6 +16,13 @@ import { getJarActivityGroups } from
 import { applyJarCommand, planJarSpend, smartAllocate } from
   "../src/features/spending-jars/services/jarService.ts";
 import { repairClosedJars } from "../src/features/spending-jars/services/closedJarMigration.ts";
+import { paginateItems } from "../src/utils/pagination.ts";
+
+const longHistory = Array.from({ length: 17 }, (_, index) => index + 1);
+assert.deepEqual([1, 2, 3].flatMap((page) => paginateItems(longHistory, page, 8).items), longHistory,
+  "pagination keeps each history item exactly once and in order");
+assert.deepEqual(paginateItems(longHistory, 99, 8),
+  { currentPage: 3, totalPages: 3, items: [17] }, "shrinking history clamps the current page");
 
 const now = "2026-09-22T10:00:00.000Z";
 const accounts = [

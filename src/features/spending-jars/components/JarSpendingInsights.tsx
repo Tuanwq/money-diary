@@ -1,8 +1,12 @@
 import { useState } from "react";
 import type { JarSpendingAnalysis } from "../domain/jarSpendingAnalysis.ts";
 import { formatMoney } from "../../../utils/money.ts";
+import { paginateItems } from "../../../utils/pagination.ts";
 import { JarCategoryChart } from "./JarCategoryChart.tsx";
+import { HistoryPagination } from "../../history/components/HistoryPagination.tsx";
 import "./JarSpendingInsights.css";
+
+const PAGE_SIZE = 8;
 
 function formatDay(date: string) {
   const [year, month, day] = date.split("-");
@@ -16,6 +20,8 @@ export function JarSpendingInsights({ analysis, months, selectedMonth, onSelectM
   onSelectMonth: (month: string) => void;
 }) {
   const [view, setView] = useState<"list" | "pie" | "column">("list");
+  const [page, setPage] = useState(1);
+  const { items: visibleExpenses, currentPage, totalPages } = paginateItems(analysis.expenses, page, PAGE_SIZE);
   const visibleCategories = analysis.categories.slice(0, 4);
   const other = analysis.categories.slice(4).reduce((sum, item) => sum + item.amount, 0);
   const categories: JarSpendingAnalysis["categories"] = other > 0
@@ -29,7 +35,7 @@ export function JarSpendingInsights({ analysis, months, selectedMonth, onSelectM
       <strong>{formatMoney(analysis.netSpent)}</strong>
     </header>
     <label className="jar-insights-month">Xem tháng
-      <select value={selectedMonth} onChange={(event) => onSelectMonth(event.target.value)}>
+      <select value={selectedMonth} onChange={(event) => { setPage(1); onSelectMonth(event.target.value); }}>
         {months.map((month) => <option key={month} value={month}>Tháng {month.slice(5, 7)}/{month.slice(0, 4)}</option>)}
       </select>
     </label>
@@ -53,11 +59,12 @@ export function JarSpendingInsights({ analysis, months, selectedMonth, onSelectM
           </div>
         </div>) : <JarCategoryChart mode={view} categories={categories} grossSpent={analysis.grossSpent} />}
       </div>
-      <div className="jar-insights-recent"><h3>Lịch sử chi tiêu trong tháng</h3>
-        {analysis.expenses.map((event) => <div className="jar-insights-event" key={event.id}>
+      <div className="jar-insights-recent"><h3>Lịch sử chi tiêu trong tháng · {analysis.expenseCount} khoản</h3>
+        {visibleExpenses.map((event) => <article className="jar-insights-event" key={event.id}>
           <div><strong>{event.note || event.category}</strong><small>{event.note ? `${event.category} · ` : ""}{formatDay(event.date)} · {event.accountNames.join(" + ")}</small></div>
           <strong>−{formatMoney(event.amount)}</strong>
-        </div>)}
+        </article>)}
+        <HistoryPagination currentPage={currentPage} totalPages={totalPages} onPageChange={setPage} />
       </div>
     </>}
     {analysis.refunded > 0 && <p className="jar-insights-refund">Đã chi {formatMoney(analysis.grossSpent)} · hoàn tiền {formatMoney(analysis.refunded)}. Phân nhóm giữ theo khoản chi gốc; tiền hoàn chưa được gán lại cho từng nhãn{analysis.refunded > analysis.grossSpent ? " và có thể thuộc kỳ trước" : ""}.</p>}

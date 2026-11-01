@@ -52,8 +52,7 @@
 .jar-category-legend-name { display: inline-flex; align-items: baseline; gap: 0.4rem; min-width: 0; overflow-wrap: anywhere; }
 .jar-category-legend-name i { display: inline-block; flex: none; width: 9px; height: 9px; border-radius: 3px; }
 .jar-category-legend strong { flex: none; font-variant-numeric: tabular-nums; }
-.jar-insights-event { display: flex; align-items: start; justify-content: space-between; gap: 0.7rem; font-size: 0.78rem; }
-.jar-insights-event + .jar-insights-event { border-top: 1px solid var(--money-border); padding-top: 0.65rem; }
+.jar-insights-event { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 0.7rem; min-width: 0; border: 1px solid var(--money-border); border-radius: 12px; background: var(--money-surface-muted); padding: 0.75rem 0.85rem; font-size: 0.78rem; }
 .jar-insights-event > div { display: grid; gap: 0.18rem; min-width: 0; }
 .jar-insights-event > div strong,
 .jar-insights-event small { overflow-wrap: anywhere; }

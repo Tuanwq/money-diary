@@ -365,13 +365,21 @@
 .jar-secondary-actions button { min-height: 44px; border: 1px solid var(--money-border); border-radius: 10px; background: var(--money-surface); padding: 0.5rem 0.7rem; color: var(--money-text); font-size: 0.78rem; }
 
 .jar-history h2 { margin: 0 0 0.6rem; font-size: 0.98rem; }
-.jar-history-group { margin-top: 0.75rem; }
+.jar-history-group { display: grid; gap: 0.55rem; margin-top: 0.75rem; }
 .jar-history-group h3 { margin: 0; border-bottom: 1px solid var(--money-border); padding: 0.55rem 0; color: var(--money-text-secondary); font-size: 0.8rem; }
-.jar-history-row { align-items: baseline; }
+.jar-history-row { align-items: baseline; border: 1px solid var(--money-border); border-radius: 12px; background: var(--money-surface-muted); padding: 0.85rem; }
 .jar-history-main { min-width: 0; }
 .jar-history-row > strong { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .jar-history-row > strong.is-outflow { color: var(--money-expense); }
 .jar-history-row > strong.is-inflow { color: var(--money-primary); }
+.jar-history-row p { border-top: 1px solid var(--money-border); margin-top: 0.4rem; padding-top: 0.5rem; }
+.jar-history-actions { border-top: 1px solid var(--money-border); margin-top: 0.4rem; padding-top: 0.35rem; }
+.jar-insights .history-pagination,
+.jar-history .history-pagination { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 0.6rem; margin-top: 0.25rem; border-top: 1px solid var(--money-border); padding-top: 0.85rem; color: var(--money-text-secondary); font-size: 0.78rem; }
+.jar-insights .history-pagination button,
+.jar-history .history-pagination button { min-height: 44px; border: 1px solid var(--money-border); border-radius: 10px; background: var(--money-surface); padding: 0.5rem 0.8rem; color: var(--money-primary); font: inherit; font-weight: 700; cursor: pointer; }
+.jar-insights .history-pagination button:disabled,
+.jar-history .history-pagination button:disabled { opacity: 0.45; cursor: not-allowed; }
 
 .jars-modal-heading { display: flex; align-items: start; justify-content: space-between; gap: 0.6rem; }
 .jars-modal-heading button { display: grid; place-items: center; flex: none; width: 44px; height: 44px; border: 0; border-radius: 12px; background: var(--money-surface-muted); color: var(--money-text); }

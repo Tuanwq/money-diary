@@ -225,14 +225,14 @@ export function SpendingJarsPage({ ledger, cloudStatus, onBack, onCommand, onDel
         {detailTab === "overview" ? <>
           <JarDetailOverview item={item} accountNames={accountNames} />
           {spendingAnalysis && <details className="jar-insights-panel"><summary>Xem phân tích chi tiêu</summary>
-            <JarSpendingInsights analysis={spendingAnalysis} months={analysisMonths}
+            <JarSpendingInsights key={selected.id} analysis={spendingAnalysis} months={analysisMonths}
               selectedMonth={analysisMonth} onSelectMonth={setAnalysisMonth} /></details>}
           {selected.status === "active" && <details className="jar-secondary-actions"><summary>Thao tác khác</summary><div>
             <button onClick={() => openAction("release")} type="button">Giải phóng về tài khoản</button>
             <button onClick={() => openAction("refund")} type="button">Hoàn tiền</button>
             <button onClick={() => selectTarget(selected, "smart")} type="button">Chia thông minh</button>
           </div></details>}
-        </> : <JarActivityList ledger={ledger} jarId={selected.id} onEditSpend={(activity) => openAction("spend", activity)}
+        </> : <JarActivityList key={selected.id} ledger={ledger} jarId={selected.id} onEditSpend={(activity) => openAction("spend", activity)}
           onDeleteSpend={(activity) => {
             if (!window.confirm("Xóa toàn bộ khoản chi này từ các tài khoản nguồn?")) return;
             void onDeleteSpend(activity).catch((cause) =>
