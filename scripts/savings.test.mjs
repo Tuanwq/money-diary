@@ -96,6 +96,36 @@ assert.equal(applySavingsCommand(ledger,
   { type: "confirm", resultId: "saving:rule:2026-10-23", amount: 108_500 }, now)
   .savingsAllocations[0].amount, 109_000);
 
+const manualCommand = { type: "manual_transfer", id: "one", date: today,
+  sourceAccountId: source, destinationAccountId: target, amount: 125_000,
+  goalId: "goal-one", note: "Chuyển khoản tiết kiệm" };
+const manuallyTransferred = applySavingsCommand(base(), manualCommand, now);
+assert.equal(manuallyTransferred.transactions.length, 2);
+assert.equal(manuallyTransferred.transactions[0].type, "transfer");
+assert.equal(manuallyTransferred.transactions[0].note, manualCommand.note);
+assert.equal(calculateAccountBalance(manuallyTransferred.accounts.find((item) => item.id === source),
+  manuallyTransferred.transactions), 375_000);
+assert.equal(calculateAccountBalance(manuallyTransferred.accounts.find((item) => item.id === target),
+  manuallyTransferred.transactions), 125_000);
+assert.equal(getFinancialPosition(manuallyTransferred).totalBalance, 500_000);
+assert.equal(getSavingsHeldAmount(manuallyTransferred), 125_000);
+assert.equal(manuallyTransferred.savingsAllocations[0].destination.goalId, "goal-one");
+assert.equal(filterSavingsHistory(manuallyTransferred.savingsAllocations,
+  { ruleId: "manual-transfer", destination: "transfer" }).length, 1);
+assert.deepEqual([getLedgerSummary(manuallyTransferred.accounts, manuallyTransferred.transactions,
+  "2026-10").income, getLedgerSummary(manuallyTransferred.accounts, manuallyTransferred.transactions,
+  "2026-10").expense], [400_000, 0], "manual savings transfer is not income or expense");
+assert.equal(applySavingsCommand(manuallyTransferred, manualCommand, now), manuallyTransferred,
+  "replaying the same manual transfer cannot duplicate it");
+assert.throws(() => applySavingsCommand({ ...manuallyTransferred,
+  savingsAllocations: [] }, manualCommand, now), /chưa khớp/, "an orphaned transfer must not be silently duplicated");
+assert.throws(() => applySavingsCommand(base(), { ...manualCommand, amount: 500_001 }, now),
+  /không đủ tiền/i);
+assert.throws(() => applySavingsCommand(base(),
+  { ...manualCommand, destinationAccountId: source }, now), /khác nhau/);
+assert.throws(() => applySavingsCommand(allocated, { ...manualCommand, amount: 421_000 }, now),
+  /không đủ tiền/i, "manual transfer cannot consume reserved savings");
+
 const transferRule = rule({ destination: { kind: "transfer", accountId: target } });
 const transferred = applySavingsCommand(refresh(save(base(), transferRule)),
   { type: "confirm", resultId: "saving:rule:2026-10-23" }, now);

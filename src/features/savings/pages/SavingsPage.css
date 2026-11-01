@@ -1,9 +1,11 @@
 .savings-page { max-width: 1120px; margin: 0 auto; padding: clamp(18px, 3vw, 36px); color: #19382d; }
 .savings-page-header { display: flex; align-items: center; gap: 16px; margin-bottom: 24px; }
-.savings-page-header > div { flex: 1; min-width: 0; }
+.savings-page-header > div:first-of-type { flex: 1; min-width: 0; }
+.savings-header-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
 .savings-page-header small, .savings-dialog-head small { color: #608171; font-size: .7rem; font-weight: 700; letter-spacing: .1em; }
 .savings-page-header h1, .savings-dialog h2 { margin: 2px 0; color: #172f26; }
 .savings-page-header p { margin: 0; color: #65776d; }
+.savings-dialog-head p { margin: 6px 0 0; color: #65776d; line-height: 1.45; }
 .savings-back, .savings-quiet-button, .savings-primary-button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 42px; border-radius: 12px; padding: 9px 15px; font: inherit; font-weight: 650; cursor: pointer; }
 .savings-back, .savings-quiet-button { background: #fff; color: #19382d; border: 1px solid #d5e2d9; }
 .savings-back { width: 44px; padding: 0; }
@@ -57,14 +59,18 @@
 .savings-dialog-head { display: flex; justify-content: space-between; gap: 12px; align-items: start; margin-bottom: 18px; }
 .savings-rule-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
 .savings-field { display: flex; flex-direction: column; gap: 7px; color: #345544; font-size: .9rem; font-weight: 650; min-width: 0; }
-.savings-field input, .savings-field select { width: 100%; min-height: 46px; border: 1px solid #d5e2d9; border-radius: 12px; padding: 10px 12px; background: #fff; color: #203b2c; font: inherit; }
+.savings-field input, .savings-field select, .savings-field textarea { width: 100%; min-height: 46px; border: 1px solid #d5e2d9; border-radius: 12px; padding: 10px 12px; background: #fff; color: #203b2c; font: inherit; }
+.savings-field textarea { resize: vertical; }
 .savings-full { grid-column: 1 / -1; }
 .savings-range { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.savings-transfer-preview { display: grid; gap: 6px; padding: 13px 15px; border: 1px solid #d8e5da; border-radius: 12px; background: #f4f8f4; color: #345544; font-size: .9rem; }
+.savings-transfer-preview small { color: #61796a; line-height: 1.45; }
 .savings-form-actions { display: flex; justify-content: flex-end; gap: 9px; padding-top: 5px; }
 @media (max-width: 650px) {
   .savings-page { padding: 16px 16px 105px; }
   .savings-page-header { flex-wrap: wrap; }
-  .savings-page-header > .savings-primary-button { margin-left: auto; }
+  .savings-header-actions { width: 100%; justify-content: stretch; }
+  .savings-header-actions > button { flex: 1; }
   .savings-summary-grid { grid-template-columns: 1fr 1fr; }
   .savings-summary-grid > section:last-child { grid-column: 1 / -1; }
   .savings-panel { padding: 16px; }

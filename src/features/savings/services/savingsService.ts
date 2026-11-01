@@ -14,8 +14,52 @@ export type SavingsCommand =
   | { type: "skip"; resultId: string }
   | { type: "recalculate"; resultId: string }
   | { type: "release"; resultId: string }
+  | { type: "manual_transfer"; id: string; date: string; sourceAccountId: string;
+      destinationAccountId: string; amount: number; note: string; goalId?: string }
   | { type: "rollover_jars"; today: string; decision: "skip" | "allocate" | "transfer";
       destinationAccountId?: string };
+
+function transferToSavings(ledger: AccountLedgerData,
+  command: Extract<SavingsCommand, { type: "manual_transfer" }>, now: string): AccountLedgerData {
+  const resultId = `manual-saving:${command.id}`;
+  const transactionId = `saving-transfer:${resultId}`;
+  const existingResult = (ledger.savingsAllocations ?? []).find((item) => item.id === resultId);
+  const existingTransaction = ledger.transactions.find((item) => item.id === transactionId);
+  if (existingResult && existingTransaction && existingResult.transactionId === transactionId) return ledger;
+  if (existingResult || existingTransaction)
+    throw new Error("Khoản chuyển tiết kiệm chưa khớp với Sổ tài khoản. Hãy kiểm tra dữ liệu trước khi thử lại.");
+  if (!command.id.trim()) throw new Error("Không xác định được lần chuyển tiền.");
+  const parsedDate = new Date(`${command.date}T12:00:00Z`);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(command.date) ||
+    Number.isNaN(parsedDate.getTime()) || parsedDate.toISOString().slice(0, 10) !== command.date)
+    throw new Error("Ngày chuyển tiền không hợp lệ.");
+  if (!Number.isSafeInteger(command.amount) || command.amount <= 0)
+    throw new Error("Số tiền chuyển phải là số nguyên dương.");
+  const source = ledger.accounts.find((item) => item.id === command.sourceAccountId && !item.archivedAt);
+  const target = ledger.accounts.find((item) => item.id === command.destinationAccountId && !item.archivedAt);
+  if (!source || !target || source.id === target.id)
+    throw new Error("Hãy chọn hai tài khoản đang hoạt động và khác nhau.");
+  if (command.amount > getSavingsAvailable(ledger, source.id))
+    throw new Error(`Tài khoản ${source.name} không đủ tiền có thể chuyển vào tiết kiệm.`);
+  const transaction: AccountTransaction = {
+    id: transactionId, accountId: source.id, toAccountId: target.id,
+    amount: command.amount, category: "Chuyển vào tiết kiệm", date: command.date,
+    type: "transfer", purpose: "internal_transfer", source: "savings",
+    note: command.note.trim(), createdAt: now, updatedAt: now,
+  };
+  const result: SavingsAllocation = {
+    id: resultId, ruleId: "manual-transfer", origin: "manual_transfer", date: command.date,
+    sourceAccountId: source.id,
+    destination: { kind: "transfer", accountId: target.id, goalId: command.goalId || undefined },
+    amount: command.amount, incomeSignature: "", ruleName: "Chuyển vào tiết kiệm",
+    status: "transferred", transactionId, createdAt: now, updatedAt: now,
+  };
+  const next = { ...ledger, transactions: [transaction, ...ledger.transactions],
+    savingsAllocations: [result, ...(ledger.savingsAllocations ?? [])] };
+  assertReservationCoverageAfterLedgerChange(ledger, next);
+  assertSavingsCoverageAfterLedgerChange(ledger, next);
+  return next;
+}
 
 function rollOverJars(ledger: AccountLedgerData,
   command: Extract<SavingsCommand, { type: "rollover_jars" }>, now: string): AccountLedgerData {
@@ -178,6 +222,7 @@ function roundExistingReservation(ledger: AccountLedgerData, rule: SavingsRule,
 /** Pure ledger command: result and any transfer are saved in the same ledger revision. */
 export function applySavingsCommand(ledger: AccountLedgerData, command: SavingsCommand,
   now = new Date().toISOString(), random: () => number = Math.random): AccountLedgerData {
+  if (command.type === "manual_transfer") return transferToSavings(ledger, command, now);
   if (command.type === "rollover_jars") return rollOverJars(ledger, command, now);
   const rules = ledger.savingsRules ?? [];
   const outcomes = ledger.savingsAllocations ?? [];
