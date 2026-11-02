@@ -27,6 +27,7 @@ import { buildBackupSourceData } from "./features/backup/backupSource";
 import { useAutomaticBackups } from "./features/backup/useAutomaticBackups";
 import { useAppNavigation } from "./hooks/useAppNavigation";
 import { useCloudSync } from "./hooks/useCloudSync";
+import { getAggregateSyncStatus } from "./hooks/cloudSyncState.ts";
 import { useMoneyDiaryData } from "./hooks/useMoneyDiaryData";
 import { useThemeMode } from "./hooks/useThemeMode";
 import { supabase } from "./lib/supabase";
@@ -746,11 +747,6 @@ export default function App() {
         showAppToast("Chưa xóa được giao dịch vì ảnh liên kết cần dọn trước. Hãy thử lại.");
       });
   }
-  const accountAwareSyncStatus = /migration|chưa thể|lỗi|xung đột/i.test(accountLedgerCloudStatus)
-    ? accountLedgerCloudStatus
-    : /đang tải|đang lưu/i.test(accountLedgerCloudStatus)
-      ? accountLedgerCloudStatus
-      : syncStatus;
   const {
     checks: accountReconciliations,
     cloudStatus: accountReconciliationCloudStatus,
@@ -760,15 +756,20 @@ export default function App() {
     saveCheck: saveAccountReconciliation,
   } = useAccountReconciliations(cloudDataUserId);
   const {
+    cloudStatus: automationCloudStatus,
     logs: automationLogs,
     processedKeys: automationProcessedKeys,
     replaceAutomationState,
     rules: automationRules,
   } = useAutomationRules(cloudDataUserId);
   const {
+    cloudStatus: cashFlowCloudStatus,
     plans: cashFlowPlans,
     replaceCashFlowState,
   } = useCashFlowPlans(cloudDataUserId);
+  const accountAwareSyncStatus = getAggregateSyncStatus(syncStatus,
+    [accountLedgerCloudStatus, accountReconciliationCloudStatus, automationCloudStatus, cashFlowCloudStatus],
+    cloudDataUserId);
   const backupSource = useMemo(
     () =>
       buildBackupSourceData({
@@ -816,7 +817,7 @@ export default function App() {
   );
   useAutomaticBackups({
     source: backupSource,
-    syncStatus,
+    syncStatus: accountAwareSyncStatus,
     userId: cloudDataUserId,
   });
   useMoneyDiaryNotificationScheduler({

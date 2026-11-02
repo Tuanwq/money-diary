@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { getCloudRenderState } from "../src/hooks/cloudSyncState.ts";
+import { getAggregateSyncStatus, getCloudRenderState } from "../src/hooks/cloudSyncState.ts";
 
 const initialWithoutData = getCloudRenderState({
   cloudLoaded: false,
@@ -45,5 +45,19 @@ const initialError = getCloudRenderState({
 });
 assert.equal(initialError.isCloudLoading, false);
 assert.match(initialError.cloudLoadError ?? "", /Không thể gộp dữ liệu cloud/);
+
+assert.equal(
+  getAggregateSyncStatus("Đã đồng bộ", ["Sổ tài khoản đã đồng bộ", "Đang lưu kiểm kê tài khoản..."], "user-1"),
+  "Đang lưu kiểm kê tài khoản...",
+  "a pending financial store cannot be hidden by the main sync badge"
+);
+assert.equal(
+  getAggregateSyncStatus("Đã đồng bộ", ["Sổ tài khoản đã đồng bộ", "Quy tắc đã đồng bộ"], "user-1"),
+  "Đã đồng bộ"
+);
+assert.equal(
+  getAggregateSyncStatus("Đã đồng bộ tiền hub vào nhật ký, đang lưu cloud...", ["Sổ tài khoản đã đồng bộ"], "user-1"),
+  "Đã đồng bộ tiền hub vào nhật ký, đang lưu cloud..."
+);
 
 console.log("Cloud sync render-state tests passed.");

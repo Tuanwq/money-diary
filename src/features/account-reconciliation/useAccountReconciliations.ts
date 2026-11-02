@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "../../lib/supabase";
 import { safeSetStorageJson } from "../../utils/safeStorage";
+import { shouldLoadRemoteAuxiliaryState } from "../offline-sync/auxiliarySyncDecision.ts";
 import {
   ACCOUNT_RECONCILIATION_STORAGE_KEY,
   createDefaultReconciliationData,
@@ -24,6 +25,10 @@ function loadLocalState() {
 
 export function useAccountReconciliations(userId?: string) {
   const [state, setState] = useState<AccountReconciliationData>(loadLocalState);
+  const [hasStoredLocalState] = useState(() => {
+    try { return localStorage.getItem(ACCOUNT_RECONCILIATION_STORAGE_KEY) !== null; }
+    catch { return false; }
+  });
   const [cloudStatus, setCloudStatus] = useState("Đang lưu trên thiết bị");
   const [cloudReady, setCloudReady] = useState(false);
   const dirtyRef = useRef(false);
@@ -69,13 +74,24 @@ export function useAccountReconciliations(userId?: string) {
           }
         : null;
       const localState = latestStateRef.current;
-      const shouldUseCloud =
-        cloudState &&
-        new Date(cloudState.updatedAt).getTime() >
-          new Date(localState.updatedAt).getTime();
+      const sameContent = cloudState && JSON.stringify(cloudState.checks) === JSON.stringify(localState.checks);
+      const shouldUseCloud = cloudState && !dirtyRef.current &&
+        (sameContent || shouldLoadRemoteAuxiliaryState(hasStoredLocalState,
+          localState.updatedAt, cloudState.updatedAt));
       const nextState = shouldUseCloud ? cloudState : localState;
 
-      if (shouldUseCloud) setState(cloudState);
+      if (shouldUseCloud) {
+        dirtyRef.current = false;
+        setState(cloudState);
+        setCloudReady(true);
+        setCloudStatus("Kiểm kê tài khoản đã đồng bộ");
+        return;
+      }
+      if (!cloudState && !hasStoredLocalState && !dirtyRef.current) {
+        setCloudReady(true);
+        setCloudStatus("Kiểm kê tài khoản đã đồng bộ");
+        return;
+      }
 
       const { error: upsertError } = await supabase
         .from("money_diary_account_reconciliation_states")
@@ -102,7 +118,7 @@ export function useAccountReconciliations(userId?: string) {
       active = false;
       window.clearTimeout(timeout);
     };
-  }, [userId]);
+  }, [hasStoredLocalState, userId]);
 
   useEffect(() => {
     if (!userId || !cloudReady || !dirtyRef.current) return;

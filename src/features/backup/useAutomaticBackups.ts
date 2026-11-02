@@ -1,5 +1,6 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { safeSetStorageItem } from "../../utils/safeStorage";
+import { getDateString } from "../../utils/date.ts";
 import {
   createBackupRecord,
   createBackupSnapshot,
@@ -30,6 +31,8 @@ export function useAutomaticBackups({
 }: AutomaticBackupParams) {
   const runningRef = useRef(false);
   const pendingRef = useRef(false);
+  const lastSavedRef = useRef<{ ownerId: string; day: string; signature: string } | null>(null);
+  const [generation, setGeneration] = useState(0);
 
   useEffect(() => {
     if (!isSynced(syncStatus)) return;
@@ -52,13 +55,19 @@ export function useAutomaticBackups({
 
       try {
         const now = new Date();
+        const day = getDateString(now);
+        const signature = JSON.stringify(source);
+        if (lastSavedRef.current?.ownerId === userId && lastSavedRef.current.day === day &&
+          lastSavedRef.current.signature === signature) return;
         const snapshot = createBackupSnapshot(source, now);
         const records = (["daily", "weekly", "monthly"] as const).map((kind) =>
           createBackupRecord({ kind, ownerId: userId, snapshot })
         );
 
-        await Promise.all(records.map((record) => saveBackupRecord(record)));
+        const results = await Promise.all(records.map((record) => saveBackupRecord(record)));
         await enforceBackupRetention(userId);
+        if (results.every((result) => result.cloudAvailable))
+          lastSavedRef.current = { ownerId: userId, day, signature };
       } catch (error) {
         console.error("Không thể tạo backup tự động.", error);
       } finally {
@@ -66,10 +75,13 @@ export function useAutomaticBackups({
 
         if (pendingRef.current) {
           pendingRef.current = false;
+          setGeneration((value) => value + 1);
         }
       }
-    }, 1800);
+    // Keep the full-size backup writes away from the interactive sync burst.
+    // A new edit restarts this timer so only a settled snapshot is uploaded.
+    }, 15_000);
 
     return () => window.clearTimeout(timeout);
-  }, [source, syncStatus, userId]);
+  }, [generation, source, syncStatus, userId]);
 }

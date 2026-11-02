@@ -10,7 +10,7 @@ import { assertReservationCoverageAfterLedgerChange } from "../spending-jars/dom
 import { areLedgerContentsEqual, decideLedgerLoad, hasLocalOnlyRecords, isPristineLedger,
   nextLedgerTimestamp } from "./ledgerSync.ts";
 import { PENDING_LEDGER_KEY, ledgerKey, pendingKey, selectLocalLedgerValue } from "./ledgerStorageScope.ts";
-import { describeLedgerCloudError } from "./ledgerCloudError.ts";
+import { describeLedgerCloudError, isRetryableLedgerNetworkError } from "./ledgerCloudError.ts";
 import { applyCategoryCommand, linkTransactionCategory, migrateTransactionCategories, type CategoryCommand } from "./transactionCategories.ts";
 import { applyAccountExternalCommand, assertExternalCoverageAfterLedgerChange,
   calculateAccountExternalAmount, type AccountExternalCommand } from "./accountExternalModel.ts";
@@ -87,6 +87,7 @@ export function useAccountLedger(userId?: string, legacyBudgets: ExpenseBudget[]
   const baseUpdatedAtRef = useRef<string | null>(null);
   const loadedUserRef = useRef<string | null>(null);
   const latestLedgerRef = useRef(ledger);
+  const uncertainSaveRef = useRef<AccountLedgerData | null>(null);
   const ownerRef = useRef(userId ?? null);
   const saveChainRef = useRef<Promise<void>>(Promise.resolve());
   const photoUploadBusyRef = useRef(photoUploadBusy);
@@ -99,6 +100,7 @@ export function useAccountLedger(userId?: string, legacyBudgets: ExpenseBudget[]
     latestLedgerRef.current = next;
     pendingRef.current = readPendingLedger(userId);
     dirtyRef.current = Boolean(pendingRef.current);
+    uncertainSaveRef.current = null;
     baseUpdatedAtRef.current = null;
     loadedUserRef.current = null;
     setCloudReady(false);
@@ -237,6 +239,26 @@ export function useAccountLedger(userId?: string, legacyBudgets: ExpenseBudget[]
       loadedUserRef.current = userId;
       const decision = decideLedgerLoad(localLedger, cloudLedger, pending?.baseUpdatedAt);
       if (decision === "conflict") {
+        // Safari can report "Load failed" after the server committed a write.
+        // If the cloud contains that attempted snapshot, advance the pending
+        // base instead of treating newer local edits as a remote conflict.
+        if (cloudLedger && uncertainSaveRef.current &&
+          areLedgerContentsEqual(uncertainSaveRef.current, cloudLedger)) {
+          uncertainSaveRef.current = null;
+          baseUpdatedAtRef.current = cloudLedger.updatedAt;
+          if (!areLedgerContentsEqual(localLedger, cloudLedger)) {
+            const nextPending = { userId, baseUpdatedAt: cloudLedger.updatedAt };
+            if (!safeSetStorageJson(pendingKey(userId), nextPending)) {
+              setCloudStatus("Chưa thể lưu trạng thái đồng bộ trên thiết bị");
+              return;
+            }
+            pendingRef.current = nextPending;
+            dirtyRef.current = true;
+            setCloudReady(true);
+            setCloudStatus("Đang lưu sổ tài khoản...");
+            return;
+          }
+        }
         if (cloudLedger && areLedgerContentsEqual(localLedger, cloudLedger)) {
           if (!safeSetStorageJson(ledgerKey(userId), cloudLedger)) {
             setCloudStatus("Chưa thể lưu bản cloud trên thiết bị · hãy kiểm tra dung lượng");
@@ -245,6 +267,7 @@ export function useAccountLedger(userId?: string, legacyBudgets: ExpenseBudget[]
           clearPendingLedger(userId);
           pendingRef.current = null;
           dirtyRef.current = false;
+          uncertainSaveRef.current = null;
           latestLedgerRef.current = cloudLedger;
           setLedger(cloudLedger);
           setCloudReady(true);
@@ -316,7 +339,7 @@ export function useAccountLedger(userId?: string, legacyBudgets: ExpenseBudget[]
     document.addEventListener("visibilitychange", refresh);
     window.addEventListener("focus", refresh);
     window.addEventListener("online", resumeOnline);
-    const interval = window.setInterval(refresh, 30_000);
+    const interval = window.setInterval(refresh, 15_000);
     return () => {
       document.removeEventListener("visibilitychange", refresh);
       window.removeEventListener("focus", refresh);
@@ -360,14 +383,35 @@ export function useAccountLedger(userId?: string, legacyBudgets: ExpenseBudget[]
           updated_at: current.updatedAt,
         };
         const expected = baseUpdatedAtRef.current;
-        const { data, error } = expected === null
-          ? await supabase.from("money_diary_account_ledgers")
-              .insert({ ...payload, user_id: userId }).select("updated_at").maybeSingle()
-          : await supabase.from("money_diary_account_ledgers")
-              .update(payload).eq("user_id", userId).eq("updated_at", expected)
-              .select("updated_at").maybeSingle();
+        const saveOnce = () => {
+          const signal = AbortSignal.timeout(20_000);
+          return expected === null
+            ? supabase.from("money_diary_account_ledgers")
+                .insert({ ...payload, user_id: userId }).select("updated_at")
+                .abortSignal(signal).maybeSingle()
+            : supabase.from("money_diary_account_ledgers")
+                .update(payload).eq("user_id", userId).eq("updated_at", expected)
+                .select("updated_at").abortSignal(signal).maybeSingle();
+        };
+        let { data, error } = await saveOnce();
+        if (error && isRetryableLedgerNetworkError(error) && ownerRef.current === userId &&
+          typeof navigator !== "undefined" && navigator.onLine) {
+          // A lost response does not prove the write failed. The revision guard
+          // makes a second attempt safe; a committed first write returns no row
+          // and is reconciled against the cloud below.
+          setCloudStatus("Kết nối gián đoạn · đang thử lưu sổ lại...");
+          await new Promise((resolve) => window.setTimeout(resolve, 1500));
+          if (ownerRef.current !== userId) return;
+          ({ data, error } = await saveOnce());
+        }
         if (ownerRef.current !== userId) return;
         if (error) {
+          uncertainSaveRef.current = current;
+          if (expected === null && error.code === "23505") {
+            setCloudStatus("Đang kiểm tra sổ vừa lưu trên cloud...");
+            retrySync();
+            return;
+          }
           console.error(error);
           const record = captureAppError({ category: "sync", message: "Không thể lưu sổ tài khoản lên cloud",
             detail: `${error.code}: ${error.message}` });
@@ -377,11 +421,14 @@ export function useAccountLedger(userId?: string, legacyBudgets: ExpenseBudget[]
           return;
         }
         if (!data) {
+          uncertainSaveRef.current = current;
           setCloudReady(false);
-          setCloudStatus("Xung đột đồng bộ sổ tài khoản · bản cloud đã thay đổi");
+          setCloudStatus("Đang kiểm tra bản cloud sau khi lưu sổ...");
+          retrySync();
           return;
         }
         baseUpdatedAtRef.current = data.updated_at;
+        uncertainSaveRef.current = null;
         if (latestLedgerRef.current === current) {
           dirtyRef.current = false;
           pendingRef.current = null;
@@ -397,7 +444,7 @@ export function useAccountLedger(userId?: string, legacyBudgets: ExpenseBudget[]
 
     return () => window.clearTimeout(timeout);
   }, [cloudReady, jarSchemaReady, categorySchemaReady, debtSchemaReady, savingsSchemaReady,
-    ledger, userId, photoUploadBusy]);
+    ledger, userId, photoUploadBusy, retrySync]);
 
   const updateLedger = useCallback(
     (

@@ -1,5 +1,11 @@
 import assert from "node:assert/strict";
 import { mergeMoneySyncSnapshots } from "../src/features/offline-sync/offlineSyncModel.ts";
+import { shouldLoadRemoteAuxiliaryState } from "../src/features/offline-sync/auxiliarySyncDecision.ts";
+
+assert.equal(shouldLoadRemoteAuxiliaryState(false, "2026-11-02T10:00:00Z", "2026-11-01T10:00:00Z"), true,
+  "a fresh device must download existing cloud data even when its empty default has a newer timestamp");
+assert.equal(shouldLoadRemoteAuxiliaryState(true, "2026-11-02T10:00:00Z", "2026-11-01T10:00:00Z"), false,
+  "a stored local edit is not silently replaced by an older cloud state");
 
 const goals = {
   dailyIncome: 400000,

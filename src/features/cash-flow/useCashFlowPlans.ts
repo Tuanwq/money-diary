@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "../../lib/supabase";
 import { safeSetStorageJson } from "../../utils/safeStorage";
+import { shouldLoadRemoteAuxiliaryState } from "../offline-sync/auxiliarySyncDecision.ts";
 import {
   CASH_FLOW_STORAGE_KEY,
   createDefaultCashFlowState,
@@ -21,6 +22,10 @@ function loadLocalState() {
 
 export function useCashFlowPlans(userId?: string) {
   const [state, setState] = useState<CashFlowState>(loadLocalState);
+  const [hasStoredLocalState] = useState(() => {
+    try { return localStorage.getItem(CASH_FLOW_STORAGE_KEY) !== null; }
+    catch { return false; }
+  });
   const [cloudStatus, setCloudStatus] = useState("Đang lưu trên thiết bị");
   const [cloudReady, setCloudReady] = useState(false);
   const dirtyRef = useRef(false);
@@ -66,13 +71,24 @@ export function useCashFlowPlans(userId?: string) {
           }
         : null;
       const localState = latestStateRef.current;
-      const shouldUseCloud =
-        cloudState &&
-        new Date(cloudState.updatedAt).getTime() >
-          new Date(localState.updatedAt).getTime();
+      const sameContent = cloudState && JSON.stringify(cloudState.plans) === JSON.stringify(localState.plans);
+      const shouldUseCloud = cloudState && !dirtyRef.current &&
+        (sameContent || shouldLoadRemoteAuxiliaryState(hasStoredLocalState,
+          localState.updatedAt, cloudState.updatedAt));
       const nextState = shouldUseCloud ? cloudState : localState;
 
-      if (shouldUseCloud) setState(cloudState);
+      if (shouldUseCloud) {
+        dirtyRef.current = false;
+        setState(cloudState);
+        setCloudReady(true);
+        setCloudStatus("Dòng tiền đã đồng bộ");
+        return;
+      }
+      if (!cloudState && !hasStoredLocalState && !dirtyRef.current) {
+        setCloudReady(true);
+        setCloudStatus("Dòng tiền đã đồng bộ");
+        return;
+      }
 
       const { error: upsertError } = await supabase
         .from("money_diary_cash_flow_states")
@@ -99,7 +115,7 @@ export function useCashFlowPlans(userId?: string) {
       active = false;
       window.clearTimeout(timeout);
     };
-  }, [userId]);
+  }, [hasStoredLocalState, userId]);
 
   useEffect(() => {
     if (!userId || !cloudReady || !dirtyRef.current) return;

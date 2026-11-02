@@ -726,6 +726,36 @@ export function useCloudSync({
     };
   }, [flushOfflineQueue, hadLocalDataAtMount, loadCloudData, userId]);
 
+  useEffect(() => {
+    if (!isMoneyCloudSyncEnabled || !userId) return;
+
+    let checking = false;
+    const checkRemoteRevision = async () => {
+      if (checking || document.visibilityState !== "visible" || !cloudLoadedRef.current ||
+        localDirtyRef.current || cloudRequestRef.current || flushRequestRef.current ||
+        getOfflineSyncOperationCount(userId) > 0) return;
+      checking = true;
+      try {
+        // The other device may stay open while this device saves. Poll only the
+        // revision; downloading the whole legacy snapshot every time is costly.
+        const { data, error } = await supabase.from("money_diary_state")
+          .select("sync_revision").eq("user_id", userId).maybeSingle();
+        if (error) {
+          if (!isMissingSafeSyncFeature(error)) console.warn("Không thể kiểm tra phiên bản cloud.", error);
+          return;
+        }
+        if (activeUserIdRef.current === userId &&
+          Number(data?.sync_revision ?? 0) !== syncRevisionRef.current)
+          await loadCloudData(userId, "background");
+      } finally {
+        checking = false;
+      }
+    };
+
+    const interval = window.setInterval(() => { void checkRemoteRevision(); }, 15_000);
+    return () => window.clearInterval(interval);
+  }, [loadCloudData, userId]);
+
   function markLocalChanged(message = "Có thay đổi, đang chờ đồng bộ...") {
     if (!isMoneyCloudSyncEnabled) {
       localDirtyRef.current = false;
