@@ -2,8 +2,8 @@ type CloudError = { code?: string; message?: string; status?: number };
 
 export function isRetryableLedgerNetworkError(error: CloudError) {
   const message = error.message?.toLowerCase() ?? "";
-  return /failed to fetch|network|timeout|timed out|load failed/.test(message) ||
-    (typeof error.status === "number" && error.status >= 500);
+  return /failed to fetch|network|timeout|timed out|load failed|aborterror|fetch is aborted/.test(message) ||
+    error.status === 0 || (typeof error.status === "number" && error.status >= 500);
 }
 
 export function describeLedgerCloudError(error: CloudError) {
@@ -14,9 +14,11 @@ export function describeLedgerCloudError(error: CloudError) {
     return "tài khoản chưa có quyền truy cập dữ liệu cloud";
   if (typeof error.status === "number" && error.status >= 500)
     return "máy chủ đang tạm thời không phản hồi";
+  if (/timeout|timed out|aborterror|fetch is aborted/.test(message))
+    return "yêu cầu bị gián đoạn hoặc hết thời gian chờ";
   if (isRetryableLedgerNetworkError(error))
     return "không kết nối được tới máy chủ";
-  if (error.code === "42703" || error.code === "PGRST204")
+  if (error.code === "42703" || error.code === "PGRST204" || error.code === "PGRST202")
     return "cấu trúc dữ liệu cloud chưa được cập nhật";
   return error.code ? `mã lỗi ${error.code}` : "máy chủ chưa phản hồi";
 }

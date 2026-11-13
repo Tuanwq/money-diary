@@ -4,7 +4,7 @@ import {
   createDefaultLedger,
   getLedgerSummary,
 } from "../src/features/account-ledger/accountLedgerModel.ts";
-import { areLedgerContentsEqual, decideLedgerLoad, hasLocalOnlyRecords, isPristineLedger, nextLedgerTimestamp } from
+import { areLedgerContentsEqual, decideLedgerLoad, hasLocalOnlyRecords, isPristineLedger, nextLedgerTimestamp, overlayLedgerAdditions } from
   "../src/features/account-ledger/ledgerSync.ts";
 import { describeLedgerCloudError, isRetryableLedgerNetworkError } from
   "../src/features/account-ledger/ledgerCloudError.ts";
@@ -15,6 +15,8 @@ assert.match(describeLedgerCloudError({ message: "TypeError: Failed to fetch" })
 assert.match(describeLedgerCloudError({ code: "42501", message: "permission denied" }), /quyền/);
 assert.match(describeLedgerCloudError({ status: 401, message: "JWT expired" }), /đăng nhập/);
 assert.equal(isRetryableLedgerNetworkError({ code: "", message: "TypeError: Load failed" }), true);
+assert.equal(isRetryableLedgerNetworkError({ code: "", message: "AbortError: Fetch is aborted" }), true);
+assert.match(describeLedgerCloudError({ message: "AbortError: Fetch is aborted" }), /gián đoạn/);
 assert.equal(isRetryableLedgerNetworkError({ code: "42501", message: "permission denied" }), false);
 
 const accountA = {
@@ -85,6 +87,15 @@ const newerCloudLedger = {
   jars: [], jarActivities: [], updatedAt: "2026-09-22T00:00:00Z",
 };
 const pristineLedger = createDefaultLedger();
+const androidTransaction = { ...baseTransaction, id: "android-pending", amount: 70, type: "expense" };
+const iphoneTransaction = { ...baseTransaction, id: "iphone-pending", amount: 50, type: "expense" };
+const committedLedger = { ...newerCloudLedger,
+  transactions: [{ ...iphoneTransaction, note: "Đã sửa trên cloud" }, ...newerCloudLedger.transactions] };
+const recoveredLedger = overlayLedgerAdditions(committedLedger,
+  [iphoneTransaction, androidTransaction, androidTransaction]);
+assert.deepEqual(recoveredLedger.transactions, [androidTransaction, ...committedLedger.transactions],
+  "recovery preserves the server's version of a committed ID and restores each missing pending ID once");
+assert.equal(overlayLedgerAdditions(committedLedger, [iphoneTransaction]), committedLedger);
 assert.equal(isPristineLedger(pristineLedger), true);
 assert.equal(isPristineLedger({ ...pristineLedger,
   categories: [{ id: "custom", name: "Đi lại", type: "expense" }] }), false);

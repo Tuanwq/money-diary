@@ -1,4 +1,4 @@
-import { createDefaultAccounts, type AccountLedgerData } from "./accountLedgerModel.ts";
+import { createDefaultAccounts, type AccountLedgerData, type AccountTransaction } from "./accountLedgerModel.ts";
 import type { AccountExternalEntry } from "./accountExternalModel.ts";
 
 function externalSignature(entry: AccountExternalEntry) {
@@ -45,6 +45,17 @@ export function isPristineLedger(ledger: AccountLedgerData) {
 export function nextLedgerTimestamp(previous: string, now = Date.now()) {
   const previousTime = Date.parse(previous);
   return new Date(Math.max(now, Number.isFinite(previousTime) ? previousTime + 1 : now)).toISOString();
+}
+
+export function overlayLedgerAdditions(ledger: AccountLedgerData, additions: AccountTransaction[]) {
+  const existingIds = new Set(ledger.transactions.map((transaction) => transaction.id));
+  const missing = additions.filter((transaction) => {
+    if (existingIds.has(transaction.id)) return false;
+    existingIds.add(transaction.id);
+    return true;
+  });
+  if (missing.length === 0) return ledger;
+  return { ...ledger, transactions: [...missing.reverse(), ...ledger.transactions] };
 }
 
 export function decideLedgerLoad(local: AccountLedgerData, cloud: AccountLedgerData | null,
